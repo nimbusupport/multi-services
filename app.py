@@ -30,12 +30,20 @@ app.secret_key = os.environ.get("SECRET_KEY", "super-secret-key")
 APP_USERNAME = os.environ.get("APP_USERNAME")
 APP_PASSWORD = os.environ.get("APP_PASSWORD")
 # Manual login users (same shared password)
-ALLOWED_USERS = {
+DEFAULT_ALLOWED_USERS = {
     "admin@nimbusip.com",
     "eugeni@nimbusip.com",
     "nir@nimbusip.com",
 }
-SHARED_PASSWORD = "Aa@0778066666"
+ALLOWED_EMAIL_DOMAIN = os.environ.get("ALLOWED_EMAIL_DOMAIN", "nimbusip.com").strip().lower().lstrip("@")
+ALLOWED_USERS = {user.strip().lower() for user in DEFAULT_ALLOWED_USERS}
+if APP_USERNAME:
+    ALLOWED_USERS.add(APP_USERNAME.strip().lower())
+for configured_user in os.environ.get("ALLOWED_USERS", "").split(","):
+    configured_user = configured_user.strip().lower()
+    if configured_user:
+        ALLOWED_USERS.add(configured_user)
+SHARED_PASSWORD = APP_PASSWORD or "Aa@0778066666"
 # ====== .ENV ======
 SMS_URL = os.environ.get("SMS_URL")
 SMS_TOKEN = os.environ.get("SMS_TOKEN")
@@ -315,6 +323,34 @@ def get_active_users_for(service_name: str):
     return sorted(users.keys())
 
 
+def api_error(message, status=500, code="server_error"):
+    return jsonify({"ok": False, "code": code, "message": str(message)}), status
+
+
+def is_allowed_login(username, password):
+    username = (username or "").strip().lower()
+    if not username.endswith(f"@{ALLOWED_EMAIL_DOMAIN}"):
+        return False
+    return username in ALLOWED_USERS and password == SHARED_PASSWORD
+
+
+def service_dashboard_entry(service_name, waiting_loader):
+    try:
+        waiting = waiting_loader()
+        return {
+            "waiting": waiting,
+            "active_users": get_active_users_for(service_name),
+            "ok": True,
+        }
+    except Exception as exc:
+        return {
+            "waiting": None,
+            "active_users": get_active_users_for(service_name),
+            "ok": False,
+            "error": str(exc),
+        }
+
+
 def load_service_account_info():
     creds_source = CREDENTIALS_FILE.strip()
     if not creds_source:
@@ -353,6 +389,9 @@ def get_gspread_client():
         "https://www.googleapis.com/auth/drive"
     ]
     creds_info, creds_source = load_service_account_info()
+    service_account = creds_info.get("client_email") or "unknown"
+    key_id = creds_info.get("private_key_id") or "unknown"
+    account_hint = f"Service account: {service_account}; key id: {key_id}; loaded from: {creds_source}"
     try:
         creds = Credentials.from_service_account_info(creds_info, scopes=scope)
         creds.refresh(Request())
@@ -362,11 +401,11 @@ def get_gspread_client():
             raise RuntimeError(
                 "Google auth failed: invalid_grant / Invalid JWT Signature. "
                 "Use a valid active service-account JSON key for this service account. "
-                f"Loaded from: {creds_source}"
+                f"{account_hint}"
             ) from e
-        raise RuntimeError(f"Google auth refresh failed ({creds_source}): {message}") from e
+        raise RuntimeError(f"Google auth refresh failed ({account_hint}): {message}") from e
     except Exception as e:
-        raise RuntimeError(f"Failed to initialize Google credentials ({creds_source}): {e}") from e
+        raise RuntimeError(f"Failed to initialize Google credentials ({account_hint}): {e}") from e
     return gspread.authorize(creds)
 
 
@@ -909,7 +948,7 @@ def login():
         username = (request.form.get("username") or "").strip().lower()
         password = request.form.get("password")
 
-        if username in ALLOWED_USERS and password == SHARED_PASSWORD:
+        if is_allowed_login(username, password):
             session["logged_in"] = True
             session["username"] = username
             return redirect(url_for("home"))
@@ -1062,48 +1101,22 @@ def features_report_recordings_detail():
 @app.route("/dashboard-data")
 def dashboard_data():
     if not session.get("logged_in"):
-        return redirect(url_for("login"))
+        return api_error("Login required", 401, "login_required")
 
     register_service_activity("dashboard")
 
-    sms_waiting = len(get_pending_customers())
-    bot_waiting = len(get_bot_customers())
-    recordings_waiting = get_recordings_waiting_count()
-    f2m_waiting = len(get_f2m_customers())
-    recording_storage_waiting = len(get_recording_storage_customers())
-    human_service_waiting = len(get_human_service_customers())
-    support_ticket_list = load_support_tickets()
-    support_tickets_waiting = len([t for t in support_ticket_list if t.get("status") == "Waiting"])
-
     return jsonify({
-        "sms": {
-            "waiting": sms_waiting,
-            "active_users": get_active_users_for("sms"),
-        },
-        "bot": {
-            "waiting": bot_waiting,
-            "active_users": get_active_users_for("bot"),
-        },
-        "recordings": {
-            "waiting": recordings_waiting,
-            "active_users": get_active_users_for("recordings"),
-        },
-        "f2m": {
-            "waiting": f2m_waiting,
-            "active_users": get_active_users_for("f2m"),
-        },
-        "recording_storage": {
-            "waiting": recording_storage_waiting,
-            "active_users": get_active_users_for("recording_storage"),
-        },
-        "human_service": {
-            "waiting": human_service_waiting,
-            "active_users": get_active_users_for("human_service"),
-        },
-        "support_tickets": {
-            "waiting": support_tickets_waiting,
-            "active_users": get_active_users_for("support_tickets"),
-        },
+        "ok": True,
+        "sms": service_dashboard_entry("sms", lambda: len(get_pending_customers())),
+        "bot": service_dashboard_entry("bot", lambda: len(get_bot_customers())),
+        "recordings": service_dashboard_entry("recordings", get_recordings_waiting_count),
+        "f2m": service_dashboard_entry("f2m", lambda: len(get_f2m_customers())),
+        "recording_storage": service_dashboard_entry("recording_storage", lambda: len(get_recording_storage_customers())),
+        "human_service": service_dashboard_entry("human_service", lambda: len(get_human_service_customers())),
+        "support_tickets": service_dashboard_entry(
+            "support_tickets",
+            lambda: len([t for t in load_support_tickets() if t.get("status") == "Waiting"]),
+        ),
     })
 
 
@@ -1395,9 +1408,12 @@ def logout():
 @app.route("/load-data")
 def load_data():
     if not session.get("logged_in"):
-        return redirect(url_for("login"))
+        return api_error("Login required", 401, "login_required")
     register_service_activity("sms")
-    return jsonify(get_pending_customers())
+    try:
+        return jsonify({"ok": True, "customers": get_pending_customers()})
+    except Exception as exc:
+        return api_error(exc, 500, "google_auth_or_sheet_error")
 
 #Firebarry Sync by ID number
 @app.route("/fireberry-by-id", methods=["POST"])

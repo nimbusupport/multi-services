@@ -3,27 +3,123 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Nimbus Login</title>
+  <title>NimbusTelecome Login</title>
+  <meta name="description" content="Sign in to manage SMS, BOT, Fax2Mail, Network, PBX and Reports.">
   <link rel="stylesheet" href="/login.css">
 </head>
 <body>
-  <main class="login-wrap">
-    <section class="login-card">
-      <p class="kicker">Nimbus Services</p>
-      <h1>Sign In</h1>
-      <p class="subtitle">Use your service account to continue</p>
-      <form method="POST" action="/login">
-        <label class="field-label" for="username">Username</label>
-        <input id="username" type="text" name="username" required autocomplete="username">
-        <label class="field-label" for="password">Password</label>
-        <input id="password" type="password" name="password" required autocomplete="current-password">
-        <button type="submit">Login</button>
-      </form>
-      {% if error %}
-      <p class="error">{{ error }}</p>
-      {% endif %}
-      <p class="hint">Only Allowed Users can Connect</p>
+  <main class="login-page">
+    <section class="carousel-panel" aria-label="NimbusTelecome services carousel">
+      <header class="carousel-brand">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span>NimbusTelecome</span>
+      </header>
+
+      <div class="carousel-stage" id="login-carousel">
+        <article class="carousel-slide active" data-index="0">
+          <img src="/login_src/assets/carousel-sms.jpg" alt="SMS Gateway">
+          <h2>SMS Gateway</h2>
+          <p>Send and receive SMS at scale with enterprise-grade reliability.</p>
+        </article>
+        <article class="carousel-slide" data-index="1">
+          <img src="/login_src/assets/carousel-bot.jpg" alt="BOT Automation">
+          <h2>BOT Automation</h2>
+          <p>Smart conversational bots to automate customer interactions.</p>
+        </article>
+        <article class="carousel-slide" data-index="2">
+          <img src="/login_src/assets/carousel-fax.jpg" alt="Fax2Mail">
+          <h2>Fax2Mail</h2>
+          <p>Modernize your fax workflow and receive faxes directly to email.</p>
+        </article>
+        <article class="carousel-slide" data-index="3">
+          <img src="/login_src/assets/carousel-network.jpg" alt="Network Solutions">
+          <h2>Network Solutions</h2>
+          <p>End-to-end network infrastructure and managed services.</p>
+        </article>
+        <article class="carousel-slide" data-index="4">
+          <img src="/login_src/assets/carousel-pbx.jpg" alt="PBX Solutions">
+          <h2>PBX Solutions</h2>
+          <p>Cloud-based PBX for clear business communications.</p>
+        </article>
+        <article class="carousel-slide" data-index="5">
+          <img src="/login_src/assets/carousel-reports.jpg" alt="Reports and Analytics">
+          <h2>Reports & Analytics</h2>
+          <p>Real-time insights and reports across all your services.</p>
+        </article>
+      </div>
+
+      <div class="carousel-dots" aria-label="Carousel controls">
+        <button class="active" type="button" aria-label="Go to slide 1" data-slide="0"></button>
+        <button type="button" aria-label="Go to slide 2" data-slide="1"></button>
+        <button type="button" aria-label="Go to slide 3" data-slide="2"></button>
+        <button type="button" aria-label="Go to slide 4" data-slide="3"></button>
+        <button type="button" aria-label="Go to slide 5" data-slide="4"></button>
+        <button type="button" aria-label="Go to slide 6" data-slide="5"></button>
+      </div>
+
+      <p class="copyright">© 2026 NimbusTelecome Networks. All rights reserved.</p>
+    </section>
+
+    <section class="login-panel" aria-label="Sign in">
+      <div class="login-card">
+        <div class="login-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" focusable="false">
+            <path d="M7 10V8a5 5 0 0 1 10 0v2" />
+            <rect x="5" y="10" width="14" height="10" rx="2" />
+            <path d="M12 14v2" />
+          </svg>
+        </div>
+        <p class="kicker">NimbusTelecome Services</p>
+        <h1>Welcome back</h1>
+        <p class="subtitle">Sign in to access your dashboard</p>
+
+        <form method="POST" action="/login">
+          <label class="input-shell" for="username">
+            <span class="input-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <path d="M20 21a8 8 0 0 0-16 0" />
+                <circle cx="12" cy="7" r="4" />
+              </svg>
+            </span>
+            <span class="sr-only">Username</span>
+            <input id="username" type="text" name="username" placeholder="Username" required autocomplete="username">
+          </label>
+
+          <label class="input-shell" for="password">
+            <span class="input-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <path d="M7 10V8a5 5 0 0 1 10 0v2" />
+                <rect x="5" y="10" width="14" height="10" rx="2" />
+              </svg>
+            </span>
+            <span class="sr-only">Password</span>
+            <input id="password" type="password" name="password" placeholder="Password" required autocomplete="current-password">
+            <button class="password-toggle" type="button" aria-label="Show password" aria-pressed="false">
+              <svg class="eye-open" viewBox="0 0 24 24" focusable="false">
+                <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+              <svg class="eye-closed" viewBox="0 0 24 24" focusable="false">
+                <path d="M3 3l18 18" />
+                <path d="M10.6 10.6a3 3 0 0 0 2.8 2.8" />
+                <path d="M9.9 5.2A10.6 10.6 0 0 1 12 5c6.5 0 10 7 10 7a17.6 17.6 0 0 1-3.2 4.1" />
+                <path d="M6.1 6.8C3.5 8.6 2 12 2 12s3.5 7 10 7a9.7 9.7 0 0 0 4.1-.9" />
+              </svg>
+            </button>
+          </label>
+
+          {% if error %}
+          <p class="error">{{ error }}</p>
+          {% endif %}
+
+          <button class="submit-btn" type="submit">Sign In</button>
+        </form>
+
+        <p class="hint">Only allowed users can connect</p>
+      </div>
     </section>
   </main>
+
+  <script src="/login.js"></script>
 </body>
 </html>

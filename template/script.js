@@ -89,7 +89,13 @@ async function lookupSmsDomain(){
 async function loadData() {
     try{
       const res = await fetch('/load-data');
-      const data = await res.json();
+      const payload = await res.json().catch(() => {
+        throw new Error("Server returned non-JSON response");
+      });
+      if(!res.ok || payload.ok === false){
+        throw new Error(payload.message || res.statusText || "Load failed");
+      }
+      const data = Array.isArray(payload) ? payload : (payload.customers || []);
   
       if(!Array.isArray(data) || data.length === 0){
         loadedData = [];

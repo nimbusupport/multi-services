@@ -11,13 +11,15 @@ function renderUsers(serviceKey, users) {
 }
 
 function renderWaiting(serviceKey, waiting) {
-  const value = Number(waiting) || 0;
+  const unavailable = waiting === null || waiting === undefined;
+  const value = unavailable ? 0 : (Number(waiting) || 0);
   const countEl = document.getElementById(`${serviceKey}-waiting-count`);
   const barEl = document.getElementById(`${serviceKey}-waiting-bar`);
-  if (countEl) countEl.textContent = String(value);
+  if (countEl) countEl.textContent = unavailable ? "!" : String(value);
   if (barEl) {
     const width = Math.min(100, value * 5);
     barEl.style.width = `${width}%`;
+    barEl.title = unavailable ? "Service unavailable" : "";
   }
 }
 
