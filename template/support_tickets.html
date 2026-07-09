@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Support Tickets</title>
+  <title>{{ page_title }}</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
   <link rel="stylesheet" href="/nav.css">
   <link rel="stylesheet" href="/support_tickets.css">
@@ -11,9 +11,10 @@
 <body>
   <nav class="site-nav">
     <div class="site-nav-inner">
-      <a class="brand" href="/home"><span class="brand-kicker">Support Suite</span><span class="brand-main">Services</span></a>
+      <a class="brand" href="{{ '/home' if can_access_home else '/support-tickets' }}"><span class="brand-kicker">Support Suite</span><span class="brand-main">Services</span></a>
       <button class="nav-toggle" type="button">Menu</button>
       <div class="nav-links">
+        {% if can_access_home %}
         <a class="nav-link" href="/sms"><span class="nav-icon"><i class="fa-solid fa-comment-sms"></i></span><span class="nav-label">SMS</span></a>
         <a class="nav-link" href="/bot"><span class="nav-icon"><i class="fa-solid fa-robot"></i></span><span class="nav-label">Bot</span></a>
         <a class="nav-link" href="/f2m"><span class="nav-icon"><i class="fa-solid fa-envelope-open-text"></i></span><span class="nav-label">F2M</span></a>
@@ -21,8 +22,19 @@
         <a class="nav-link" href="/human-service"><span class="nav-icon"><i class="fa-solid fa-headset"></i></span><span class="nav-label">מוקד</span></a>
         <a class="nav-link" href="/record"><span class="nav-icon"><i class="fa-solid fa-record-vinyl"></i></span><span class="nav-label">Recordings</span></a>
         <a class="nav-link" href="/features-report"><span class="nav-icon"><i class="fa-solid fa-chart-simple"></i></span><span class="nav-label">Features Report</span></a>
-        <a class="nav-link active" href="/support-tickets"><span class="nav-icon"><i class="fa-solid fa-ticket"></i></span><span class="nav-label">Tickets</span></a>
+        {% endif %}
+        {% if can_access_support %}
+        <a class="nav-link {% if ticket_board.slug == 'support' and page_mode != 'nastia' %}active{% endif %}" href="/support-tickets"><span class="nav-icon"><i class="fa-solid fa-ticket"></i></span><span class="nav-label">Tickets</span></a>
+        {% endif %}
+        {% if can_access_pais %}
+        <a class="nav-link {% if ticket_board.slug == 'pais' and page_mode != 'nastia' %}active{% endif %}" href="/pais-tickets"><span class="nav-icon"><img class="nav-pais-icon" src="/picture/pais.png" alt=""></span><span class="nav-label">מפעל הפיס</span></a>
+        {% endif %}
+        {% if can_access_nastia %}
+        <a class="nav-link {% if page_mode == 'nastia' %}active{% endif %}" href="/nastia-tickets"><span class="nav-icon"><i class="fa-solid fa-user-clock"></i></span><span class="nav-label">נסטיה</span></a>
+        {% endif %}
+        {% if can_access_home %}
         <a class="nav-link" href="/home"><span class="nav-icon"><i class="fa-solid fa-chart-column"></i></span><span class="nav-label">Dashboard</span></a>
+        {% endif %}
       </div>
       <div class="nav-footer">
         <div class="nav-user">{{ (current_user or "").split("@")[0] }}</div>
@@ -33,10 +45,36 @@
 
   <main class="tickets-shell">
     <aside class="tickets-menu" aria-label="Ticket filters">
+      {% if page_mode == 'nastia' %}
+      <button class="ticket-tab active" type="button" data-scope="all"><i class="fa-solid fa-user-clock"></i><span>כל כרטיסי התאום</span><strong id="stat-all">0</strong></button>
+      {% else %}
       <button class="ticket-tab active" type="button" data-scope="all"><i class="fa-solid fa-inbox"></i><span>All Tickets</span><strong id="stat-all">0</strong></button>
       <button class="ticket-tab" type="button" data-scope="my"><i class="fa-solid fa-user-check"></i><span>My Tickets</span></button>
       <button class="ticket-tab" type="button" data-scope="unassigned"><i class="fa-regular fa-circle-question"></i><span>Unassigned</span><strong id="stat-unassigned">0</strong></button>
+      {% endif %}
 
+      <div class="ticket-board-links">
+        {% if can_access_support %}
+        <a class="ticket-board-link {% if ticket_board.slug == 'support' and page_mode != 'nastia' %}active{% endif %}" href="/support-tickets">
+          <i class="fa-solid fa-ticket"></i>
+          <span>Support Tickets</span>
+        </a>
+        {% endif %}
+        {% if can_access_pais %}
+        <a class="ticket-board-link {% if ticket_board.slug == 'pais' and page_mode != 'nastia' %}active{% endif %}" href="/pais-tickets">
+          <img src="/picture/pais.png" alt="">
+          <span>מפעל הפיס</span>
+        </a>
+        {% endif %}
+        {% if can_access_nastia %}
+        <a class="ticket-board-link {% if page_mode == 'nastia' %}active{% endif %}" href="/nastia-tickets">
+          <i class="fa-solid fa-user-clock"></i>
+          <span>נסטיה - תאום</span>
+        </a>
+        {% endif %}
+      </div>
+
+      {% if can_access_home %}
       <div class="portal-menu">
         <button class="portal-toggle" type="button"><i class="fa-solid fa-right-to-bracket"></i><span>Portals</span></button>
         <div class="portal-group">
@@ -88,15 +126,35 @@
           </a>
         </div>
       </div>
+      {% endif %}
     </aside>
 
     <section class="tickets-workspace">
       <header class="tickets-header">
-        <div>
-          <p>Support Tickets</p>
-          <h1>Support Tickets <span id="stat-waiting">0 Waiting</span></h1>
+        <div class="ticket-board-brand {% if page_icon_path %}has-logo{% endif %}">
+          {% if page_icon_path %}
+          <img src="{{ page_icon_path }}" alt="{{ page_title }}">
+          {% endif %}
+          <div>
+            <p>{{ page_subtitle }}</p>
+            <h1>{{ page_title }} <span id="stat-waiting">0 Waiting</span></h1>
+          </div>
         </div>
-        <button class="add-ticket-btn" id="open-ticket-modal" type="button"><i class="fa-solid fa-plus"></i><span>Add Ticket</span></button>
+
+        {% if show_create_button and ticket_board.slug == 'support' %}
+        <div class="ticket-create-controls">
+          <button class="add-ticket-btn" id="open-ticket-modal" type="button"><i class="fa-solid fa-plus"></i><span>Add Ticket</span></button>
+          <button class="icon-btn add-ticket-menu-toggle" id="open-create-menu" type="button" title="Ticket options"><i class="fa-solid fa-chevron-down"></i></button>
+          <div class="add-ticket-menu" id="ticket-create-menu">
+            <button class="menu-item" id="create-regular-ticket" type="button"><i class="fa-solid fa-ticket"></i><span>New Ticket</span></button>
+            {% if can_access_pais %}
+            <a class="menu-item" href="/pais-tickets"><img src="/picture/pais.png" alt=""><span>מפעל הפיס</span></a>
+            {% endif %}
+          </div>
+        </div>
+        {% elif show_create_button %}
+        <button class="add-ticket-btn pais-btn" id="open-ticket-modal" type="button"><img src="/picture/pais.png" alt=""><span>Ticket חדש</span></button>
+        {% endif %}
       </header>
 
       <section class="ticket-filters">
@@ -104,8 +162,17 @@
           <span>Status</span>
           <select id="status-filter">
             <option value="">All</option>
+            {% if ticket_board.slug == 'pais' %}
+            <option value="ממתין">ממתין</option>
+            <option value="ממתין לתאום">{% if page_mode == 'nastia' %}ממתין{% else %}ממתין לתאום{% endif %}</option>
+            <option value="תואם">תואם</option>
+            <option value="אין מענה">אין מענה</option>
+            <option value="בוצע">בוצע</option>
+            <option value="נכשל">נכשל</option>
+            {% else %}
             <option value="Waiting">Waiting</option>
             <option value="Done">Done</option>
+            {% endif %}
           </select>
         </label>
         <label>
@@ -127,10 +194,79 @@
           </select>
         </label>
         <label>
+          <span>From</span>
+          <input id="date-from-filter" type="date">
+        </label>
+        <label>
+          <span>To</span>
+          <input id="date-to-filter" type="date">
+        </label>
+        <label class="search-filter">
           <span>Search</span>
-          <input id="ticket-search" type="search" placeholder="Search ticket, domain, text">
+          <div class="search-input-wrap">
+            <input id="ticket-search" type="search" placeholder="{% if ticket_board.slug == 'pais' %}חיפוש לפי מספר מסוף או כתובת{% else %}Search ticket, customer, text{% endif %}">
+            <button class="icon-btn search-submit-btn" id="ticket-search-btn" type="button" aria-label="Search tickets">
+              <i class="fa-solid fa-magnifying-glass"></i>
+            </button>
+          </div>
         </label>
       </section>
+
+      {% if show_pais_report %}
+      <section class="pais-report-panel">
+        <div class="pais-report-head">
+          <div>
+            <p>Report</p>
+            <h2>ביצועי עובדים</h2>
+          </div>
+          <div class="report-export-group">
+            <label class="report-format-field">
+              <span>Format</span>
+              <select id="pais-report-format">
+                <option value="csv">CSV</option>
+                <option value="pdf">PDF</option>
+              </select>
+            </label>
+            <button class="create-ticket-btn report-export-btn" id="export-pais-report" type="button">
+              <i class="fa-solid fa-file-arrow-down"></i>
+              <span>Export</span>
+            </button>
+          </div>
+        </div>
+        <div class="pais-report-controls">
+          <label>
+            <span>Period</span>
+            <select id="pais-report-period">
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+            </select>
+          </label>
+          <label>
+            <span>Status</span>
+            <select id="pais-report-status">
+              <option value="">All</option>
+              <option value="ממתין">ממתין</option>
+              <option value="ממתין לתאום">ממתין לתאום</option>
+              <option value="תואם">תואם</option>
+              <option value="אין מענה">אין מענה</option>
+              <option value="בוצע">בוצע</option>
+              <option value="נכשל">נכשל</option>
+            </select>
+          </label>
+          <label>
+            <span>From</span>
+            <input id="pais-report-from" type="date">
+          </label>
+          <label>
+            <span>To</span>
+            <input id="pais-report-to" type="date">
+          </label>
+        </div>
+        <div class="pais-report-summary" id="pais-report-summary"></div>
+        <div class="pais-report-leaderboard" id="pais-report-leaderboard"></div>
+      </section>
+      {% endif %}
 
       <section class="ticket-list" id="ticket-list"></section>
       <div class="tickets-empty" id="tickets-empty">No tickets found</div>
@@ -139,9 +275,10 @@
 
   <div class="ticket-modal" id="ticket-modal" aria-hidden="true">
     <form class="ticket-form" id="ticket-form">
+      <input type="hidden" name="board_slug" value="{{ ticket_board.slug }}">
       <header>
         <div>
-          <p>New Ticket</p>
+          <p>{{ ticket_board.name }}</p>
           <h2 id="next-ticket-id">#0001</h2>
         </div>
         <button class="icon-btn" id="close-ticket-modal" type="button" title="Close"><i class="fa-solid fa-xmark"></i></button>
@@ -158,6 +295,7 @@
         </label>
       </div>
 
+      {% if ticket_board.slug == 'support' %}
       <div class="form-grid">
         <label>
           <span>Ticket type</span>
@@ -212,6 +350,66 @@
         <span>Solution</span>
         <textarea name="solution" rows="5"></textarea>
       </label>
+      {% else %}
+      <section class="detail-description paste-import-card">
+        <h3>הדבקה מהירה</h3>
+        <p>אפשר להדביק את כל הטקסט שקיבלתם, והמערכת תנסה למלא אוטומטית את השדות.</p>
+        <textarea id="pais-paste-source" rows="8" placeholder="מספר מסוף- 603884&#10;כתובת- שדרות אגם כנרת 6 נתניה&#10;כתובת סטטית- 10.63.129.49&#10;אלטורה- 10.222.19.0/28&#10;Loop back- 10.250.65.49/32&#10;איש קשר: מ.א ממתקים 0507500775&#10;פניית לקוח- ..."></textarea>
+        <div class="detail-save-row">
+          <span id="pais-paste-message"></span>
+          <button class="create-ticket-btn" id="parse-pais-paste" type="button">מלא שדות</button>
+        </div>
+      </section>
+      <div class="form-grid pais-grid">
+        <label>
+          <span>מספר מסוף</span>
+          <input name="terminal_number" type="text" required>
+        </label>
+        <label>
+          <span>כתובת</span>
+          <input name="address" type="text" required>
+        </label>
+        <label>
+          <span>כתובת IP סטטית</span>
+          <input name="static_ip" type="text">
+        </label>
+        <label>
+          <span>אלטורה</span>
+          <input name="altura" type="text">
+        </label>
+        <label>
+          <span>look back</span>
+          <input name="look_back" type="text">
+        </label>
+        <label>
+          <span>איש קשר - שם</span>
+          <input name="contact_name" type="text">
+        </label>
+        <label>
+          <span>איש קשר - מספר</span>
+          <input name="contact_phone" type="text">
+        </label>
+        <label>
+          <span>Assign</span>
+          <select name="assigned_to">
+            <option value="">Keep unassigned</option>
+            {% for user in support_users %}
+            <option value="{{ user }}">{{ user }}</option>
+            {% endfor %}
+          </select>
+        </label>
+      </div>
+
+      <label class="description-field">
+        <span>פניית לקוח</span>
+        <textarea name="customer_request" rows="4" required></textarea>
+      </label>
+
+      <label class="description-field">
+        <span>פעולות__הערות</span>
+        <textarea name="actions_taken" rows="4"></textarea>
+      </label>
+      {% endif %}
 
       <footer>
         <span id="ticket-form-message"></span>
@@ -230,14 +428,7 @@
         <button class="icon-btn" id="close-detail-modal" type="button" title="Close"><i class="fa-solid fa-xmark"></i></button>
       </header>
       <div class="detail-grid" id="detail-grid"></div>
-      <section class="detail-description">
-        <h3>Description</h3>
-        <p id="detail-description"></p>
-      </section>
-      <section class="detail-description">
-        <h3>Solution</h3>
-        <p id="detail-solution"></p>
-      </section>
+      <div id="detail-sections"></div>
       <section class="detail-attachments" id="detail-attachments"></section>
     </section>
   </div>
@@ -250,6 +441,22 @@
   </div>
 
   <script src="/nav.js"></script>
+  <script>
+    window.supportTicketsContext = {
+      isAdmin: {{ 'true' if is_admin else 'false' }},
+      boardSlug: {{ ticket_board.slug|tojson }},
+      boardName: {{ ticket_board.name|tojson }},
+      boardRoutePath: {{ ticket_board.route_path|tojson }},
+      ticketBoards: {{ ticket_boards|tojson }},
+      supportUsers: {{ support_users|tojson }},
+      technicianUsers: {{ technician_users|tojson }},
+      currentSupportUser: {{ support_user|tojson }},
+      supportStatuses: {{ support_statuses|tojson }},
+      paisStatuses: {{ pais_statuses|tojson }},
+      pageMode: {{ page_mode|tojson }},
+      ticketQueue: {{ ticket_queue|tojson }}
+    };
+  </script>
   <script src="/support_tickets.js"></script>
 </body>
 </html>

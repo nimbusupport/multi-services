@@ -1,3 +1,16 @@
+function displayUserName(user) {
+  const local = String(user || "").split("@")[0].toLowerCase();
+  if (local === "nir") return "ניר";
+  if (["eugeni", "yevgeni", "evgeni"].includes(local)) return "יבגני";
+  if (local === "golan") return "גולן";
+  if (local === "asaf") return "אסף";
+  if (["itsik", "itzik", "isaac"].includes(local)) return "איציק";
+  if (local === "zohar" || local === "zora") return "זורה";
+  if (["nastia", "nastya", "nastiya"].includes(local)) return "נסטיה";
+  if (local === "admin") return "Admin";
+  return String(user || "").split("@")[0];
+}
+
 function renderUsers(serviceKey, users) {
   const host = document.getElementById(`${serviceKey}-users`);
   if (!host) return;
@@ -6,7 +19,7 @@ function renderUsers(serviceKey, users) {
     return;
   }
   host.innerHTML = users
-    .map((u) => `<span class="active-user-chip">${String(u || "").split("@")[0]}</span>`)
+    .map((u) => `<span class="active-user-chip">${displayUserName(u)}</span>`)
     .join("");
 }
 
@@ -42,6 +55,10 @@ async function loadDashboardData() {
     renderUsers("human_service", data?.human_service?.active_users);
     renderWaiting("support_tickets", data?.support_tickets?.waiting);
     renderUsers("support_tickets", data?.support_tickets?.active_users);
+    renderWaiting("pais_tickets", data?.pais_tickets?.waiting);
+    renderUsers("pais_tickets", data?.pais_tickets?.active_users);
+    renderWaiting("nastia_tickets", data?.nastia_tickets?.waiting);
+    renderUsers("nastia_tickets", data?.nastia_tickets?.active_users);
   } catch (err) {
     console.error("dashboard data error", err);
   }

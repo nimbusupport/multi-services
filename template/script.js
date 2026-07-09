@@ -593,6 +593,18 @@ function copyInforuLog(){
 /* ================================
    CREATE SMS
 ================================ */
+function formatSmsResponse(response){
+  if(response === undefined || response === null || response === "" || response === "Created"){
+    return "";
+  }
+
+  if(typeof response === "string"){
+    return response;
+  }
+
+  return JSON.stringify(response);
+}
+
 async function createSMS(){
 
     const selected = loadedData.filter(x => x.checked);
@@ -630,11 +642,14 @@ async function createSMS(){
       let errorMsg = "";
   
       json.results.forEach(r => {
-  
+        const responseText = formatSmsResponse(r.response);
+
         if(r.success){
-          successMsg += `✅ ${r.domain} Created\n`;
+          successMsg += responseText
+            ? `✅ ${r.domain} Created\n${responseText}\n\n`
+            : `✅ ${r.domain} Created\n`;
         }else{
-          errorMsg += `❌ ${r.domain}\n${JSON.stringify(r.response)}\n\n`;
+          errorMsg += `❌ ${r.domain}\n${responseText || "API Error"}\n\n`;
         }
   
       });

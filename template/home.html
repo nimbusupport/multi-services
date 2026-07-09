@@ -22,6 +22,8 @@
         <a class="nav-link" href="/record"><span class="nav-icon"><i class="fa-solid fa-record-vinyl"></i></span><span class="nav-label">Recordings</span></a>
         <a class="nav-link" href="/features-report"><span class="nav-icon"><i class="fa-solid fa-chart-simple"></i></span><span class="nav-label">Features Report</span></a>
         <a class="nav-link" href="/support-tickets"><span class="nav-icon"><i class="fa-solid fa-ticket"></i></span><span class="nav-label">Tickets</span></a>
+        <a class="nav-link" href="/pais-tickets"><span class="nav-icon"><img src="/picture/pais.png" alt="" style="width:18px;height:18px;object-fit:contain"></span><span class="nav-label">מפעל הפיס</span></a>
+        <a class="nav-link" href="/nastia-tickets"><span class="nav-icon"><i class="fa-solid fa-user-clock"></i></span><span class="nav-label">נסטיה</span></a>
         <a class="nav-link active" href="/home"><span class="nav-icon"><i class="fa-solid fa-chart-column"></i></span><span class="nav-label">Dashboard</span></a>
       </div>
       <div class="nav-footer">
@@ -33,121 +35,152 @@
 
   <main class="dashboard-wrap">
     <section class="dashboard-panel">
-    <header class="dash-head">
-      <p class="welcome">Welcome back, {{ (current_user or "user").split("@")[0] }}</p>
-      <h1>Services</h1>
-    </header>
+      <header class="dash-head">
+        <p class="welcome">Welcome back, {{ (current_user or "user").split("@")[0] }}</p>
+        <h1>Services</h1>
+      </header>
 
-    <section class="card-grid">
-      <article class="service-card">
-        <span class="badge sms">SMS</span>
-        <h2>SMS Service</h2>
-        <img class="card-image" src="/card/sms.jpg" alt="SMS Service">
-        <a class="connect-btn" href="/sms">Connect</a>
-        <div class="active-users" id="sms-users"></div>
-        <div class="meter-row">
-          <span>Waiting</span>
-          <span id="sms-waiting-count">0</span>
-        </div>
-        <div class="meter"><div id="sms-waiting-bar"></div></div>
-      </article>
+      <section class="card-grid">
+        <article class="service-card">
+          <span class="badge sms">SMS</span>
+          <h2>SMS Service</h2>
+          <img class="card-image" src="/card/sms.jpg" alt="SMS Service">
+          <a class="connect-btn" href="/sms">Connect</a>
+          <div class="active-users" id="sms-users"></div>
+          <div class="meter-row">
+            <span>Waiting</span>
+            <span id="sms-waiting-count">0</span>
+          </div>
+          <div class="meter"><div id="sms-waiting-bar"></div></div>
+        </article>
 
-      <article class="service-card">
-        <span class="badge bot">Bot</span>
-        <h2>Bot Service</h2>
-        <img class="card-image" src="https://images.unsplash.com/photo-1677442136019-21780ecad995?auto=format&fit=crop&w=900&q=60" alt="Bot Service">
-        <a class="connect-btn" href="/bot">Connect</a>
-        <div class="active-users" id="bot-users"></div>
-        <div class="meter-row">
-          <span>Waiting</span>
-          <span id="bot-waiting-count">0</span>
-        </div>
-        <div class="meter"><div id="bot-waiting-bar"></div></div>
-      </article>
+        <article class="service-card">
+          <span class="badge bot">Bot</span>
+          <h2>Bot Service</h2>
+          <img class="card-image" src="https://images.unsplash.com/photo-1677442136019-21780ecad995?auto=format&fit=crop&w=900&q=60" alt="Bot Service">
+          <a class="connect-btn" href="/bot">Connect</a>
+          <div class="active-users" id="bot-users"></div>
+          <div class="meter-row">
+            <span>Waiting</span>
+            <span id="bot-waiting-count">0</span>
+          </div>
+          <div class="meter"><div id="bot-waiting-bar"></div></div>
+        </article>
 
-      <article class="service-card">
-        <span class="badge f2m">F2M</span>
-        <h2>F2M Service</h2>
-        <img class="card-image" src="/card/f2m.svg" alt="F2M Service">
-        <a class="connect-btn" href="/f2m">Connect</a>
-        <div class="active-users" id="f2m-users"></div>
-        <div class="meter-row">
-          <span>Waiting</span>
-          <span id="f2m-waiting-count">0</span>
-        </div>
-        <div class="meter"><div id="f2m-waiting-bar"></div></div>
-      </article>
+        <article class="service-card">
+          <span class="badge f2m">F2M</span>
+          <h2>F2M Service</h2>
+          <img class="card-image" src="/card/f2m.svg" alt="F2M Service">
+          <a class="connect-btn" href="/f2m">Connect</a>
+          <div class="active-users" id="f2m-users"></div>
+          <div class="meter-row">
+            <span>Waiting</span>
+            <span id="f2m-waiting-count">0</span>
+          </div>
+          <div class="meter"><div id="f2m-waiting-bar"></div></div>
+        </article>
 
-      <article class="service-card">
-        <span class="badge rec">Recordings</span>
-        <h2>Recording Service</h2>
-        <img class="card-image" src="https://images.unsplash.com/photo-1590602847861-f357a9332bbc?auto=format&fit=crop&w=900&q=60" alt="Recording Service">
-        <a class="connect-btn" href="/record">Connect</a>
-        <div class="active-users" id="recordings-users"></div>
-        <div class="meter-row">
-          <span>Waiting</span>
-          <span id="recordings-waiting-count">0</span>
-        </div>
-        <div class="meter"><div id="recordings-waiting-bar"></div></div>
-      </article>
+        <article class="service-card">
+          <span class="badge rec">Recordings</span>
+          <h2>Recording Service</h2>
+          <img class="card-image" src="https://images.unsplash.com/photo-1590602847861-f357a9332bbc?auto=format&fit=crop&w=900&q=60" alt="Recording Service">
+          <a class="connect-btn" href="/record">Connect</a>
+          <div class="active-users" id="recordings-users"></div>
+          <div class="meter-row">
+            <span>Waiting</span>
+            <span id="recordings-waiting-count">0</span>
+          </div>
+          <div class="meter"><div id="recordings-waiting-bar"></div></div>
+        </article>
 
-      <article class="service-card">
-        <span class="badge storage">אחסון</span>
-        <h2>איחסון הקלטות</h2>
-        <img class="card-image" src="/card/recording-storage.svg" alt="איחסון הקלטות">
-        <a class="connect-btn" href="/recording-storage">Connect</a>
-        <div class="active-users" id="recording_storage-users"></div>
-        <div class="meter-row">
-          <span>Waiting</span>
-          <span id="recording_storage-waiting-count">0</span>
-        </div>
-        <div class="meter"><div id="recording_storage-waiting-bar"></div></div>
-      </article>
+        <article class="service-card">
+          <span class="badge storage">אחסון</span>
+          <h2>אחסון הקלטות</h2>
+          <img class="card-image" src="/card/recording-storage.svg" alt="אחסון הקלטות">
+          <a class="connect-btn" href="/recording-storage">Connect</a>
+          <div class="active-users" id="recording_storage-users"></div>
+          <div class="meter-row">
+            <span>Waiting</span>
+            <span id="recording_storage-waiting-count">0</span>
+          </div>
+          <div class="meter"><div id="recording_storage-waiting-bar"></div></div>
+        </article>
 
-      <article class="service-card">
-        <span class="badge human">מוקד</span>
-        <h2>מוקד - אנושי</h2>
-        <img class="card-image" src="/card/human-service.svg" alt="מוקד אנושי">
-        <a class="connect-btn" href="/human-service">Connect</a>
-        <div class="active-users" id="human_service-users"></div>
-        <div class="meter-row">
-          <span>Waiting</span>
-          <span id="human_service-waiting-count">0</span>
-        </div>
-        <div class="meter"><div id="human_service-waiting-bar"></div></div>
-      </article>
-      <article class="service-card">
-        <span class="badge report">Report</span>
-        <h2>דו"ח פיצ'רים שבוצעו</h2>
-        <div class="report-card-art">
-          <i class="fa-solid fa-chart-simple"></i>
-        </div>
-        <a class="connect-btn" href="/features-report">Open Report</a>
-        <div class="active-users">
-          <span class="active-user-empty">Counters by selected month</span>
-        </div>
-        <div class="meter-row">
-          <span>CSV / PDF</span>
-          <span>All services</span>
-        </div>
-        <div class="meter"><div style="width:100%"></div></div>
-      </article>
-      <article class="service-card">
-        <span class="badge tickets">Tickets</span>
-        <h2>Support Tickets</h2>
-        <div class="ticket-card-art">
-          <i class="fa-solid fa-ticket"></i>
-          <span>#0001</span>
-        </div>
-        <a class="connect-btn" href="/support-tickets">Open Tickets</a>
-        <div class="active-users" id="support_tickets-users"></div>
-        <div class="meter-row">
-          <span>Waiting</span>
-          <span id="support_tickets-waiting-count">0</span>
-        </div>
-        <div class="meter"><div id="support_tickets-waiting-bar"></div></div>
-      </article>
-    </section>
+        <article class="service-card">
+          <span class="badge human">מוקד</span>
+          <h2>מוקד - אנושי</h2>
+          <img class="card-image" src="/card/human-service.svg" alt="מוקד אנושי">
+          <a class="connect-btn" href="/human-service">Connect</a>
+          <div class="active-users" id="human_service-users"></div>
+          <div class="meter-row">
+            <span>Waiting</span>
+            <span id="human_service-waiting-count">0</span>
+          </div>
+          <div class="meter"><div id="human_service-waiting-bar"></div></div>
+        </article>
+
+        <article class="service-card">
+          <span class="badge report">Report</span>
+          <h2>דו"ח פיצ'רים שבוצעו</h2>
+          <div class="report-card-art">
+            <i class="fa-solid fa-chart-simple"></i>
+          </div>
+          <a class="connect-btn" href="/features-report">Open Report</a>
+          <div class="active-users">
+            <span class="active-user-empty">Counters by selected month</span>
+          </div>
+          <div class="meter-row">
+            <span>CSV / PDF</span>
+            <span>All services</span>
+          </div>
+          <div class="meter"><div style="width:100%"></div></div>
+        </article>
+
+        <article class="service-card">
+          <span class="badge tickets">Tickets</span>
+          <h2>Support Tickets</h2>
+          <div class="ticket-card-art">
+            <i class="fa-solid fa-ticket"></i>
+            <span>#0001</span>
+          </div>
+          <a class="connect-btn" href="/support-tickets">Open Tickets</a>
+          <div class="active-users" id="support_tickets-users"></div>
+          <div class="meter-row">
+            <span>Waiting</span>
+            <span id="support_tickets-waiting-count">0</span>
+          </div>
+          <div class="meter"><div id="support_tickets-waiting-bar"></div></div>
+        </article>
+
+        <article class="service-card">
+          <span class="badge tickets">Pais</span>
+          <h2>מפעל הפיס</h2>
+          <img class="card-image" src="/picture/pais.png" alt="מפעל הפיס">
+          <a class="connect-btn" href="/pais-tickets">Open Pais</a>
+          <div class="active-users" id="pais_tickets-users"></div>
+          <div class="meter-row">
+            <span>Waiting</span>
+            <span id="pais_tickets-waiting-count">0</span>
+          </div>
+          <div class="meter"><div id="pais_tickets-waiting-bar"></div></div>
+        </article>
+
+        <article class="service-card">
+          <span class="badge tickets">Coord</span>
+          <h2>נסטיה - תאום</h2>
+          <div class="ticket-card-art">
+            <i class="fa-solid fa-user-clock"></i>
+            <span>Tech</span>
+          </div>
+          <a class="connect-btn" href="/nastia-tickets">Open Queue</a>
+          <div class="active-users" id="nastia_tickets-users"></div>
+          <div class="meter-row">
+            <span>ממתין לתאום</span>
+            <span id="nastia_tickets-waiting-count">0</span>
+          </div>
+          <div class="meter"><div id="nastia_tickets-waiting-bar"></div></div>
+        </article>
+      </section>
     </section>
   </main>
 

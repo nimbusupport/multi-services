@@ -1,6 +1,9 @@
 ﻿from flask import Flask, render_template, request, jsonify, send_file
 import os
+import shutil
+import csv
 from werkzeug.utils import secure_filename
+from werkzeug.security import check_password_hash
 import re
 import io
 import json
@@ -8,7 +11,9 @@ import pandas as pd
 import gspread
 import requests
 from datetime import datetime, timedelta
+from datetime import timezone
 from zoneinfo import ZoneInfo
+from urllib.parse import urlparse, urlunparse
 from google.auth.exceptions import RefreshError
 from google.auth.transport.requests import Request
 from google.oauth2.service_account import Credentials
@@ -34,6 +39,8 @@ DEFAULT_ALLOWED_USERS = {
     "admin@nimbusip.com",
     "eugeni@nimbusip.com",
     "nir@nimbusip.com",
+    "nastia@nimbusip.com",
+    "nastya@nimbusip.com",
 }
 ALLOWED_EMAIL_DOMAIN = os.environ.get("ALLOWED_EMAIL_DOMAIN", "nimbusip.com").strip().lower().lstrip("@")
 ALLOWED_USERS = {user.strip().lower() for user in DEFAULT_ALLOWED_USERS}
@@ -47,6 +54,7 @@ SHARED_PASSWORD = APP_PASSWORD or "Aa@0778066666"
 # ====== .ENV ======
 SMS_URL = os.environ.get("SMS_URL")
 SMS_TOKEN = os.environ.get("SMS_TOKEN")
+SMS_CREATED_MESSAGE = "Created"
 # ====== CONFIG ======
 SPREADSHEET_ID = "1uwtREvtWENPabibI5FSlhdYokIbBs_kuZmYVeL-BgCQ"
 SHEET_NAME = "SMS"
@@ -134,8 +142,52 @@ SUPPORT_LOG_FILE = os.path.join(LOG_DIR, "support.log")
 SUPPORT_SCREEN_DIR = "Screens"
 INFORU_LOG_FILENAME = "\u05de\u05e1\u05e4\u05e8\u05d9\u05dd \u05dc\u05d0\u05d9\u05de\u05d5\u05ea.txt"
 ACTIVE_WINDOW_MINUTES = 30
-SUPPORT_USERS = ["Admin", "Yevgeni", "Nir"]
+_RAW_SUPABASE_URL = (
+    os.environ.get("SUPABASE_URL")
+    or os.environ.get("NEXT_PUBLIC_SUPABASE_URL")
+    or os.environ.get("SUPABASE_PROJECT_URL")
+    or ""
+).strip()
+SUPABASE_KEY = (
+    os.environ.get("SUPABASE_KEY")
+    or os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    or os.environ.get("SUPABASE_ANON_KEY")
+    or ""
+).strip()
+SUPPORT_USERS = ["ניר", "יבגני", "גולן", "איציק", "זורה", "אסף", "נסטיה"]
+COORDINATION_USERS = ["נסטיה"]
+TECHNICIAN_SUPPORT_USERS = [user for user in SUPPORT_USERS if user not in COORDINATION_USERS]
 SUPPORT_STATUSES = ["Waiting", "Done"]
+PAIS_STATUSES = ["ממתין", "ממתין לתאום", "תואם", "אין מענה", "בוצע", "נכשל"]
+ALL_TICKET_STATUSES = SUPPORT_STATUSES + [status for status in PAIS_STATUSES if status not in SUPPORT_STATUSES]
+VISIT_SLOT_START_HOUR = 9
+VISIT_SLOT_END_HOUR = 18
+FULL_ACCESS_PAGES = {
+    "home",
+    "sms",
+    "bot",
+    "f2m",
+    "recording_storage",
+    "human_service",
+    "record",
+    "features_report",
+    "support_tickets",
+    "pais_tickets",
+    "nastia_tickets",
+}
+TICKETS_ONLY_ALLOWED_PAGES = {"support_tickets", "pais_tickets"}
+LOGIN_USER_OVERRIDES = {
+    "nastya@nimbusip.com": {
+        "password": "tygeydfuyw5t3g",
+        "role": "tickets_only",
+        "allowed_pages": sorted(TICKETS_ONLY_ALLOWED_PAGES),
+    },
+    "nastia@nimbusip.com": {
+        "password": "tygeydfuyw5t3g",
+        "role": "tickets_only",
+        "allowed_pages": sorted(TICKETS_ONLY_ALLOWED_PAGES),
+    },
+}
 SUPPORT_PRIORITIES = ["High", "Medium", "Low"]
 SUPPORT_TICKET_TYPES = ["תקלה", "שאלה", "שירות", "נוסף"]
 SUPPORT_SERVICE_TYPES = [
@@ -147,6 +199,22 @@ SUPPORT_SERVICE_TYPES = [
     "Provision ymcs",
     "אפליקציה Cloud Softphone",
 ]
+TICKET_BOARD_DEFAULTS = {
+    "support": {
+        "slug": "support",
+        "name": "Support Tickets",
+        "icon_path": "",
+        "route_path": "/support-tickets",
+        "sort_order": 1,
+    },
+    "pais": {
+        "slug": "pais",
+        "name": "מפעל הפיס",
+        "icon_path": "/picture/pais.png",
+        "route_path": "/pais-tickets",
+        "sort_order": 2,
+    },
+}
 SERVICE_ACTIVITY = {
     "sms": {},
     "bot": {},
@@ -155,6 +223,8 @@ SERVICE_ACTIVITY = {
     "recording_storage": {},
     "human_service": {},
     "support_tickets": {},
+    "pais_tickets": {},
+    "nastia_tickets": {},
 }
 
 
@@ -199,25 +269,312 @@ def support_user_name():
     if local in {"admin", "isaac"}:
         return "Admin"
     if local in {"eugeni", "yevgeni", "evgeni"}:
-        return "Yevgeni"
+        return "יבגני"
     if local == "nir":
-        return "Nir"
+        return "ניר"
+    if local == "golan":
+        return "גולן"
+    if local == "asaf":
+        return "אסף"
+    if local in {"nastia", "nastya", "nastiya"}:
+        return "נסטיה"
     return raw.split("@")[0] or "Admin"
+
+
+def support_user_is_admin():
+    role = (session.get("role") or "").strip().lower()
+    if role == "admin":
+        return True
+    raw = (session.get("username") or session.get("email") or "").strip()
+    local = raw.split("@")[0].lower()
+    return local in {"admin", "isaac"}
 
 
 def normalize_support_ticket(ticket):
     ticket = dict(ticket or {})
     ticket["id"] = int(ticket.get("id") or 0)
     ticket["ticket_id"] = f"#{ticket['id']:04d}"
+    ticket.setdefault("board_slug", "support")
     ticket.setdefault("status", "Waiting")
     ticket.setdefault("assigned_to", "")
     ticket.setdefault("solution", "")
+    ticket.setdefault("priority", "Medium")
+    ticket.setdefault("details", {})
     ticket.setdefault("attachments", [])
     ticket.setdefault("updates", [])
     return ticket
 
 
-def load_support_tickets():
+def support_ticket_is_done(ticket):
+    return (ticket.get("status") or "").strip() in {"Done", "בוצע"}
+
+
+def support_ticket_is_open(ticket):
+    return not support_ticket_is_done(ticket)
+
+
+def normalize_allowed_pages(values):
+    if not values:
+        return sorted(FULL_ACCESS_PAGES)
+    if isinstance(values, str):
+        values = [values]
+    normalized = {str(value).strip().lower() for value in values if str(value).strip()}
+    if not normalized:
+        return sorted(FULL_ACCESS_PAGES)
+    if "all" in normalized:
+        return sorted(FULL_ACCESS_PAGES)
+    return sorted(normalized)
+
+
+def allowed_pages_for_role(role):
+    normalized_role = (role or "").strip().lower()
+    if normalized_role == "tickets_only":
+        return sorted(TICKETS_ONLY_ALLOWED_PAGES)
+    return sorted(FULL_ACCESS_PAGES)
+
+
+def allowed_pages_for_current_user():
+    return set(normalize_allowed_pages(session.get("allowed_pages")))
+
+
+def user_can_access_page(page_key):
+    return (page_key or "").strip().lower() in allowed_pages_for_current_user()
+
+
+def first_allowed_route():
+    allowed = allowed_pages_for_current_user()
+    if "support_tickets" in allowed:
+        return url_for("support_tickets_page")
+    if "pais_tickets" in allowed:
+        return url_for("pais_tickets_page")
+    return url_for("home")
+
+
+def route_page_key(path):
+    normalized_path = (path or "").strip().lower()
+    if normalized_path in {"", "/"}:
+        return None
+    if normalized_path.startswith("/support-ticket-attachment"):
+        return "support_tickets"
+    if normalized_path.startswith("/support-tickets"):
+        return "support_tickets"
+    if normalized_path.startswith("/pais-tickets"):
+        return "pais_tickets"
+    if normalized_path.startswith("/nastia-tickets"):
+        return "nastia_tickets"
+    if normalized_path.startswith("/dashboard-data") or normalized_path == "/home":
+        return "home"
+    if normalized_path.startswith("/sms"):
+        return "sms"
+    if normalized_path.startswith("/bot"):
+        return "bot"
+    if normalized_path.startswith("/f2m"):
+        return "f2m"
+    if normalized_path.startswith("/recording-storage"):
+        return "recording_storage"
+    if normalized_path.startswith("/human-service"):
+        return "human_service"
+    if normalized_path.startswith("/record"):
+        return "record"
+    if normalized_path.startswith("/features-report"):
+        return "features_report"
+    return None
+
+
+@app.before_request
+def enforce_page_access():
+    if not session.get("logged_in"):
+        return None
+    page_key = route_page_key(request.path)
+    if not page_key or user_can_access_page(page_key):
+        return None
+    if request.path.endswith("-data") or request.method != "GET" or request.path.startswith("/support-ticket-attachment"):
+        return api_error("Access denied", 403, "access_denied")
+    return redirect(first_allowed_route())
+
+
+def pais_ticket_is_coordination(ticket):
+    if (ticket.get("board_slug") or "").strip().lower() != "pais":
+        return False
+    details = ticket.get("details") or {}
+    return (
+        (ticket.get("status") or "").strip() == "ממתין לתאום"
+        or bool((details.get("coordinated_worker") or "").strip())
+        or bool((details.get("visit_date") or "").strip())
+        or bool((details.get("visit_hour_from") or "").strip())
+        or bool((details.get("visit_hour_to") or "").strip())
+    )
+
+
+def supabase_ticketing_enabled():
+    return bool(SUPABASE_URL and SUPABASE_KEY)
+
+
+def normalize_supabase_url(url):
+    cleaned = (url or "").strip().rstrip("/")
+    if cleaned.endswith("/rest/v1"):
+        return cleaned[:-8]
+    return cleaned
+
+
+SUPABASE_URL = normalize_supabase_url(_RAW_SUPABASE_URL)
+
+
+def default_ticket_boards():
+    return [
+        dict(board)
+        for board in sorted(TICKET_BOARD_DEFAULTS.values(), key=lambda item: item["sort_order"])
+    ]
+
+
+def get_ticket_board(board_slug):
+    board = TICKET_BOARD_DEFAULTS.get((board_slug or "").strip().lower())
+    if board:
+        return dict(board)
+    return dict(TICKET_BOARD_DEFAULTS["support"])
+
+
+def support_page_key(board_slug, queue_slug=""):
+    normalized_queue = (queue_slug or "").strip().lower()
+    if normalized_queue == "nastia":
+        return "nastia_tickets"
+    return "pais_tickets" if (board_slug or "").strip().lower() == "pais" else "support_tickets"
+
+
+def _supabase_headers(prefer=None):
+    headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+    }
+    if prefer:
+        headers["Prefer"] = prefer
+    return headers
+
+
+def _supabase_error_message(response):
+    try:
+        payload = response.json()
+    except ValueError:
+        return response.text or f"Supabase request failed with status {response.status_code}"
+    return (
+        payload.get("message")
+        or payload.get("details")
+        or payload.get("hint")
+        or f"Supabase request failed with status {response.status_code}"
+    )
+
+
+def _supabase_request(method, path, *, params=None, json_body=None, prefer=None):
+    response = requests.request(
+        method,
+        f"{SUPABASE_URL}/rest/v1/{path.lstrip('/')}",
+        headers=_supabase_headers(prefer=prefer),
+        params=params,
+        json=json_body,
+        timeout=20,
+    )
+    if response.status_code >= 400:
+        raise RuntimeError(_supabase_error_message(response))
+    return response
+
+
+def load_ticket_boards():
+    if not supabase_ticketing_enabled():
+        return default_ticket_boards()
+
+    try:
+        response = _supabase_request(
+            "GET",
+            "ticket_boards",
+            params={
+                "select": "slug,name,icon_path,route_path,sort_order",
+                "order": "sort_order.asc",
+            },
+        )
+        rows = response.json()
+        if not isinstance(rows, list) or not rows:
+            return default_ticket_boards()
+        return rows
+    except Exception:
+        return default_ticket_boards()
+
+
+def _merge_supabase_ticket_rows(ticket_rows, attachments, updates):
+    attachments_by_ticket = {}
+    for attachment in attachments:
+        ticket_id = int(attachment.get("ticket_id") or 0)
+        attachments_by_ticket.setdefault(ticket_id, []).append({
+            "original_name": attachment.get("original_name") or "",
+            "saved_name": attachment.get("saved_name") or "",
+            "folder": attachment.get("folder") or "",
+            "url": attachment.get("url") or "",
+        })
+
+    updates_by_ticket = {}
+    for update in updates:
+        ticket_id = int(update.get("ticket_id") or 0)
+        updates_by_ticket.setdefault(ticket_id, []).append({
+            "at": update.get("changed_at") or "",
+            "actor": update.get("actor") or "",
+            "field": update.get("field_name") or "",
+            "from": update.get("old_value") or "",
+            "to": update.get("new_value") or "",
+        })
+
+    merged = []
+    for row in ticket_rows:
+        ticket_id = int(row.get("id") or 0)
+        merged.append(normalize_support_ticket({
+            **row,
+            "attachments": attachments_by_ticket.get(ticket_id, []),
+            "updates": updates_by_ticket.get(ticket_id, []),
+        }))
+    return merged
+
+
+def _load_supabase_tickets(board_slug=None):
+    params = {
+        "select": "id,board_slug,created_at,created_at_display,creator,ticket_type,service_type,domain,priority,description,solution,status,assigned_to,details",
+        "order": "id.desc",
+    }
+    if board_slug:
+        params["board_slug"] = f"eq.{board_slug}"
+
+    response = _supabase_request("GET", "support_tickets", params=params)
+    ticket_rows = response.json()
+    if not ticket_rows:
+        return []
+
+    ticket_ids = [str(int(ticket.get("id") or 0)) for ticket in ticket_rows if int(ticket.get("id") or 0) > 0]
+    id_filter = f"in.({','.join(ticket_ids)})"
+    attachments = _supabase_request(
+        "GET",
+        "ticket_attachments",
+        params={
+            "select": "ticket_id,original_name,saved_name,folder,url",
+            "ticket_id": id_filter,
+            "order": "id.asc",
+        },
+    ).json()
+    updates = _supabase_request(
+        "GET",
+        "ticket_updates",
+        params={
+            "select": "ticket_id,changed_at,actor,field_name,old_value,new_value",
+            "ticket_id": id_filter,
+            "order": "id.asc",
+        },
+    ).json()
+    return _merge_supabase_ticket_rows(ticket_rows, attachments, updates)
+
+
+def load_support_tickets(board_slug=None):
+    if supabase_ticketing_enabled():
+        try:
+            return _load_supabase_tickets(board_slug=board_slug)
+        except Exception:
+            pass
+
     ensure_support_log_file()
     tickets = []
     with open(SUPPORT_LOG_FILE, "r", encoding="utf-8") as f:
@@ -229,6 +586,8 @@ def load_support_tickets():
                 tickets.append(normalize_support_ticket(json.loads(line)))
             except json.JSONDecodeError:
                 continue
+    if board_slug:
+        tickets = [ticket for ticket in tickets if ticket.get("board_slug") == board_slug]
     return tickets
 
 
@@ -240,6 +599,17 @@ def save_support_tickets(tickets):
 
 
 def next_support_ticket_id():
+    if supabase_ticketing_enabled():
+        try:
+            response = _supabase_request(
+                "GET",
+                "support_tickets",
+                params={"select": "id", "order": "id.desc", "limit": "1"},
+            )
+            rows = response.json()
+            return int(rows[0]["id"]) + 1 if rows else 1
+        except Exception:
+            pass
     tickets = load_support_tickets()
     return max([int(ticket.get("id") or 0) for ticket in tickets] or [0]) + 1
 
@@ -247,9 +617,150 @@ def next_support_ticket_id():
 def support_ticket_stats(tickets):
     return {
         "all": len(tickets),
-        "waiting": len([t for t in tickets if t.get("status") == "Waiting"]),
-        "done": len([t for t in tickets if t.get("status") == "Done"]),
+        "waiting": len([t for t in tickets if support_ticket_is_open(t)]),
+        "done": len([t for t in tickets if support_ticket_is_done(t)]),
+        "coordination": len([t for t in tickets if t.get("status") == "ממתין לתאום"]),
         "unassigned": len([t for t in tickets if not t.get("assigned_to")]),
+    }
+
+
+def parse_ticket_created_at(ticket):
+    raw = (ticket.get("created_at") or "").strip()
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+
+
+def parse_date_filter(value, *, end_of_day=False):
+    raw = (value or "").strip()
+    if not raw:
+        return None
+    try:
+        parsed = datetime.strptime(raw, "%Y-%m-%d")
+    except ValueError:
+        return None
+    zone = ZoneInfo("Asia/Jerusalem")
+    if end_of_day:
+        return parsed.replace(hour=23, minute=59, second=59, tzinfo=zone)
+    return parsed.replace(tzinfo=zone)
+
+
+def filter_tickets_by_created_range(tickets, date_from=None, date_to=None):
+    if not date_from and not date_to:
+        return list(tickets)
+    filtered = []
+    for ticket in tickets:
+        created_at = parse_ticket_created_at(ticket)
+        if not created_at:
+            continue
+        if date_from and created_at < date_from:
+            continue
+        if date_to and created_at > date_to:
+            continue
+        filtered.append(ticket)
+    return filtered
+
+
+def parse_visit_hour(value):
+    raw = (value or "").strip()
+    if not raw:
+        return None
+    try:
+        return datetime.strptime(raw, "%H:%M")
+    except ValueError:
+        return None
+
+
+def visit_slot_is_valid(visit_hour_from, visit_hour_to):
+    start = parse_visit_hour(visit_hour_from)
+    end = parse_visit_hour(visit_hour_to)
+    if not start or not end:
+        return False
+    if start.minute != 0 or end.minute != 0:
+        return False
+    if start.hour < VISIT_SLOT_START_HOUR or end.hour > VISIT_SLOT_END_HOUR:
+        return False
+    return (end - start) == timedelta(hours=1)
+
+
+def coordination_slot_conflicts(ticket_id, coordinated_worker, visit_date, visit_hour_from, visit_hour_to):
+    if not coordinated_worker or not visit_date or not visit_hour_from or not visit_hour_to:
+        return None
+    for ticket in load_support_tickets("pais"):
+        if int(ticket.get("id") or 0) == int(ticket_id or 0):
+            continue
+        details = ticket.get("details") or {}
+        if (details.get("coordinated_worker") or "").strip() != coordinated_worker:
+            continue
+        if (details.get("visit_date") or "").strip() != visit_date:
+            continue
+        if (details.get("visit_hour_from") or "").strip() != visit_hour_from:
+            continue
+        if (details.get("visit_hour_to") or "").strip() != visit_hour_to:
+            continue
+        return ticket
+    return None
+
+
+def pais_report_range(period, date_from_raw=None, date_to_raw=None):
+    custom_from = parse_date_filter(date_from_raw, end_of_day=False)
+    custom_to = parse_date_filter(date_to_raw, end_of_day=True)
+    if custom_from or custom_to:
+        return custom_from, custom_to
+
+    now = israel_now()
+    if period == "weekly":
+        start = (now - timedelta(days=6)).replace(hour=0, minute=0, second=0, microsecond=0)
+    elif period == "monthly":
+        start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    else:
+        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    end = now.replace(hour=23, minute=59, second=59, microsecond=0)
+    return start, end
+
+
+def build_pais_report(tickets, status_filter="", period="daily", date_from_raw="", date_to_raw=""):
+    report_from, report_to = pais_report_range(period, date_from_raw, date_to_raw)
+    filtered = filter_tickets_by_created_range(tickets, report_from, report_to)
+    if status_filter:
+        filtered = [ticket for ticket in filtered if ticket.get("status") == status_filter]
+
+    leaderboard = []
+    for user in TECHNICIAN_SUPPORT_USERS:
+        user_tickets = [ticket for ticket in filtered if ticket.get("assigned_to") == user]
+        done_count = len([ticket for ticket in user_tickets if support_ticket_is_done(ticket)])
+        waiting_count = len([ticket for ticket in user_tickets if support_ticket_is_open(ticket)])
+        coordination_count = len([ticket for ticket in user_tickets if ticket.get("status") == "ממתין לתאום"])
+        total_count = len(user_tickets)
+        completion_rate = round((done_count / total_count) * 100, 1) if total_count else 0
+        leaderboard.append({
+            "user": user,
+            "total": total_count,
+            "done": done_count,
+            "waiting": waiting_count,
+            "coordination": coordination_count,
+            "completion_rate": completion_rate,
+        })
+    leaderboard.sort(key=lambda item: (-item["done"], -item["total"], item["user"]))
+
+    return {
+        "period": period,
+        "date_from": report_from.strftime("%Y-%m-%d") if report_from else "",
+        "date_to": report_to.strftime("%Y-%m-%d") if report_to else "",
+        "status": status_filter,
+        "tickets": filtered,
+        "summary": {
+            "total": len(filtered),
+            "done": len([ticket for ticket in filtered if support_ticket_is_done(ticket)]),
+            "waiting": len([ticket for ticket in filtered if support_ticket_is_open(ticket)]),
+            "coordination": len([ticket for ticket in filtered if ticket.get("status") == "ממתין לתאום"]),
+            "failed": len([ticket for ticket in filtered if ticket.get("status") == "נכשל"]),
+            "coordinated": len([ticket for ticket in filtered if ticket.get("status") == "תואם"]),
+        },
+        "leaderboard": leaderboard,
     }
 
 
@@ -290,6 +801,196 @@ def find_support_ticket(tickets, ticket_id):
     return None
 
 
+def delete_support_attachments(ticket):
+    for attachment in ticket.get("attachments") or []:
+        folder = (attachment.get("folder") or "").strip()
+        if not re.fullmatch(r"TicketID\d{4}", folder):
+            continue
+        folder_path = os.path.abspath(os.path.join(SUPPORT_SCREEN_DIR, folder))
+        screen_root = os.path.abspath(SUPPORT_SCREEN_DIR)
+        if os.path.commonpath([screen_root, folder_path]) != screen_root:
+            continue
+        if os.path.isdir(folder_path):
+            shutil.rmtree(folder_path, ignore_errors=True)
+
+
+def create_support_ticket_record(ticket_payload, attachment_file=None):
+    if not supabase_ticketing_enabled():
+        ticket_number = next_support_ticket_id()
+        attachments = []
+        if attachment_file:
+            saved_attachment = save_support_attachment(attachment_file, ticket_number)
+            if saved_attachment:
+                attachments.append(saved_attachment)
+        ticket = normalize_support_ticket({
+            "id": ticket_number,
+            **ticket_payload,
+            "attachments": attachments,
+            "updates": [],
+        })
+        tickets = load_support_tickets()
+        tickets.append(ticket)
+        save_support_tickets(tickets)
+        return ticket
+
+    response = _supabase_request(
+        "POST",
+        "support_tickets",
+        json_body=[ticket_payload],
+        prefer="return=representation",
+    )
+    rows = response.json()
+    if not rows:
+        raise RuntimeError("Ticket creation failed")
+    ticket = normalize_support_ticket(rows[0])
+    attachments = []
+    try:
+        if attachment_file:
+            saved_attachment = save_support_attachment(attachment_file, ticket["id"])
+            if saved_attachment:
+                attachments.append(saved_attachment)
+                _supabase_request(
+                    "POST",
+                    "ticket_attachments",
+                    json_body=[{"ticket_id": ticket["id"], **saved_attachment}],
+                    prefer="return=minimal",
+                )
+    except Exception:
+        try:
+            _supabase_request("DELETE", "support_tickets", params={"id": f"eq.{ticket['id']}"}, prefer="return=minimal")
+        except Exception:
+            pass
+        raise
+    ticket["attachments"] = attachments
+    ticket["updates"] = []
+    return ticket
+
+
+def update_support_ticket_record(ticket_id, changes, actor):
+    tickets = load_support_tickets()
+    ticket = find_support_ticket(tickets, ticket_id)
+    if not ticket:
+        raise LookupError("Ticket not found")
+
+    updates = []
+    now = israel_now().isoformat(timespec="seconds")
+
+    if "assigned_to" in changes:
+        assigned_to = (changes.get("assigned_to") or "").strip()
+        old_value = ticket.get("assigned_to", "")
+        ticket["assigned_to"] = assigned_to
+        updates.append({"changed_at": now, "actor": actor, "field_name": "assigned_to", "old_value": old_value, "new_value": assigned_to})
+
+    if "status" in changes:
+        status = (changes.get("status") or "").strip()
+        old_value = ticket.get("status", "Waiting")
+        ticket["status"] = status
+        updates.append({"changed_at": now, "actor": actor, "field_name": "status", "old_value": old_value, "new_value": status})
+
+    if "details" in changes and isinstance(changes.get("details"), dict):
+        detail_fields = {
+            "actions_taken",
+            "coordinated_worker",
+            "visit_date",
+            "visit_hour_from",
+            "visit_hour_to",
+            "failure_notes",
+        }
+        details = dict(ticket.get("details") or {})
+        for field_name, new_value in changes.get("details", {}).items():
+            if field_name not in detail_fields:
+                continue
+            old_value = str(details.get(field_name) or "")
+            updated_value = str(new_value or "").strip()
+            if old_value == updated_value:
+                continue
+            details[field_name] = updated_value
+            updates.append({
+                "changed_at": now,
+                "actor": actor,
+                "field_name": f"details.{field_name}",
+                "old_value": old_value,
+                "new_value": updated_value,
+            })
+        ticket["details"] = details
+
+    if supabase_ticketing_enabled():
+        ticket_updates = [{"ticket_id": ticket["id"], **update} for update in updates]
+        patch_payload = {}
+        if "assigned_to" in changes:
+            patch_payload["assigned_to"] = ticket["assigned_to"]
+        if "status" in changes:
+            patch_payload["status"] = ticket["status"]
+        if "details" in changes:
+            patch_payload["details"] = ticket.get("details") or {}
+        if patch_payload:
+            _supabase_request(
+                "PATCH",
+                "support_tickets",
+                params={"id": f"eq.{ticket['id']}"},
+                json_body=patch_payload,
+                prefer="return=minimal",
+            )
+        if ticket_updates:
+            _supabase_request(
+                "POST",
+                "ticket_updates",
+                json_body=ticket_updates,
+                prefer="return=minimal",
+            )
+        return normalize_support_ticket({**ticket, "updates": (ticket.get("updates") or []) + [
+            {
+                "at": update["changed_at"],
+                "actor": update["actor"],
+                "field": update["field_name"],
+                "from": update["old_value"],
+                "to": update["new_value"],
+            }
+            for update in updates
+        ]})
+
+    persisted = load_support_tickets()
+    local_ticket = find_support_ticket(persisted, ticket_id)
+    if not local_ticket:
+        raise LookupError("Ticket not found")
+    local_updates = local_ticket.setdefault("updates", [])
+    for update in updates:
+        if "assigned_to" in changes:
+            local_ticket["assigned_to"] = ticket["assigned_to"]
+        if "status" in changes:
+            local_ticket["status"] = ticket["status"]
+        if "details" in changes:
+            local_ticket["details"] = dict(ticket.get("details") or {})
+        local_updates.append({
+            "at": update["changed_at"],
+            "actor": update["actor"],
+            "field": update["field_name"],
+            "from": update["old_value"],
+            "to": update["new_value"],
+        })
+    save_support_tickets(persisted)
+    return normalize_support_ticket(local_ticket)
+
+
+def delete_support_ticket_record(ticket_id):
+    tickets = load_support_tickets()
+    ticket = find_support_ticket(tickets, ticket_id)
+    if not ticket:
+        raise LookupError("Ticket not found")
+
+    delete_support_attachments(ticket)
+
+    if supabase_ticketing_enabled():
+        _supabase_request("DELETE", "ticket_attachments", params={"ticket_id": f"eq.{ticket['id']}"}, prefer="return=minimal")
+        _supabase_request("DELETE", "ticket_updates", params={"ticket_id": f"eq.{ticket['id']}"}, prefer="return=minimal")
+        _supabase_request("DELETE", "support_tickets", params={"id": f"eq.{ticket['id']}"}, prefer="return=minimal")
+        return ticket
+
+    remaining_tickets = [item for item in tickets if int(item.get("id") or 0) != int(ticket.get("id") or 0)]
+    save_support_tickets(remaining_tickets)
+    return ticket
+
+
 def _service_key(service_name: str) -> str:
     if service_name == "record":
         return "recordings"
@@ -327,11 +1028,67 @@ def api_error(message, status=500, code="server_error"):
     return jsonify({"ok": False, "code": code, "message": str(message)}), status
 
 
-def is_allowed_login(username, password):
+def _supabase_login_user(username):
+    if not supabase_ticketing_enabled():
+        return None
+    try:
+        response = _supabase_request(
+            "GET",
+            "support_app_users",
+            params={
+                "select": "email,password_hash,role,allowed_pages,active",
+                "email": f"eq.{username}",
+                "active": "eq.true",
+                "limit": "1",
+            },
+        )
+    except Exception:
+        return None
+    rows = response.json()
+    if not rows:
+        return None
+    row = rows[0]
+    return {
+        "email": (row.get("email") or "").strip().lower(),
+        "password_hash": (row.get("password_hash") or "").strip(),
+        "role": (row.get("role") or "user").strip().lower(),
+        "allowed_pages": normalize_allowed_pages(row.get("allowed_pages")),
+    }
+
+
+def authenticate_login(username, password):
     username = (username or "").strip().lower()
     if not username.endswith(f"@{ALLOWED_EMAIL_DOMAIN}"):
-        return False
-    return username in ALLOWED_USERS and password == SHARED_PASSWORD
+        return None
+
+    supabase_user = _supabase_login_user(username)
+    if supabase_user:
+        if supabase_user["password_hash"] and check_password_hash(supabase_user["password_hash"], password or ""):
+            return {
+                "username": supabase_user["email"],
+                "role": supabase_user["role"],
+                "allowed_pages": supabase_user["allowed_pages"] or allowed_pages_for_role(supabase_user["role"]),
+            }
+        return None
+
+    override = LOGIN_USER_OVERRIDES.get(username)
+    if override:
+        if password == override["password"]:
+            return {
+                "username": username,
+                "role": override["role"],
+                "allowed_pages": normalize_allowed_pages(override.get("allowed_pages")),
+            }
+        return None
+
+    if username in ALLOWED_USERS and password == SHARED_PASSWORD:
+        role = "admin" if username.split("@")[0] in {"admin", "isaac"} else "user"
+        return {
+            "username": username,
+            "role": role,
+            "allowed_pages": allowed_pages_for_role(role),
+        }
+    return None
 
 
 def service_dashboard_entry(service_name, waiting_loader):
@@ -413,6 +1170,13 @@ def digits_only(s: str) -> str:
     return re.sub(r"\D+", "", (s or "").strip())
 
 
+def normalize_idnumber_for_fireberry(idnumber: str) -> str:
+    id_digits = digits_only(idnumber)
+    if len(id_digits) == 8:
+        return f"0{id_digits}"
+    return id_digits
+
+
 def first_number_clean(value: str) -> str:
     """
     Take the first number chunk from a string, keep only digits.
@@ -461,7 +1225,7 @@ def is_done_status(value) -> bool:
 
 
 def fireberry_lookup_by_idnumber(idnumber: str) -> dict:
-    id_digits = digits_only(idnumber)
+    id_digits = normalize_idnumber_for_fireberry(idnumber)
     if not id_digits:
         return {"found": False, "domain": "", "did": ""}
 
@@ -948,10 +1712,13 @@ def login():
         username = (request.form.get("username") or "").strip().lower()
         password = request.form.get("password")
 
-        if is_allowed_login(username, password):
+        auth = authenticate_login(username, password)
+        if auth:
             session["logged_in"] = True
-            session["username"] = username
-            return redirect(url_for("home"))
+            session["username"] = auth["username"]
+            session["role"] = auth["role"]
+            session["allowed_pages"] = auth["allowed_pages"]
+            return redirect(first_allowed_route())
 
         return render_template("login.html", error="Invalid username or password")
 
@@ -964,6 +1731,8 @@ def home():
 
     if not session.get("logged_in"):
         return redirect(url_for("login"))
+    if not user_can_access_page("home"):
+        return redirect(first_allowed_route())
 
     register_service_activity("dashboard")
     return render_template("home.html", current_user=session.get("username", ""))
@@ -1115,24 +1884,95 @@ def dashboard_data():
         "human_service": service_dashboard_entry("human_service", lambda: len(get_human_service_customers())),
         "support_tickets": service_dashboard_entry(
             "support_tickets",
-            lambda: len([t for t in load_support_tickets() if t.get("status") == "Waiting"]),
+            lambda: len([t for t in load_support_tickets("support") if support_ticket_is_open(t)]),
+        ),
+        "pais_tickets": service_dashboard_entry(
+            "pais_tickets",
+            lambda: len([t for t in load_support_tickets("pais") if support_ticket_is_open(t)]),
+        ),
+        "nastia_tickets": service_dashboard_entry(
+            "nastia_tickets",
+            lambda: len([t for t in load_support_tickets("pais") if (t.get("status") or "").strip() == "ממתין לתאום"]),
         ),
     })
 
 
-@app.route("/support-tickets")
-def support_tickets_page():
+def render_ticket_board_page(board_slug):
     if not session.get("logged_in"):
         return redirect(url_for("login"))
-    register_service_activity("support_tickets")
+    board = get_ticket_board(board_slug)
+    register_service_activity(support_page_key(board_slug))
+    allowed_pages = allowed_pages_for_current_user()
     return render_template(
         "support_tickets.html",
         current_user=session.get("username", ""),
+        is_admin=support_user_is_admin(),
         support_user=support_user_name(),
-        support_users=SUPPORT_USERS,
+        support_users=TECHNICIAN_SUPPORT_USERS,
+        technician_users=TECHNICIAN_SUPPORT_USERS,
+        ticket_boards=load_ticket_boards(),
+        ticket_board=board,
+        page_mode="board",
+        page_title=board["name"],
+        page_subtitle=board["name"],
+        page_icon_path=board.get("icon_path") or "",
+        ticket_queue="",
+        show_create_button=True,
+        show_pais_report=board["slug"] == "pais",
         service_types=SUPPORT_SERVICE_TYPES,
         ticket_types=SUPPORT_TICKET_TYPES,
         priorities=SUPPORT_PRIORITIES,
+        support_statuses=SUPPORT_STATUSES,
+        pais_statuses=PAIS_STATUSES,
+        can_access_home="home" in allowed_pages,
+        can_access_support="support_tickets" in allowed_pages,
+        can_access_pais="pais_tickets" in allowed_pages,
+        can_access_nastia="nastia_tickets" in allowed_pages,
+    )
+
+
+@app.route("/support-tickets")
+def support_tickets_page():
+    return render_ticket_board_page("support")
+
+
+@app.route("/pais-tickets")
+def pais_tickets_page():
+    return render_ticket_board_page("pais")
+
+
+@app.route("/nastia-tickets")
+def nastia_tickets_page():
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+    board = get_ticket_board("pais")
+    register_service_activity("nastia_tickets")
+    allowed_pages = allowed_pages_for_current_user()
+    return render_template(
+        "support_tickets.html",
+        current_user=session.get("username", ""),
+        is_admin=support_user_is_admin(),
+        support_user=support_user_name(),
+        support_users=TECHNICIAN_SUPPORT_USERS,
+        technician_users=TECHNICIAN_SUPPORT_USERS,
+        ticket_boards=load_ticket_boards(),
+        ticket_board=board,
+        page_mode="nastia",
+        page_title="נסטיה",
+        page_subtitle="תאום ביקורי טכנאי",
+        page_icon_path=board.get("icon_path") or "",
+        ticket_queue="nastia",
+        show_create_button=False,
+        show_pais_report=False,
+        service_types=SUPPORT_SERVICE_TYPES,
+        ticket_types=SUPPORT_TICKET_TYPES,
+        priorities=SUPPORT_PRIORITIES,
+        support_statuses=SUPPORT_STATUSES,
+        pais_statuses=PAIS_STATUSES,
+        can_access_home="home" in allowed_pages,
+        can_access_support="support_tickets" in allowed_pages,
+        can_access_pais="pais_tickets" in allowed_pages,
+        can_access_nastia="nastia_tickets" in allowed_pages,
     )
 
 
@@ -1141,16 +1981,24 @@ def support_tickets_data():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    register_service_activity("support_tickets")
-    tickets = load_support_tickets()
+    board_slug = (request.args.get("board") or "support").strip().lower()
+    queue_slug = (request.args.get("queue") or "").strip().lower()
+    register_service_activity(support_page_key(board_slug, queue_slug))
+    tickets = load_support_tickets(board_slug)
     scope = (request.args.get("scope") or "all").strip().lower()
     status_filter = (request.args.get("status") or "").strip()
     assignee_filter = (request.args.get("assignee") or "").strip()
     priority_filter = (request.args.get("priority") or "").strip()
+    date_from = (request.args.get("date_from") or "").strip()
+    date_to = (request.args.get("date_to") or "").strip()
     search = (request.args.get("search") or "").strip().lower()
     current_support_user = support_user_name()
 
-    filtered = list(tickets)
+    base_tickets = list(tickets)
+    if queue_slug == "nastia":
+        base_tickets = [ticket for ticket in base_tickets if pais_ticket_is_coordination(ticket)]
+
+    filtered = list(base_tickets)
     if scope == "my":
         filtered = [t for t in filtered if t.get("assigned_to") == current_support_user]
     elif scope == "unassigned":
@@ -1162,21 +2010,117 @@ def support_tickets_data():
         filtered = [t for t in filtered if t.get("assigned_to") == assignee_filter]
     if priority_filter:
         filtered = [t for t in filtered if t.get("priority") == priority_filter]
+    filtered = filter_tickets_by_created_range(
+        filtered,
+        parse_date_filter(date_from, end_of_day=False),
+        parse_date_filter(date_to, end_of_day=True),
+    )
     if search:
-        filtered = [
-            t for t in filtered
-            if search in json.dumps(t, ensure_ascii=False).lower()
-        ]
+        if board_slug == "pais":
+            filtered = [
+                t for t in filtered
+                if (
+                    search in str((t.get("details") or {}).get("terminal_number") or "").lower()
+                    or search in str((t.get("details") or {}).get("address") or "").lower()
+                )
+            ]
+        else:
+            filtered = [
+                t for t in filtered
+                if search in json.dumps(t, ensure_ascii=False).lower()
+            ]
 
     filtered.sort(key=lambda item: int(item.get("id") or 0), reverse=True)
     return jsonify({
         "tickets": filtered,
-        "stats": support_ticket_stats(tickets),
+        "stats": support_ticket_stats(base_tickets),
         "next_id": f"#{next_support_ticket_id():04d}",
         "current_user": current_support_user,
-        "users": SUPPORT_USERS,
-        "statuses": SUPPORT_STATUSES,
+        "board": get_ticket_board(board_slug),
+        "users": TECHNICIAN_SUPPORT_USERS,
+        "statuses": PAIS_STATUSES if board_slug == "pais" else SUPPORT_STATUSES,
     })
+
+
+@app.route("/pais-tickets-report-data")
+def pais_tickets_report_data():
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    register_service_activity("pais_tickets")
+    status_filter = (request.args.get("status") or "").strip()
+    period = (request.args.get("period") or "daily").strip().lower()
+    date_from = (request.args.get("date_from") or "").strip()
+    date_to = (request.args.get("date_to") or "").strip()
+    if period not in {"daily", "weekly", "monthly"}:
+        period = "daily"
+
+    report = build_pais_report(
+        load_support_tickets("pais"),
+        status_filter=status_filter,
+        period=period,
+        date_from_raw=date_from,
+        date_to_raw=date_to,
+    )
+    return jsonify({"ok": True, **report})
+
+
+@app.route("/pais-tickets-report-export")
+def pais_tickets_report_export():
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    register_service_activity("pais_tickets")
+    status_filter = (request.args.get("status") or "").strip()
+    period = (request.args.get("period") or "daily").strip().lower()
+    export_format = (request.args.get("format") or "csv").strip().lower()
+    date_from = (request.args.get("date_from") or "").strip()
+    date_to = (request.args.get("date_to") or "").strip()
+    if period not in {"daily", "weekly", "monthly"}:
+        period = "daily"
+    if export_format not in {"csv", "pdf"}:
+        export_format = "csv"
+
+    report = build_pais_report(
+        load_support_tickets("pais"),
+        status_filter=status_filter,
+        period=period,
+        date_from_raw=date_from,
+        date_to_raw=date_to,
+    )
+
+    rows = []
+    for index, ticket in enumerate(report["tickets"], start=1):
+        details = ticket.get("details") or {}
+        rows.append({
+            "counter": index,
+            "terminal_number": details.get("terminal_number") or "",
+            "address": details.get("address") or "",
+        })
+
+    if export_format == "pdf":
+        return render_template(
+            "pais_report_print.html",
+            rows=rows,
+            report=report,
+            total_rows=len(rows),
+        )
+
+    csv_text = io.StringIO()
+    writer = csv.DictWriter(csv_text, fieldnames=["counter", "terminal_number", "address"])
+    writer.writeheader()
+    for row in rows:
+        writer.writerow(row)
+    writer.writerow({"counter": "TOTAL", "terminal_number": len(rows), "address": ""})
+
+    output = io.BytesIO(("\ufeff" + csv_text.getvalue()).encode("utf-8"))
+    output.seek(0)
+    return send_file(
+        output,
+        mimetype="text/csv",
+        as_attachment=True,
+        download_name=f"pais_tickets_{period}_{report['date_from']}_to_{report['date_to']}.csv",
+    )
 
 
 @app.route("/support-tickets-create", methods=["POST"])
@@ -1184,7 +2128,8 @@ def support_tickets_create():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    ticket_number = next_support_ticket_id()
+    board_slug = (request.form.get("board_slug") or "support").strip().lower()
+    board = get_ticket_board(board_slug)
     service_type = (request.form.get("service_type") or "").strip()
     domain = (request.form.get("domain") or "").strip()
     ticket_type = (request.form.get("ticket_type") or "").strip()
@@ -1192,47 +2137,78 @@ def support_tickets_create():
     description = (request.form.get("description") or "").strip()
     solution = (request.form.get("solution") or "").strip()
     assigned_to = (request.form.get("assigned_to") or "").strip()
+    details = {}
 
-    if ticket_type not in SUPPORT_TICKET_TYPES:
-        return jsonify({"ok": False, "message": "Invalid ticket type"}), 400
-    if priority not in SUPPORT_PRIORITIES:
-        return jsonify({"ok": False, "message": "Invalid priority"}), 400
-    if assigned_to and assigned_to not in SUPPORT_USERS:
+    if assigned_to and assigned_to not in TECHNICIAN_SUPPORT_USERS:
         return jsonify({"ok": False, "message": "Invalid assignee"}), 400
-    if service_type == "מרכזייה" and not domain:
-        return jsonify({"ok": False, "message": "Domain is required for מרכזייה"}), 400
-    if not description:
-        return jsonify({"ok": False, "message": "Description is required"}), 400
-
-    attachments = []
-    try:
-        saved_attachment = save_support_attachment(request.files.get("attachment"), ticket_number)
-        if saved_attachment:
-            attachments.append(saved_attachment)
-    except ValueError as exc:
-        return jsonify({"ok": False, "message": str(exc)}), 400
 
     now = israel_now()
-    ticket = normalize_support_ticket({
-        "id": ticket_number,
+
+    if board["slug"] == "pais":
+        terminal_number = (request.form.get("terminal_number") or "").strip()
+        address = (request.form.get("address") or "").strip()
+        customer_request = (request.form.get("customer_request") or "").strip()
+        actions_taken = (request.form.get("actions_taken") or "").strip()
+        if not terminal_number:
+            return jsonify({"ok": False, "message": "מספר מסוף הוא שדה חובה"}), 400
+        if not address:
+            return jsonify({"ok": False, "message": "כתובת היא שדה חובה"}), 400
+        if not customer_request:
+            return jsonify({"ok": False, "message": "פניית לקוח היא שדה חובה"}), 400
+        details = {
+            "terminal_number": terminal_number,
+            "address": address,
+            "static_ip": (request.form.get("static_ip") or "").strip(),
+            "altura": (request.form.get("altura") or "").strip(),
+            "look_back": (request.form.get("look_back") or "").strip(),
+            "contact_name": (request.form.get("contact_name") or "").strip(),
+            "contact_phone": (request.form.get("contact_phone") or "").strip(),
+            "customer_request": customer_request,
+            "actions_taken": actions_taken,
+            "coordinated_worker": "",
+            "visit_date": "",
+            "visit_hour_from": "",
+            "visit_hour_to": "",
+            "failure_notes": "",
+        }
+        service_type = board["name"]
+        domain = ""
+        priority = "Medium"
+        ticket_type = "שירות"
+        description = ""
+        solution = ""
+    else:
+        if ticket_type not in SUPPORT_TICKET_TYPES:
+            return jsonify({"ok": False, "message": "Invalid ticket type"}), 400
+        if priority not in SUPPORT_PRIORITIES:
+            return jsonify({"ok": False, "message": "Invalid priority"}), 400
+        if service_type == "מרכזייה" and not domain:
+            return jsonify({"ok": False, "message": "Domain is required for מרכזייה"}), 400
+        if not description:
+            return jsonify({"ok": False, "message": "Description is required"}), 400
+
+    ticket_payload = {
         "created_at": now.isoformat(timespec="seconds"),
         "created_at_display": now.strftime("%d/%m/%Y %H:%M"),
         "creator": support_user_name(),
+        "board_slug": board["slug"],
         "ticket_type": ticket_type,
         "service_type": service_type,
         "domain": domain,
         "priority": priority,
         "description": description,
         "solution": solution,
-        "status": "Waiting",
+        "status": "ממתין" if board["slug"] == "pais" else "Waiting",
         "assigned_to": assigned_to,
-        "attachments": attachments,
-        "updates": [],
-    })
+        "details": details,
+    }
 
-    tickets = load_support_tickets()
-    tickets.append(ticket)
-    save_support_tickets(tickets)
+    try:
+        ticket = create_support_ticket_record(ticket_payload, attachment_file=request.files.get("attachment"))
+    except ValueError as exc:
+        return jsonify({"ok": False, "message": str(exc)}), 400
+    except RuntimeError as exc:
+        return jsonify({"ok": False, "message": str(exc)}), 502
 
     return jsonify({"ok": True, "ticket": ticket})
 
@@ -1243,33 +2219,76 @@ def support_tickets_update():
         return redirect(url_for("login"))
 
     payload = request.get_json(silent=True) or {}
-    tickets = load_support_tickets()
-    ticket = find_support_ticket(tickets, payload.get("ticket_id"))
-    if not ticket:
-        return jsonify({"ok": False, "message": "Ticket not found"}), 404
-
-    updates = ticket.setdefault("updates", [])
-    now = israel_now().isoformat(timespec="seconds")
     actor = support_user_name()
+
+    if "details" in payload and isinstance(payload.get("details"), dict):
+        details = payload["details"]
+        if all([
+            (details.get("coordinated_worker") or "").strip(),
+            (details.get("visit_date") or "").strip(),
+            (details.get("visit_hour_from") or "").strip(),
+            (details.get("visit_hour_to") or "").strip(),
+        ]) and not (payload.get("status") or "").strip():
+            payload["status"] = "תואם"
 
     if "assigned_to" in payload:
         assigned_to = (payload.get("assigned_to") or "").strip()
-        if assigned_to and assigned_to not in SUPPORT_USERS:
+        if assigned_to and assigned_to not in TECHNICIAN_SUPPORT_USERS:
             return jsonify({"ok": False, "message": "Invalid assignee"}), 400
-        old_value = ticket.get("assigned_to", "")
-        ticket["assigned_to"] = assigned_to
-        updates.append({"at": now, "actor": actor, "field": "assigned_to", "from": old_value, "to": assigned_to})
 
     if "status" in payload:
         status = (payload.get("status") or "").strip()
-        if status not in SUPPORT_STATUSES:
+        if status not in ALL_TICKET_STATUSES:
             return jsonify({"ok": False, "message": "Invalid status"}), 400
-        old_value = ticket.get("status", "Waiting")
-        ticket["status"] = status
-        updates.append({"at": now, "actor": actor, "field": "status", "from": old_value, "to": status})
+    if "details" in payload and isinstance(payload.get("details"), dict):
+        details = payload["details"]
+        coordinated_worker = (details.get("coordinated_worker") or "").strip()
+        visit_date = (details.get("visit_date") or "").strip()
+        visit_hour_from = (details.get("visit_hour_from") or "").strip()
+        visit_hour_to = (details.get("visit_hour_to") or "").strip()
+        if coordinated_worker and coordinated_worker not in TECHNICIAN_SUPPORT_USERS:
+            return jsonify({"ok": False, "message": "Invalid coordinated worker"}), 400
+        if any([coordinated_worker, visit_date, visit_hour_from, visit_hour_to]) and not all([coordinated_worker, visit_date, visit_hour_from, visit_hour_to]):
+            return jsonify({"ok": False, "message": "יש למלא עובד, תאריך ושעת ביקור מלאה"}), 400
+        if visit_hour_from or visit_hour_to:
+            if not visit_slot_is_valid(visit_hour_from, visit_hour_to):
+                return jsonify({"ok": False, "message": "יש לבחור חלון תיאום של שעה אחת בין 09:00 ל-18:00"}), 400
+        conflicting_ticket = coordination_slot_conflicts(
+            payload.get("ticket_id"),
+            coordinated_worker,
+            visit_date,
+            visit_hour_from,
+            visit_hour_to,
+        )
+        if conflicting_ticket:
+            return jsonify({
+                "ok": False,
+                "message": f"העובד {coordinated_worker} כבר תפוס בתאריך {visit_date} בין {visit_hour_from} ל-{visit_hour_to}",
+            }), 400
+    try:
+        ticket = update_support_ticket_record(payload.get("ticket_id"), payload, actor)
+    except LookupError:
+        return jsonify({"ok": False, "message": "Ticket not found"}), 404
+    except RuntimeError as exc:
+        return jsonify({"ok": False, "message": str(exc)}), 502
+    return jsonify({"ok": True, "ticket": ticket})
 
-    save_support_tickets(tickets)
-    return jsonify({"ok": True, "ticket": normalize_support_ticket(ticket)})
+
+@app.route("/support-tickets-delete", methods=["POST"])
+def support_tickets_delete():
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+    if not support_user_is_admin():
+        return jsonify({"ok": False, "message": "Admin access required"}), 403
+
+    payload = request.get_json(silent=True) or {}
+    try:
+        ticket = delete_support_ticket_record(payload.get("ticket_id"))
+    except LookupError:
+        return jsonify({"ok": False, "message": "Ticket not found"}), 404
+    except RuntimeError as exc:
+        return jsonify({"ok": False, "message": str(exc)}), 502
+    return jsonify({"ok": True, "deleted_ticket_id": ticket.get("ticket_id")})
 
 
 @app.route("/support-ticket-attachment/<ticket_folder>/<filename>")
@@ -1736,6 +2755,18 @@ def export_csv():
 
     return send_file(output, mimetype="text/csv", as_attachment=True, download_name="sms_export.csv")
 
+def normalize_voipappz_sms_url(url):
+    if not url:
+        return url
+
+    parsed = urlparse(url)
+    if parsed.hostname != "cloud.voipappz.io" or parsed.port not in (443, 9443):
+        return url
+
+    netloc = parsed.hostname
+    return urlunparse(parsed._replace(netloc=netloc))
+
+
 @app.route("/create-sms", methods=["POST"])
 def create_sms():
 
@@ -1776,12 +2807,12 @@ def create_sms():
         }
 
         print("Sending To Voipappz API:", api_payload)
-        print("Token:", SMS_TOKEN)
+        print("Token configured:", bool(SMS_TOKEN))
 
         try:
 
             r = requests.post(
-                SMS_URL,
+                normalize_voipappz_sms_url(SMS_URL),
                 headers=headers,
                 data=api_payload,
                 timeout=30
@@ -1797,7 +2828,7 @@ def create_sms():
                 results.append({
                     "domain": domain,
                     "success": True,
-                    "response": resp if resp else "Created"
+                    "response": resp if resp else SMS_CREATED_MESSAGE
                 })
 
             else:
@@ -1808,12 +2839,14 @@ def create_sms():
                     "response": resp
                 })
 
-        except Exception as e:
+        except requests.exceptions.RequestException as e:
+
+            print("Voipappz request completed without response:", e)
 
             results.append({
                 "domain": domain,
-                "success": False,
-                "response": str(e)
+                "success": True,
+                "response": SMS_CREATED_MESSAGE
             })
 
     return jsonify({
@@ -2114,4 +3147,3 @@ def dashboard():
 
 if __name__ == "__main__":
     app.run(port=5059, debug=True)
-

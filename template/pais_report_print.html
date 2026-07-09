@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pais Report</title>
+  <style>
+    body {
+      margin: 24px;
+      font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+      color: #1f2937;
+      background: #fff;
+    }
+
+    h1, h2, p {
+      margin: 0;
+    }
+
+    .head {
+      display: flex;
+      justify-content: space-between;
+      align-items: end;
+      gap: 16px;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid #dbe4f0;
+    }
+
+    .meta {
+      color: #4b5563;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th, td {
+      border: 1px solid #d7deea;
+      padding: 10px 12px;
+      text-align: right;
+      vertical-align: top;
+    }
+
+    th {
+      background: #eef4ff;
+      color: #1d4f91;
+    }
+
+    .empty {
+      margin-top: 24px;
+      padding: 18px;
+      border: 1px dashed #c9d5e6;
+      border-radius: 10px;
+      color: #6b7280;
+    }
+
+    @media print {
+      body {
+        margin: 12mm;
+      }
+    }
+  </style>
+</head>
+<body>
+  <section class="head">
+    <div>
+      <p>מפעל הפיס</p>
+      <h1>Export Report</h1>
+    </div>
+    <div class="meta">
+      <div>Period: {{ report.period }}</div>
+      <div>Dates: {{ report.date_from }} - {{ report.date_to }}</div>
+      <div>Status: {{ report.status or 'All' }}</div>
+      <div>Rows: {{ total_rows }}</div>
+    </div>
+  </section>
+
+  {% if rows %}
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>terminal_number</th>
+        <th>address</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        <td>{{ row.counter }}</td>
+        <td>{{ row.terminal_number }}</td>
+        <td>{{ row.address }}</td>
+      </tr>
+      {% endfor %}
+      <tr>
+        <td><strong>TOTAL</strong></td>
+        <td><strong>{{ total_rows }}</strong></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">No rows found for this report.</div>
+  {% endif %}
+
+  <script>
+    window.addEventListener("load", () => {
+      window.print();
+    });
+  </script>
+</body>
+</html>

@@ -101,7 +101,7 @@
   - סינון לפי email, status, created date
   - badge עבור `role`
   - badge עבור `enabled/disabled`
-  - פעולות: `Create`, `Disable/Enable`, `Reset Password`, `Change Role`
+  - פעולות__הערות: `Create`, `Disable/Enable`, `Reset Password`, `Change Role`
 - יצירת משתמש תתבצע מה־backend דרך Admin SDK:
   - email
   - password זמני או סיסמה שהאדמין מזין
@@ -114,7 +114,7 @@
 ## 8. מסך Audit Log לאדמין
 - לבנות מסך שמאחד שני מקורות:
   - Cloud Logging עבור auth/platform/runtime events
-  - audit events אפליקטיביים מובנים עבור פעולות admin
+  - audit events אפליקטיביים מובנים עבור פעולות__הערות admin
 - ב־v1 להציג לפחות:
   - login succeeded
   - login failed
@@ -143,12 +143,12 @@
 ### 9. אינסטרומנטציה ואחידות audit
 - להוסיף helper אחיד לכתיבת audit events מהאפליקציה בפורמט JSON structured logging.
 - כל פעולה רגישה חדשה תשתמש באותו helper.
-- ב־v1 “critical app actions” לא יורחבו לכל הזרימות העסקיות של SMS/Bot/Recordings, אלא רק לפעולות admin + auth events, בהתאם להחלטה שננעלה.
+- ב־v1 “critical app actions” לא יורחבו לכל הזרימות העסקיות של SMS/Bot/Recordings, אלא רק לפעולות__הערות admin + auth events, בהתאם להחלטה שננעלה.
 - להכין extension point כדי להוסיף בעתיד גם audit על:
   - יצירת SMS
   - סימון done
-  - פעולות recordings
-  - פעולות bot
+  - פעולות__הערות recordings
+  - פעולות__הערות bot
 
 ### 10. UI / Navigation / UX
 - לעדכן את כל ה־templates הקיימים כך שהניווט יהיה role-aware.
@@ -225,6 +225,6 @@
 - v1 נשאר Flask server-rendered + JS קיים, בלי מעבר ל־SPA או React.
 - authentication מתבצע עם `Email/Password`, לא Google SSO.
 - `admin@nimbusip.com` יוקם כאדמין ראשון באמצעות bootstrap חיצוני חד־פעמי.
-- מסך audit ב־v1 מכסה auth events + admin actions בלבד; פעולות עסקיות של SMS/Bot/Recordings יישארו לשלב הבא.
+- מסך audit ב־v1 מכסה auth events + admin actions בלבד; פעולות__הערות עסקיות של SMS/Bot/Recordings יישארו לשלב הבא.
 - אם לא מוגדר מנגנון מייל ייעודי, reset password ב־v1 יתבסס על reset link ולא על דיוור custom.
 - הריפקטור של `app.py` הוא חלק מהמשימה, כדי לא להטמיע auth/admin חדשים בתוך קובץ יחיד של 1000+ שורות.
