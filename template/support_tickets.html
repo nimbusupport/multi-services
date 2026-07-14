@@ -130,6 +130,7 @@
     </aside>
 
     <section class="tickets-workspace">
+      <div class="tickets-toolbar">
       <header class="tickets-header">
         <div class="ticket-board-brand {% if page_icon_path %}has-logo{% endif %}">
           {% if page_icon_path %}
@@ -157,7 +158,7 @@
         {% endif %}
       </header>
 
-      <section class="ticket-filters">
+      <form class="ticket-filters" id="ticket-filters-form">
         <label>
           <span>Status</span>
           <select id="status-filter">
@@ -205,12 +206,13 @@
           <span>Search</span>
           <div class="search-input-wrap">
             <input id="ticket-search" type="search" placeholder="{% if ticket_board.slug == 'pais' %}חיפוש לפי מספר מסוף או כתובת{% else %}Search ticket, customer, text{% endif %}">
-            <button class="icon-btn search-submit-btn" id="ticket-search-btn" type="button" aria-label="Search tickets">
+            <button class="icon-btn search-submit-btn" id="ticket-search-btn" type="submit" aria-label="Search tickets">
               <i class="fa-solid fa-magnifying-glass"></i>
             </button>
           </div>
         </label>
-      </section>
+      </form>
+      </div>
 
       {% if show_pais_report %}
       <section class="pais-report-panel">
@@ -443,7 +445,7 @@
   <script src="/nav.js"></script>
   <script>
     window.supportTicketsContext = {
-      isAdmin: {{ 'true' if is_admin else 'false' }},
+      isAdmin: {{ is_admin|tojson }},
       boardSlug: {{ ticket_board.slug|tojson }},
       boardName: {{ ticket_board.name|tojson }},
       boardRoutePath: {{ ticket_board.route_path|tojson }},

@@ -5,6 +5,7 @@ let reportQuickFilter = "all";
 let ticketsLoading = false;
 let paisReportLoading = false;
 let autoRefreshTimer = null;
+let leaderboardWorkersVisible = false;
 
 const AUTO_REFRESH_INTERVAL_MS = 10000;
 const NASTYA_EDITABLE_STATUSES = ["ממתין לתאום", "תואם", "בוצע", "נכשל"];
@@ -64,6 +65,22 @@ function nextHourValue(value) {
 
 function priorityClass(priority) {
   return `priority-${String(priority || "medium").toLowerCase()}`;
+}
+
+function leaderboardRankMarkup(index, doneCount) {
+  if (Number(doneCount) <= 0) {
+    return `<span class="leaderboard-rank">#${index + 1}</span>`;
+  }
+  if (index === 0) {
+    return '<span class="leaderboard-rank top-1"><i class="fa-solid fa-trophy" aria-hidden="true"></i></span>';
+  }
+  if (index === 1) {
+    return '<span class="leaderboard-rank top-2"><i class="fa-solid fa-trophy" aria-hidden="true"></i></span>';
+  }
+  if (index === 2) {
+    return '<span class="leaderboard-rank top-3"><i class="fa-solid fa-trophy" aria-hidden="true"></i></span>';
+  }
+  return `<span class="leaderboard-rank">#${index + 1}</span>`;
 }
 
 function statusClassName(status) {
@@ -710,21 +727,40 @@ function renderPaisReport(data) {
   });
 
   const leaderboard = Array.isArray(data?.leaderboard) ? data.leaderboard : [];
-  leaderboardHost.innerHTML = leaderboard.map((item, index) => `
+  const leaderboardCards = leaderboard.map((item, index) => `
     <article class="leaderboard-card">
-      <div class="leaderboard-rank">#${index + 1}</div>
+      ${leaderboardRankMarkup(index, item.done)}
       <div class="leaderboard-main">
         <h3>${escapeHtml(item.user)}</h3>
-        <p>${escapeHtml(item.done)} solved / ${escapeHtml(item.total)} total</p>
+        <p>${escapeHtml(item.done)} בוצע מתוך ${escapeHtml(item.total)} בתקופה שנבחרה</p>
       </div>
       <div class="leaderboard-metrics">
         <span class="pill done">בוצע ${escapeHtml(item.done)}</span>
         <span class="pill waiting">פתוח ${escapeHtml(item.waiting)}</span>
         <span class="pill coordination">תאום ${escapeHtml(item.coordination ?? 0)}</span>
-        <span class="pill ${Number(item.completion_rate) >= 60 ? "priority-low" : "priority-medium"}">${escapeHtml(item.completion_rate)}%</span>
+        <span class="pill priority-low">${escapeHtml(item.done)} / ${escapeHtml(item.total)}</span>
       </div>
     </article>
-  `).join("") || '<div class="tickets-empty report-empty" style="display:block">No report data found</div>';
+  `).join("");
+  leaderboardHost.innerHTML = `
+    <div class="leaderboard-toolbar">
+      <div class="leaderboard-toolbar-copy">
+      <p>רשימת העובדים מוסתרת כברירת מחדל.</p>
+      <p class="leaderboard-period-total">בוצע בתקופה: ${escapeHtml(data?.period_done_total ?? summary.done ?? 0)}</p>
+      </div>
+      <button class="icon-btn leaderboard-toggle-btn" id="leaderboard-toggle-btn" type="button" aria-expanded="${leaderboardWorkersVisible ? "true" : "false"}" aria-label="${leaderboardWorkersVisible ? "הסתר עובדים" : "הצג עובדים"}">
+        <i class="fa-solid ${leaderboardWorkersVisible ? "fa-eye-slash" : "fa-eye"}"></i>
+        <span>${leaderboardWorkersVisible ? "הסתר עובדים" : "הצג עובדים"}</span>
+      </button>
+    </div>
+    <div class="leaderboard-list" ${leaderboardWorkersVisible ? "" : "hidden"}>
+      ${leaderboardCards || '<div class="tickets-empty report-empty" style="display:block">No report data found</div>'}
+    </div>
+  `;
+  document.getElementById("leaderboard-toggle-btn")?.addEventListener("click", () => {
+    leaderboardWorkersVisible = !leaderboardWorkersVisible;
+    renderPaisReport(data);
+  });
 }
 
 async function loadPaisReport() {
@@ -844,7 +880,7 @@ function parsePaisPasteText(rawText) {
     { key: "altura", pattern: "אלטורה" },
     { key: "look_back", pattern: "(?:loop\\s*back|look\\s*back|loopback)" },
     { key: "contact", pattern: "איש\\s*קשר" },
-    { key: "customer_request", pattern: "פניית\\s*לקוח" },
+    { key: "customer_request", pattern: "(?:פניית\\s*לקוח|תלונת?|תלונה)" },
   ];
 
   const positions = [];
@@ -872,19 +908,20 @@ function parsePaisPasteText(rawText) {
   result.look_back = (sections.look_back || "").split(/\n/)[0].trim();
 
   const contactRaw = sections.contact || "";
+  const contactLine = contactRaw.split(/\n/)[0].replace(/^[\s:־-]+/, "").trim();
   const phoneMatch = contactRaw.match(/(0\d[\d-]{7,})/);
   if (phoneMatch) {
     result.contact_phone = phoneMatch[1].trim();
-    result.contact_name = contactRaw.replace(phoneMatch[1], "").replace(/^[\s:־-]+/, "").trim();
+    result.contact_name = contactLine;
   } else {
-    result.contact_name = contactRaw.split(/\n/)[0].trim();
+    result.contact_name = contactLine;
   }
 
   if (sections.customer_request) {
     result.customer_request = sections.customer_request.trim();
   } else {
     const lines = text.split("\n").map((line) => line.trim()).filter(Boolean);
-    const requestStart = lines.findIndex((line) => /פניית\s*לקוח/i.test(line));
+    const requestStart = lines.findIndex((line) => /(?:פניית\s*לקוח|תלונת?|תלונה)/i.test(line));
     if (requestStart >= 0) {
       result.customer_request = lines.slice(requestStart + 1).join("\n").trim();
     }
@@ -973,6 +1010,10 @@ document.addEventListener("DOMContentLoaded", () => {
   ["status-filter", "assignee-filter", "priority-filter", "date-from-filter", "date-to-filter"].forEach((id) => {
     document.getElementById(id).addEventListener("change", loadTickets);
   });
+  document.getElementById("ticket-filters-form")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    submitTicketSearch();
+  });
   const ticketSearch = document.getElementById("ticket-search");
   const ticketSearchButton = document.getElementById("ticket-search-btn");
   ticketSearch?.addEventListener("keydown", (event) => {
@@ -981,7 +1022,10 @@ document.addEventListener("DOMContentLoaded", () => {
     submitTicketSearch();
   });
   ticketSearch?.addEventListener("search", submitTicketSearch);
-  ticketSearchButton?.addEventListener("click", submitTicketSearch);
+  ticketSearchButton?.addEventListener("click", (event) => {
+    event.preventDefault();
+    submitTicketSearch();
+  });
 
   const openModalButton = document.getElementById("open-ticket-modal");
   if (openModalButton) {

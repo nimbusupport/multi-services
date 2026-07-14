@@ -724,7 +724,8 @@ def pais_report_range(period, date_from_raw=None, date_to_raw=None):
 
 def build_pais_report(tickets, status_filter="", period="daily", date_from_raw="", date_to_raw=""):
     report_from, report_to = pais_report_range(period, date_from_raw, date_to_raw)
-    filtered = filter_tickets_by_created_range(tickets, report_from, report_to)
+    period_filtered = filter_tickets_by_created_range(tickets, report_from, report_to)
+    filtered = list(period_filtered)
     if status_filter:
         filtered = [ticket for ticket in filtered if ticket.get("status") == status_filter]
 
@@ -752,6 +753,7 @@ def build_pais_report(tickets, status_filter="", period="daily", date_from_raw="
         "date_to": report_to.strftime("%Y-%m-%d") if report_to else "",
         "status": status_filter,
         "tickets": filtered,
+        "period_done_total": len([ticket for ticket in period_filtered if support_ticket_is_done(ticket)]),
         "summary": {
             "total": len(filtered),
             "done": len([ticket for ticket in filtered if support_ticket_is_done(ticket)]),
