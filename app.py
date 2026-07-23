@@ -302,6 +302,15 @@ def normalize_support_ticket(ticket):
     ticket.setdefault("details", {})
     ticket.setdefault("attachments", [])
     ticket.setdefault("updates", [])
+    ticket["created_at_display"] = (ticket.get("created_at_display") or "").strip() or format_support_ticket_datetime(ticket.get("created_at"))
+    latest_edit_at = latest_ticket_update_at(ticket)
+    if latest_edit_at:
+        ticket["last_edited_at"] = latest_edit_at.isoformat(timespec="seconds")
+        ticket["last_edited_at_display"] = format_support_ticket_datetime(latest_edit_at)
+    else:
+        ticket.setdefault("last_edited_at", "")
+        ticket.setdefault("last_edited_at_display", "")
+    ticket["list_timestamp_display"] = ticket.get("last_edited_at_display") or ticket.get("created_at_display") or ""
     return ticket
 
 
@@ -625,13 +634,36 @@ def support_ticket_stats(tickets):
 
 
 def parse_ticket_created_at(ticket):
-    raw = (ticket.get("created_at") or "").strip()
+    return parse_support_ticket_datetime(ticket.get("created_at"))
+
+
+def parse_support_ticket_datetime(value):
+    raw = str(value or "").strip()
     if not raw:
         return None
     try:
-        return datetime.fromisoformat(raw)
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
     except ValueError:
         return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=ZoneInfo("Asia/Jerusalem"))
+    return parsed
+
+
+def format_support_ticket_datetime(value):
+    parsed = value if isinstance(value, datetime) else parse_support_ticket_datetime(value)
+    if not parsed:
+        return ""
+    return parsed.astimezone(ZoneInfo("Asia/Jerusalem")).strftime("%d/%m/%Y %H:%M")
+
+
+def latest_ticket_update_at(ticket):
+    latest = parse_support_ticket_datetime(ticket.get("last_edited_at"))
+    for update in ticket.get("updates") or []:
+        parsed = parse_support_ticket_datetime(update.get("at"))
+        if parsed and (latest is None or parsed > latest):
+            latest = parsed
+    return latest
 
 
 def parse_date_filter(value, *, end_of_day=False):

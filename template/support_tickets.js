@@ -156,6 +156,10 @@ function ticketTypeLabel(ticket) {
   return ticket.ticket_type || "";
 }
 
+function ticketListTimestamp(ticket) {
+  return ticket?.list_timestamp_display || ticket?.last_edited_at_display || ticket?.created_at_display || "";
+}
+
 function coordinationSummary(ticket) {
   const details = ticketDetails(ticket);
   if (!details.coordinated_worker && !details.visit_date) return "";
@@ -242,7 +246,7 @@ function renderTickets(tickets, users) {
       </div>
       <div class="ticket-meta">
         <strong>${escapeHtml(ticketTypeLabel(ticket))}</strong><br>
-        ${escapeHtml(ticket.creator)}<br>${escapeHtml(ticket.created_at_display)}
+        ${escapeHtml(ticket.creator)}<br>${escapeHtml(ticketListTimestamp(ticket))}
         ${coordinationText ? `<div class="ticket-meta-note">${escapeHtml(coordinationText)}</div>` : ""}
       </div>
       <select class="assignee-select" data-ticket-id="${ticket.id}" ${isNastyaUser && ticket.board_slug === "pais" ? "disabled" : ""}>${assigneeOptions}</select>
@@ -547,6 +551,7 @@ function openTicketDetail(ticketId) {
     detailItem("Assigned To", ticket.assigned_to || "Unassigned"),
     detailItem("Creator", ticket.creator),
     detailItem("Created", ticket.created_at_display),
+    detailItem("Last Edited", ticket.last_edited_at_display || "—"),
     detailItem("Internal ID", ticket.id),
   ];
 
@@ -556,7 +561,7 @@ function openTicketDetail(ticketId) {
       detailItemHtml("כתובת", renderAddressValue(details.address)),
       detailItem("כתובת IP סטטית", details.static_ip),
       detailItem("אלטורה", details.altura),
-      detailItem("look back", details.look_back),
+      detailItem("loop back", details.look_back),
       detailItem("נציג מטפל", ticket.assigned_to || "—"),
       detailItem("טכנאי מתואם", details.coordinated_worker || "—"),
       detailItem("תאריך ביקור", details.visit_date || "—"),
@@ -873,6 +878,12 @@ function parsePaisPasteText(rawText) {
   };
   if (!text) return result;
 
+  const complaintPattern = [
+    "\u05E4\u05E0\u05D9\u05D9\u05EA\\s*\u05DC\u05E7\u05D5\u05D7",
+    "\u05EA\u05DC\u05D5\u05E0\u05D4?",
+    "\u05D4\u05DC\u05E7\u05D5\u05D7\\s*\u05D8\u05D5\u05E2\u05DF",
+  ].join("|");
+
   const labelPatterns = [
     { key: "terminal_number", pattern: "(?:מספר\\s*מסוף|מסוף)" },
     { key: "address", pattern: "כתובת(?!\\s*(?:IP|סטטית))" },
@@ -882,6 +893,7 @@ function parsePaisPasteText(rawText) {
     { key: "contact", pattern: "איש\\s*קשר" },
     { key: "customer_request", pattern: "(?:פניית\\s*לקוח|תלונת?|תלונה)" },
   ];
+  labelPatterns[labelPatterns.length - 1].pattern = `(?:${complaintPattern})`;
 
   const positions = [];
   labelPatterns.forEach(({ key, pattern }) => {
@@ -912,7 +924,7 @@ function parsePaisPasteText(rawText) {
   const phoneMatch = contactRaw.match(/(0\d[\d-]{7,})/);
   if (phoneMatch) {
     result.contact_phone = phoneMatch[1].trim();
-    result.contact_name = contactLine;
+    result.contact_name = contactLine.replace(phoneMatch[1], "").trim();
   } else {
     result.contact_name = contactLine;
   }
@@ -924,6 +936,21 @@ function parsePaisPasteText(rawText) {
     const requestStart = lines.findIndex((line) => /(?:פניית\s*לקוח|תלונת?|תלונה)/i.test(line));
     if (requestStart >= 0) {
       result.customer_request = lines.slice(requestStart + 1).join("\n").trim();
+    }
+  }
+
+  if (!result.customer_request) {
+    result.customer_request = contactRaw
+      .split(/\n/)
+      .slice(1)
+      .join("\n")
+      .trim();
+  }
+
+  if (!result.customer_request) {
+    const complaintHeaderMatch = text.match(new RegExp(`(?:${complaintPattern})[\\s:ײ¾-]*([\\s\\S]+)$`, "i"));
+    if (complaintHeaderMatch?.[1]) {
+      result.customer_request = complaintHeaderMatch[1].trim();
     }
   }
 

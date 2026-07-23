@@ -4,6 +4,8 @@ import sys
 import tempfile
 import types
 import unittest
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 
 class SupportTicketsTestCase(unittest.TestCase):
@@ -93,6 +95,7 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.original_screens = self.app_module.SUPPORT_SCREEN_DIR
         self.original_supabase_url = self.app_module.SUPABASE_URL
         self.original_supabase_key = self.app_module.SUPABASE_KEY
+        self.original_israel_now = self.app_module.israel_now
         self.app_module.SUPPORT_LOG_FILE = self.support_log_file
         self.app_module.SUPPORT_SCREEN_DIR = self.screens_dir
         self.app_module.SUPABASE_URL = ""
@@ -104,6 +107,7 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.app_module.SUPPORT_SCREEN_DIR = self.original_screens
         self.app_module.SUPABASE_URL = self.original_supabase_url
         self.app_module.SUPABASE_KEY = self.original_supabase_key
+        self.app_module.israel_now = self.original_israel_now
         self.tempdir.cleanup()
 
     def seed_tickets(self):
@@ -195,6 +199,84 @@ class SupportTicketsTestCase(unittest.TestCase):
         payload = response.get_json()
         self.assertEqual(len(payload["tickets"]), 1)
         self.assertEqual(payload["tickets"][0]["board_slug"], "support")
+
+    def test_ticket_list_uses_last_edit_timestamp_after_update(self):
+        self.app_module.israel_now = lambda: datetime(2026, 7, 10, 14, 35, tzinfo=ZoneInfo("Asia/Jerusalem"))
+
+        self.login("admin@nimbusip.com")
+        update_response = self.client.post(
+            "/support-tickets-update",
+            json={
+                "ticket_id": 1,
+                "assigned_to": "ניר",
+            },
+        )
+
+        self.assertEqual(update_response.status_code, 200)
+        update_payload = update_response.get_json()
+        self.assertEqual(update_payload["ticket"]["created_at_display"], "29/06/2026 10:00")
+        self.assertEqual(update_payload["ticket"]["last_edited_at_display"], "10/07/2026 14:35")
+        self.assertEqual(update_payload["ticket"]["list_timestamp_display"], "10/07/2026 14:35")
+
+        data_response = self.client.get("/support-tickets-data?board=support")
+
+        self.assertEqual(data_response.status_code, 200)
+        ticket = data_response.get_json()["tickets"][0]
+        self.assertEqual(ticket["created_at_display"], "29/06/2026 10:00")
+        self.assertEqual(ticket["last_edited_at_display"], "10/07/2026 14:35")
+        self.assertEqual(ticket["list_timestamp_display"], "10/07/2026 14:35")
+
+    def test_ticket_list_uses_last_edit_timestamp_for_pais_detail_changes(self):
+        tickets = self.app_module.load_support_tickets()
+        tickets.append({
+            "id": 2,
+            "board_slug": "pais",
+            "created_at": "2026-07-08T09:00:00+03:00",
+            "created_at_display": "08/07/2026 09:00",
+            "creator": "Admin",
+            "ticket_type": "שירות",
+            "service_type": "מפעל הפיס",
+            "domain": "",
+            "priority": "Medium",
+            "description": "",
+            "solution": "",
+            "status": "ממתין",
+            "assigned_to": "ניר",
+            "details": {
+                "terminal_number": "5555",
+                "address": "Test address",
+                "customer_request": "Original request",
+                "actions_taken": "",
+            },
+            "attachments": [],
+            "updates": [],
+        })
+        self.app_module.save_support_tickets(tickets)
+        self.app_module.israel_now = lambda: datetime(2026, 7, 11, 9, 20, tzinfo=ZoneInfo("Asia/Jerusalem"))
+
+        self.login("admin@nimbusip.com")
+        update_response = self.client.post(
+            "/support-tickets-update",
+            json={
+                "ticket_id": 2,
+                "details": {
+                    "actions_taken": "Updated note",
+                },
+            },
+        )
+
+        self.assertEqual(update_response.status_code, 200)
+        update_payload = update_response.get_json()
+        self.assertEqual(update_payload["ticket"]["details"]["actions_taken"], "Updated note")
+        self.assertEqual(update_payload["ticket"]["last_edited_at_display"], "11/07/2026 09:20")
+
+        data_response = self.client.get("/support-tickets-data?board=pais")
+
+        self.assertEqual(data_response.status_code, 200)
+        ticket = next(item for item in data_response.get_json()["tickets"] if item["id"] == 2)
+        self.assertEqual(ticket["created_at_display"], "08/07/2026 09:00")
+        self.assertEqual(ticket["last_edited_at_display"], "11/07/2026 09:20")
+        self.assertEqual(ticket["list_timestamp_display"], "11/07/2026 09:20")
 
     def test_can_create_pais_ticket_without_description_solution(self):
         self.login("admin@nimbusip.com")
