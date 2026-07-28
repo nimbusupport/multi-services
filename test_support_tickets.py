@@ -96,6 +96,7 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.original_supabase_url = self.app_module.SUPABASE_URL
         self.original_supabase_key = self.app_module.SUPABASE_KEY
         self.original_israel_now = self.app_module.israel_now
+        self.original_get_gspread_client = self.app_module.get_gspread_client
         self.app_module.SUPPORT_LOG_FILE = self.support_log_file
         self.app_module.SUPPORT_SCREEN_DIR = self.screens_dir
         self.app_module.SUPABASE_URL = ""
@@ -108,6 +109,7 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.app_module.SUPABASE_URL = self.original_supabase_url
         self.app_module.SUPABASE_KEY = self.original_supabase_key
         self.app_module.israel_now = self.original_israel_now
+        self.app_module.get_gspread_client = self.original_get_gspread_client
         self.tempdir.cleanup()
 
     def seed_tickets(self):
@@ -277,6 +279,76 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertEqual(ticket["created_at_display"], "08/07/2026 09:00")
         self.assertEqual(ticket["last_edited_at_display"], "11/07/2026 09:20")
         self.assertEqual(ticket["list_timestamp_display"], "11/07/2026 09:20")
+
+    def test_features_status_lookup_aggregates_services_without_login(self):
+        class FakeWorksheet:
+            def __init__(self, rows):
+                self.rows = rows
+
+            def get_all_values(self):
+                return self.rows
+
+        class FakeSpreadsheet:
+            def __init__(self, worksheets):
+                self.worksheets = worksheets
+
+            def worksheet(self, name):
+                return FakeWorksheet(self.worksheets[name])
+
+        class FakeGspreadClient:
+            def __init__(self, worksheets):
+                self.worksheets = worksheets
+
+            def open_by_key(self, key):
+                return FakeSpreadsheet(self.worksheets)
+
+        worksheets = {
+            self.app_module.SHEET_NAME: [
+                ["name", "id", "", "", "", "", "", "status"],
+                ["Business One", "514684125", "", "", "", "", "", "כפילות"],
+                ["Business One", "514684125", "", "", "", "", "", "בוצע"],
+                ["Business One", "514684125", "", "", "", "", "", "בוצע"],
+            ],
+            self.app_module.RECORDING_OPENING_SHEET_NAME: [
+                ["name", "id", "", "", "", "", "", "", "status"],
+                ["Business One", "514684125", "", "", "", "", "", "", "ממתין"],
+            ],
+            self.app_module.BOT_SHEET_NAME: [
+                ["name", "id", "", "", "", "", "", "status"],
+                ["Business One", "514684125", "", "", "", "", "", "בוצע"],
+            ],
+            self.app_module.HUMAN_SERVICE_SHEET_NAME: [
+                ["name", "id", "", "", "", "", "", "status"],
+                ["Business One", "514684125", "", "", "", "", "", "ממתין"],
+            ],
+            self.app_module.F2M_SHEET_NAME: [
+                ["name", "id", "", "", "", "", "", "status"],
+                ["Business One", "514684125", "", "", "", "", "", ""],
+                ["Business One", "514684125", "", "", "", "", "", "בוצע"],
+            ],
+            self.app_module.RECORDING_STORAGE_SHEET_NAME: [
+                ["name", "id", "", "", "", "", "", "status"],
+                ["Business One", "514684125", "", "", "", "", "", ""],
+            ],
+        }
+        self.app_module.get_gspread_client = lambda: FakeGspreadClient(worksheets)
+
+        response = self.client.get("/features-status-data?customer_id=051-4684125")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["customer_id"], "514684125")
+        self.assertEqual(payload["found_count"], 6)
+        self.assertEqual(payload["missing_count"], 0)
+        self.assertEqual(payload["business_names"], ["Business One"])
+        self.assertEqual(len(payload["services"]), 6)
+        self.assertEqual(len(payload["services"][0]["entries"]), 1)
+        self.assertEqual(payload["services"][0]["entries"][0]["status"], "בוצע")
+        self.assertEqual(payload["services"][1]["entries"][0]["status"], "ממתין")
+        self.assertEqual(len(payload["services"][4]["entries"]), 1)
+        self.assertEqual(payload["services"][4]["entries"][0]["status"], "בוצע")
+        self.assertEqual(payload["services"][5]["entries"][0]["status"], "לא הוגדר")
 
     def test_can_create_pais_ticket_without_description_solution(self):
         self.login("admin@nimbusip.com")

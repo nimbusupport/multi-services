@@ -1,0 +1,428 @@
+body {
+  margin: 0;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  background:
+    radial-gradient(circle at top right, rgba(255, 214, 153, 0.55), transparent 28%),
+    linear-gradient(135deg, #f5efe6 0%, #e8ddd0 100%);
+  color: #2d2a24;
+}
+
+.feature-status-shell {
+  min-height: 100vh;
+  padding: 28px 18px 42px;
+}
+
+.feature-status-panel {
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+.feature-status-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 22px;
+}
+
+.eyebrow {
+  margin: 0 0 6px;
+  color: #7f6e58;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.feature-status-hero h1 {
+  margin: 0;
+  font-size: 44px;
+  color: #31281d;
+}
+
+.subtitle {
+  margin: 10px 0 0;
+  max-width: 720px;
+  color: #6b5a47;
+  line-height: 1.6;
+}
+
+.back-link {
+  display: none !important;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: #356749;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(53, 103, 73, 0.16);
+  border-radius: 999px;
+  padding: 12px 18px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.lookup-card,
+.summary-card,
+.service-status-card,
+.service-status-skeleton {
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(109, 88, 60, 0.12);
+  box-shadow: 0 18px 38px rgba(90, 71, 49, 0.12);
+  backdrop-filter: blur(8px);
+}
+
+.lookup-card {
+  border-radius: 24px;
+  padding: 22px;
+}
+
+.lookup-form {
+  display: flex;
+  align-items: end;
+  gap: 14px;
+}
+
+.lookup-field {
+  flex: 1;
+  display: grid;
+  gap: 8px;
+  font-weight: 700;
+  color: #5a4a38;
+}
+
+.lookup-field input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #d4c2b1;
+  border-radius: 16px;
+  padding: 16px 18px;
+  font-size: 17px;
+  background: rgba(255, 251, 246, 0.95);
+  color: #2d2a24;
+}
+
+.lookup-field input:focus {
+  outline: none;
+  border-color: #2fa36b;
+  box-shadow: 0 0 0 4px rgba(47, 163, 107, 0.15);
+}
+
+.lookup-btn {
+  border: 0;
+  border-radius: 16px;
+  padding: 16px 28px;
+  background: linear-gradient(135deg, #2fa36b 0%, #1f8f5b 100%);
+  color: #fffdf9;
+  font-size: 16px;
+  font-weight: 800;
+  cursor: pointer;
+  min-width: 130px;
+}
+
+.lookup-btn[disabled] {
+  opacity: 0.8;
+  cursor: wait;
+}
+
+.lookup-message {
+  margin: 14px 0 0;
+  color: #776756;
+}
+
+.lookup-message.error {
+  color: #b33a3a;
+}
+
+.summary-card {
+  margin-top: 18px;
+  border-radius: 22px;
+  padding: 20px 22px;
+}
+
+.summary-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.summary-head h2 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.summary-id {
+  font-weight: 800;
+  color: #356749;
+}
+
+.summary-names {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.summary-chip {
+  background: #f3eadf;
+  color: #604f3d;
+  border-radius: 999px;
+  padding: 7px 12px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.summary-stats {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+
+.summary-stat {
+  background: rgba(53, 103, 73, 0.08);
+  color: #31533d;
+  border-radius: 14px;
+  padding: 10px 14px;
+  font-weight: 700;
+}
+
+.results-grid {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.service-status-card,
+.service-status-skeleton {
+  border-radius: 20px;
+  padding: 18px;
+}
+
+.service-status-card.found {
+  border-inline-start: 6px solid #2fa36b;
+}
+
+.service-status-card.missing {
+  border-inline-start: 6px solid #d7c6b7;
+  opacity: 0.88;
+}
+
+.service-status-card h3 {
+  margin: 0 0 6px;
+  font-size: 22px;
+}
+
+.service-status-sheet {
+  margin: 0 0 14px;
+  color: #7b6a58;
+  font-size: 13px;
+}
+
+.status-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-weight: 700;
+  background: #fff7ee;
+  color: #6f5c45;
+}
+
+.status-chip.done {
+  background: rgba(47, 163, 107, 0.15);
+  color: #237046;
+}
+
+.status-chip.waiting {
+  background: rgba(242, 200, 75, 0.18);
+  color: #8a6312;
+}
+
+.status-chip.other {
+  background: rgba(89, 111, 141, 0.13);
+  color: #42556e;
+}
+
+.service-empty {
+  margin: 0;
+  color: #8b7b69;
+  font-weight: 700;
+}
+
+.service-entry-list {
+  display: grid;
+  gap: 10px;
+}
+
+.service-entry {
+  border-radius: 16px;
+  background: rgba(245, 239, 230, 0.92);
+  padding: 12px 14px;
+}
+
+.entry-name {
+  font-weight: 800;
+  color: #35291d;
+}
+
+.entry-meta {
+  margin-top: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  color: #6f5f4c;
+  font-size: 14px;
+}
+
+.hidden {
+  display: none;
+}
+
+.service-status-skeleton {
+  overflow: hidden;
+  position: relative;
+  min-height: 170px;
+}
+
+.service-status-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.52), transparent);
+  transform: translateX(-100%);
+  animation: shimmer 1.3s infinite;
+}
+
+.skeleton-line {
+  height: 14px;
+  border-radius: 999px;
+  background: rgba(163, 142, 117, 0.18);
+  margin-bottom: 12px;
+}
+
+.skeleton-line.title {
+  height: 24px;
+  width: 54%;
+}
+
+.skeleton-line.short {
+  width: 32%;
+}
+
+.skeleton-line.medium {
+  width: 68%;
+}
+
+.skeleton-line.long {
+  width: 86%;
+}
+
+@keyframes shimmer {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@media (max-width: 980px) {
+  .results-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .feature-status-shell {
+    padding: 20px 14px 32px;
+  }
+
+  .lookup-card,
+  .summary-card,
+  .service-status-card,
+  .service-status-skeleton {
+    border-radius: 18px;
+  }
+
+  .feature-status-hero {
+    flex-direction: column;
+  }
+
+  .feature-status-hero h1 {
+    font-size: 34px;
+  }
+
+  .lookup-form,
+  .summary-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .lookup-btn {
+    width: 100%;
+    min-height: 54px;
+  }
+
+  .results-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .feature-status-shell {
+    padding: 14px 10px 24px;
+  }
+
+  .feature-status-hero h1 {
+    font-size: 28px;
+  }
+
+  .subtitle {
+    font-size: 14px;
+  }
+
+  .lookup-card {
+    padding: 16px;
+  }
+
+  .lookup-field input,
+  .lookup-btn {
+    font-size: 16px;
+  }
+
+  .lookup-field input {
+    padding: 14px 16px;
+  }
+
+  .summary-card {
+    padding: 16px;
+  }
+
+  .summary-head h2,
+  .service-status-card h3 {
+    font-size: 20px;
+  }
+
+  .summary-stat,
+  .summary-chip,
+  .status-chip,
+  .entry-name,
+  .service-empty {
+    font-size: 14px;
+  }
+
+  .service-status-card,
+  .service-status-skeleton {
+    padding: 16px;
+  }
+}

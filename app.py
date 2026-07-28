@@ -110,6 +110,45 @@ FEATURE_REPORT_SERVICES = {
     },
 }
 
+FEATURE_STATUS_SERVICES = [
+    {
+        "key": "sms",
+        "label": "SMS",
+        "sheet": SHEET_NAME,
+        "status_col": 8,  # H
+    },
+    {
+        "key": "recording_opening",
+        "label": "הקלטת פתיח",
+        "sheet": RECORDING_OPENING_SHEET_NAME,
+        "status_col": 9,  # I
+    },
+    {
+        "key": "bot",
+        "label": "שירות מענה - בוט",
+        "sheet": BOT_SHEET_NAME,
+        "status_col": 8,  # H
+    },
+    {
+        "key": "human_service",
+        "label": "שירות מענה - אנושי",
+        "sheet": HUMAN_SERVICE_SHEET_NAME,
+        "status_col": 8,  # H
+    },
+    {
+        "key": "f2m",
+        "label": "m2f / f2m",
+        "sheet": F2M_SHEET_NAME,
+        "status_col": 8,  # H
+    },
+    {
+        "key": "recording_storage",
+        "label": "איחסון הקלטות",
+        "sheet": RECORDING_STORAGE_SHEET_NAME,
+        "status_col": 8,  # H
+    },
+]
+
 # Column mapping (1-based for gspread)
 COL_NAME = 1       # A
 COL_IDNUMBER = 2   # B (׳—.׳₪) hidden in UI
@@ -1728,6 +1767,106 @@ def get_feature_report_counts(month_value):
     }
 
 
+def normalize_feature_status_customer_id(value):
+    digits_only = re.sub(r"\D", "", str(value or ""))
+    if not digits_only:
+        return ""
+    return digits_only.lstrip("0") or digits_only
+
+
+def collapse_feature_status_entries(entries):
+    if not entries:
+        return []
+
+    filtered = []
+    for entry in entries:
+        status_value = (entry.get("status") or "").strip()
+        if status_value == "כפילות":
+            continue
+        filtered.append({
+            "business_name": (entry.get("business_name") or "").strip(),
+            "customer_id": (entry.get("customer_id") or "").strip(),
+            "status": status_value or "לא הוגדר",
+        })
+
+    source_entries = filtered or [{
+        "business_name": (entries[0].get("business_name") or "").strip() if entries else "",
+        "customer_id": (entries[0].get("customer_id") or "").strip() if entries else "",
+        "status": "לא הוגדר",
+    }]
+    statuses = [entry["status"] for entry in source_entries]
+
+    if "בוצע" in statuses:
+        final_status = "בוצע"
+    else:
+        final_status = next((status for status in statuses if status != "לא הוגדר"), "לא הוגדר")
+
+    primary_entry = next(
+        (entry for entry in source_entries if entry["status"] == final_status),
+        source_entries[0],
+    )
+    return [{
+        "business_name": primary_entry["business_name"],
+        "customer_id": primary_entry["customer_id"],
+        "status": final_status,
+    }]
+
+
+def lookup_feature_status_by_customer_id(customer_id):
+    normalized_customer_id = normalize_feature_status_customer_id(customer_id)
+    if not normalized_customer_id:
+        raise ValueError("יש להזין מספר ח.פ של העסק")
+
+    client = get_gspread_client()
+    spreadsheet = client.open_by_key(SPREADSHEET_ID)
+    services = []
+    business_names = []
+
+    for config in FEATURE_STATUS_SERVICES:
+        ws = spreadsheet.worksheet(config["sheet"])
+        rows = ws.get_all_values()
+        entries = []
+
+        for row_index, row in enumerate(rows[1:], start=2):
+            row_customer_id = normalize_feature_status_customer_id(row[1] if len(row) >= 2 else "")
+            if row_customer_id != normalized_customer_id:
+                continue
+
+            business_name = (row[0] if len(row) >= 1 else "").strip()
+            status_value = (row[config["status_col"] - 1] if len(row) >= config["status_col"] else "").strip()
+            row_customer_display = (row[1] if len(row) >= 2 else "").strip()
+
+            if business_name and business_name not in business_names:
+                business_names.append(business_name)
+
+            entries.append({
+                "row": row_index,
+                "business_name": business_name,
+                "customer_id": row_customer_display,
+                "status": status_value or "לא הוגדר",
+            })
+
+        entries = collapse_feature_status_entries(entries)
+
+        services.append({
+            "key": config["key"],
+            "label": config["label"],
+            "sheet": config["sheet"],
+            "found": bool(entries),
+            "entry_count": len(entries),
+            "entries": entries,
+        })
+
+    found_count = len([service for service in services if service["found"]])
+    return {
+        "customer_id": normalized_customer_id,
+        "business_names": business_names,
+        "services": services,
+        "found_count": found_count,
+        "missing_count": len(services) - found_count,
+    }
+
+
 # ================= ROOT =================
 @app.route("/")
 def root():
@@ -1845,6 +1984,26 @@ def features_report_page():
         return redirect(url_for("login"))
 
     return render_template("features_report.html", current_user=session.get("username", ""))
+
+
+@app.route("/features-status")
+def features_status_page():
+    return render_template(
+        "features_status.html",
+        current_user=session.get("username", ""),
+    )
+
+
+@app.route("/features-status-data")
+def features_status_data():
+    customer_id = request.args.get("customer_id", "")
+    try:
+        payload = lookup_feature_status_by_customer_id(customer_id)
+    except ValueError as exc:
+        return api_error(exc, 400, "missing_customer_id")
+    except Exception as exc:
+        return api_error(exc, 500, "google_auth_or_sheet_error")
+    return jsonify({"ok": True, **payload})
 
 
 @app.route("/features-report-data")
