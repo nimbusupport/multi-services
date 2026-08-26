@@ -64,6 +64,10 @@
       </section>
 
       <section id="print-area" class="report-table-wrap">
+        <div id="report-loading" class="report-loading" aria-live="polite" hidden>
+          <div class="report-loading-spinner" aria-hidden="true"></div>
+          <span id="report-loading-text">Loading report...</span>
+        </div>
         <div class="summary-row">
           <span id="report-month-label">--/----</span>
           <strong id="report-total">0</strong>
@@ -77,6 +81,18 @@
           </thead>
           <tbody id="report-body"></tbody>
         </table>
+      </section>
+
+      <section class="trend-card" aria-labelledby="trend-title">
+        <div class="trend-head">
+          <div>
+            <p class="trend-kicker">April to current month</p>
+            <h2 id="trend-title">Monthly Total Comparison</h2>
+          </div>
+          <span id="trend-range" class="trend-range">--/---- - --/----</span>
+        </div>
+        <div id="trend-chart" class="trend-chart" aria-live="polite"></div>
+        <p id="trend-message" class="inline-message trend-message"></p>
       </section>
 
       <p id="report-message" class="inline-message"></p>

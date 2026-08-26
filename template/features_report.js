@@ -7,6 +7,12 @@ const reportBody = document.getElementById("report-body");
 const reportTotal = document.getElementById("report-total");
 const reportMonthLabel = document.getElementById("report-month-label");
 const reportMessage = document.getElementById("report-message");
+const printArea = document.getElementById("print-area");
+const reportLoading = document.getElementById("report-loading");
+const reportLoadingText = document.getElementById("report-loading-text");
+const trendChart = document.getElementById("trend-chart");
+const trendRange = document.getElementById("trend-range");
+const trendMessage = document.getElementById("trend-message");
 
 let currentReport = null;
 
@@ -21,9 +27,25 @@ function setMessage(text, isError = false) {
   reportMessage.classList.toggle("error", isError);
 }
 
+function setTrendMessage(text, isError = false) {
+  trendMessage.textContent = text;
+  trendMessage.classList.toggle("error", isError);
+}
+
+function setReportLoading(isLoading, text = "Loading report...") {
+  reportLoading.hidden = !isLoading;
+  reportLoadingText.textContent = text;
+  printArea.classList.toggle("is-loading", isLoading);
+  loadButton.disabled = isLoading;
+  monthFilter.disabled = isLoading;
+  trendChart.querySelectorAll(".trend-bar-card").forEach((card) => {
+    card.disabled = isLoading;
+  });
+}
+
 function renderReport(report) {
   currentReport = report;
-  reportMonthLabel.textContent = `חודש ${report.month_display}`;
+  reportMonthLabel.textContent = `\u05d7\u05d5\u05d3\u05e9 ${report.month_display}`;
   reportTotal.textContent = report.total;
   reportBody.innerHTML = report.services
     .map((service) => {
@@ -57,11 +79,44 @@ function renderReport(report) {
     .join("");
 }
 
-async function loadReport() {
+function renderTrendChart(months, startMonth, endMonth) {
+  if (!months.length) {
+    trendChart.innerHTML = "";
+    trendRange.textContent = "--/---- - --/----";
+    setTrendMessage("No monthly data available.", true);
+    return;
+  }
+
+  const maxTotal = Math.max(...months.map((item) => item.total), 1);
+  trendRange.textContent = `${startMonth} - ${endMonth}`;
+  trendChart.innerHTML = months
+    .map((item) => {
+      const height = Math.max((item.total / maxTotal) * 100, item.total > 0 ? 8 : 0);
+      const isActive = monthFilter.value === item.month;
+      return `
+        <button
+          type="button"
+          class="trend-bar-card${isActive ? " active" : ""}"
+          data-month="${item.month}"
+          aria-label="Load report for ${item.month_display}"
+        >
+          <strong class="trend-value">${item.total}</strong>
+          <div class="trend-bar-track">
+            <div class="trend-bar-fill" style="height: ${height}%"></div>
+          </div>
+          <span class="trend-label">${item.month_display}</span>
+        </button>
+      `;
+    })
+    .join("");
+  setTrendMessage("");
+}
+
+async function loadReport(loadingText = "Loading report...") {
   const month = monthFilter.value || currentMonthValue();
   monthFilter.value = month;
-  setMessage("טוען נתונים...");
-  loadButton.disabled = true;
+  setMessage("\u05d8\u05d5\u05e2\u05df \u05e0\u05ea\u05d5\u05e0\u05d9\u05dd...");
+  setReportLoading(true, loadingText);
 
   try {
     const params = new URLSearchParams({ month });
@@ -71,20 +126,51 @@ async function loadReport() {
       throw new Error(data.error || "Failed to load report");
     }
     renderReport(data.report);
+    renderTrendChartFromDomSelection(month);
     setMessage("");
   } catch (error) {
     currentReport = null;
     reportBody.innerHTML = "";
     reportTotal.textContent = "0";
-    setMessage(`שגיאה בטעינת הדו"ח: ${error.message}`, true);
+    setMessage(`\u05e9\u05d2\u05d9\u05d0\u05d4 \u05d1\u05d8\u05e2\u05d9\u05e0\u05ea \u05d4\u05d3\u05d5\"\u05d7: ${error.message}`, true);
   } finally {
-    loadButton.disabled = false;
+    setReportLoading(false);
   }
+}
+
+async function loadMonthlyTotals() {
+  setTrendMessage("Loading monthly totals...");
+
+  try {
+    const res = await fetch("/features-report-monthly-totals");
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      throw new Error(data.error || "Failed to load monthly totals");
+    }
+    renderTrendChart(data.months || [], data.start_month, data.end_month);
+  } catch (error) {
+    trendChart.innerHTML = "";
+    trendRange.textContent = "--/---- - --/----";
+    setTrendMessage(`Failed to load monthly totals: ${error.message}`, true);
+  }
+}
+
+async function loadReportForMonth(month) {
+  monthFilter.value = month;
+  await loadReport(`Loading ${month}...`);
+  renderTrendChartFromDomSelection(month);
+  printArea.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function renderTrendChartFromDomSelection(selectedMonth) {
+  trendChart.querySelectorAll(".trend-bar-card").forEach((card) => {
+    card.classList.toggle("active", card.dataset.month === selectedMonth);
+  });
 }
 
 function downloadCsv() {
   if (!currentReport) {
-    setMessage("אין נתונים לייצוא. לחץ הצג קודם.", true);
+    setMessage("\u05d0\u05d9\u05df \u05e0\u05ea\u05d5\u05e0\u05d9\u05dd \u05dc\u05d9\u05d9\u05e6\u05d5\u05d0. \u05dc\u05d7\u05e5 \u05d4\u05e6\u05d2 \u05e7\u05d5\u05d3\u05dd.", true);
     return;
   }
 
@@ -98,7 +184,7 @@ function downloadCsv() {
   rows.push(["Total", currentReport.month_display, currentReport.total]);
 
   const csv = rows
-    .map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(","))
+    .map((row) => row.map((value) => `"${String(value).replace(/"/g, "\"\"")}"`).join(","))
     .join("\r\n");
   const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
@@ -119,14 +205,14 @@ function exportReport() {
 
   if (exportFormat.value === "pdf") {
     if (!currentReport) {
-      setMessage("אין נתונים לייצוא. לחץ הצג קודם.", true);
+      setMessage("\u05d0\u05d9\u05df \u05e0\u05ea\u05d5\u05e0\u05d9\u05dd \u05dc\u05d9\u05d9\u05e6\u05d5\u05d0. \u05dc\u05d7\u05e5 \u05d4\u05e6\u05d2 \u05e7\u05d5\u05d3\u05dd.", true);
       return;
     }
     window.print();
     return;
   }
 
-  setMessage("בחר פורמט CSV או PDF.", true);
+  setMessage("\u05d1\u05d7\u05e8 \u05e4\u05d5\u05e8\u05de\u05d8 CSV \u05d0\u05d5 PDF.", true);
 }
 
 function exportRecordingsDetail() {
@@ -140,4 +226,12 @@ loadButton.addEventListener("click", loadReport);
 monthFilter.addEventListener("change", loadReport);
 exportButton.addEventListener("click", exportReport);
 detailExportButton.addEventListener("click", exportRecordingsDetail);
+trendChart.addEventListener("click", async (event) => {
+  const card = event.target.closest(".trend-bar-card");
+  if (!card) {
+    return;
+  }
+  await loadReportForMonth(card.dataset.month);
+});
 loadReport();
+loadMonthlyTotals();

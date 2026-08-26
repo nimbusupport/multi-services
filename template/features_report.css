@@ -100,10 +100,44 @@ body {
 }
 
 .report-table-wrap {
+  position: relative;
   background: rgba(89, 78, 63, 0.55);
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.14);
   overflow: hidden;
+}
+
+.report-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  gap: 12px;
+  background: rgba(63, 57, 47, 0.72);
+  backdrop-filter: blur(2px);
+  color: #fff6df;
+  font-size: 18px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.report-loading[hidden] {
+  display: none;
+}
+
+.report-loading-spinner {
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  border: 4px solid rgba(255, 255, 255, 0.22);
+  border-top-color: #f2c84b;
+  animation: report-spin 0.8s linear infinite;
+}
+
+.report-table-wrap.is-loading .summary-row,
+.report-table-wrap.is-loading .report-table {
+  opacity: 0.3;
 }
 
 .summary-row {
@@ -200,6 +234,127 @@ body {
   color: #ffe1df;
 }
 
+.trend-card {
+  margin-top: 18px;
+  padding: 18px 18px 14px;
+  background: rgba(89, 78, 63, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 16px;
+}
+
+.trend-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.trend-kicker {
+  margin: 0 0 4px;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.trend-head h2 {
+  margin: 0;
+  font-size: 26px;
+  line-height: 1.2;
+}
+
+.trend-range {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.18);
+  color: rgba(255, 255, 255, 0.88);
+  font-weight: 700;
+}
+
+.trend-chart {
+  min-height: 280px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 14px;
+  align-items: end;
+}
+
+.trend-bar-card {
+  min-height: 260px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 10px 10px;
+  border: 1px solid transparent;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  cursor: pointer;
+  appearance: none;
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.trend-bar-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(242, 200, 75, 0.5);
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.trend-bar-card.active {
+  border-color: rgba(242, 200, 75, 0.92);
+  background: rgba(242, 200, 75, 0.12);
+}
+
+.trend-bar-card:disabled {
+  cursor: wait;
+  opacity: 0.7;
+  transform: none;
+}
+
+.trend-bar-card:focus-visible {
+  outline: 2px solid #f2c84b;
+  outline-offset: 3px;
+}
+
+.trend-value {
+  color: #f7f2e8;
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.trend-bar-track {
+  width: 100%;
+  height: 170px;
+  display: flex;
+  align-items: flex-end;
+  padding: 10px;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.trend-bar-fill {
+  width: 100%;
+  min-height: 0;
+  border-radius: 10px 10px 6px 6px;
+  background: linear-gradient(180deg, #f2c84b 0%, #28b571 100%);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+}
+
+.trend-label {
+  color: rgba(255, 255, 255, 0.88);
+  font-weight: 700;
+}
+
+.trend-message {
+  margin-top: 10px;
+}
+
+@keyframes report-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @media (max-width: 760px) {
   .report-wrap {
     padding: 14px;
@@ -213,6 +368,10 @@ body {
     font-size: 32px;
   }
 
+  .trend-head {
+    flex-direction: column;
+  }
+
   .export-control,
   .filters-row,
   .filters-row input,
@@ -223,12 +382,25 @@ body {
   .counter-cell {
     width: 90px;
   }
+
+  .trend-chart {
+    grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+  }
+
+  .trend-bar-card {
+    min-height: 220px;
+  }
+
+  .trend-bar-track {
+    height: 140px;
+  }
 }
 
 @media print {
   .site-nav,
   .report-head,
   .filters-row,
+  .trend-card,
   .inline-message {
     display: none !important;
   }

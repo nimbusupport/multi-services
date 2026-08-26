@@ -2031,6 +2031,81 @@ def features_report_recordings_detail():
         return redirect(url_for("login"))
 
     month_value = request.args.get("month", datetime.now().strftime("%Y-%m"))
+def iter_month_values(start_month, end_month):
+    current = datetime(start_month.year, start_month.month, 1)
+    finish = datetime(end_month.year, end_month.month, 1)
+
+    while current <= finish:
+        yield current.strftime("%Y-%m")
+        if current.month == 12:
+            current = datetime(current.year + 1, 1, 1)
+        else:
+            current = datetime(current.year, current.month + 1, 1)
+
+
+def count_done_recordings_by_month(start_month, end_month):
+    service = get_drive_service(readonly=True)
+    query = (
+        f"'{DRIVE_DONE_FOLDER_ID}' in parents and "
+        "mimeType = 'audio/wav' and trashed=false"
+    )
+    totals = {month_value: 0 for month_value in iter_month_values(start_month, end_month)}
+    page_token = None
+
+    while True:
+        response = service.files().list(
+            q=query,
+            fields="nextPageToken, files(modifiedTime)",
+            pageSize=1000,
+            pageToken=page_token,
+        ).execute()
+
+        for file_item in response.get("files", []):
+            modified_date = parse_drive_modified_time(file_item.get("modifiedTime"))
+            if not modified_date:
+                continue
+
+            month_value = modified_date.strftime("%Y-%m")
+            if month_value in totals:
+                totals[month_value] += 1
+
+        page_token = response.get("nextPageToken")
+        if not page_token:
+            break
+
+    return totals
+
+
+def count_sheet_feature_by_month(config, start_month, end_month, client):
+    ws = client.open_by_key(SPREADSHEET_ID).worksheet(config["sheet"])
+    rows = ws.get_all_values()[1:]
+    totals = {month_value: 0 for month_value in iter_month_values(start_month, end_month)}
+
+    for row in rows:
+        status_col = config["status_col"]
+        date_col = config["date_col"]
+        status = row[status_col - 1].strip() if len(row) >= status_col else ""
+        date_value = row[date_col - 1].strip() if len(row) >= date_col else ""
+
+        if config.get("checkbox"):
+            is_done = report_checkbox_marked(status)
+        else:
+            is_done = status == config["status_value"]
+
+        if not is_done:
+            continue
+
+        done_date = parse_report_date(date_value, config.get("date_order", "mdy"))
+        if not done_date:
+            continue
+
+        month_value = done_date.strftime("%Y-%m")
+        if month_value in totals:
+            totals[month_value] += 1
+
+    return totals
+
+
 
     try:
         selected_month = datetime.strptime(month_value, "%Y-%m")
@@ -2086,6 +2161,48 @@ def dashboard_data():
         "nastia_tickets": service_dashboard_entry(
             "nastia_tickets",
             lambda: len([t for t in load_support_tickets("pais") if (t.get("status") or "").strip() == "ממתין לתאום"]),
+def get_feature_report_monthly_totals(start_month_value, end_month_value):
+    start_month = datetime.strptime(start_month_value, "%Y-%m")
+    end_month = datetime.strptime(end_month_value, "%Y-%m")
+    if start_month > end_month:
+        raise ValueError("Start month must be before end month")
+
+    monthly_totals = {month_value: 0 for month_value in iter_month_values(start_month, end_month)}
+    client = get_gspread_client()
+
+    for config in FEATURE_REPORT_SERVICES.values():
+        if config.get("source") == "drive_done":
+            service_totals = count_done_recordings_by_month(start_month, end_month)
+        else:
+            service_totals = count_sheet_feature_by_month(config, start_month, end_month, client)
+
+        for month_value, count in service_totals.items():
+            monthly_totals[month_value] += count
+
+    months = []
+    for month_value in iter_month_values(start_month, end_month):
+        month_label = datetime.strptime(month_value, "%Y-%m").strftime("%m/%Y")
+        months.append({
+            "month": month_value,
+            "month_display": month_label,
+            "total": monthly_totals[month_value],
+        })
+
+    return {
+        "start_month": start_month_value,
+        "end_month": end_month_value,
+        "months": months,
+    }
+
+
+def get_feature_report_graph_range():
+    now = datetime.now(ZoneInfo("Asia/Jerusalem"))
+    start_year = now.year if now.month >= 4 else now.year - 1
+    start_month = f"{start_year}-04"
+    end_month = now.strftime("%Y-%m")
+    return start_month, end_month
+
+
         ),
     })
 
@@ -2355,6 +2472,26 @@ def support_tickets_create():
             "altura": (request.form.get("altura") or "").strip(),
             "look_back": (request.form.get("look_back") or "").strip(),
             "contact_name": (request.form.get("contact_name") or "").strip(),
+@app.route("/features-report-monthly-totals")
+def features_report_monthly_totals():
+
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    default_start_month, default_end_month = get_feature_report_graph_range()
+    start_month = request.args.get("start_month", default_start_month)
+    end_month = request.args.get("end_month", default_end_month)
+
+    try:
+        totals = get_feature_report_monthly_totals(start_month, end_month)
+    except ValueError:
+        return jsonify({"ok": False, "error": "Invalid month range"}), 400
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+    return jsonify({"ok": True, **totals})
+
+
             "contact_phone": (request.form.get("contact_phone") or "").strip(),
             "customer_request": customer_request,
             "actions_taken": actions_taken,
