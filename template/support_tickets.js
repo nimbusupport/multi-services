@@ -160,6 +160,118 @@ function ticketListTimestamp(ticket) {
   return ticket?.list_timestamp_display || ticket?.last_edited_at_display || ticket?.created_at_display || "";
 }
 
+function detailDisplayValue(value, fallback = "—") {
+  const text = String(value ?? "").trim();
+  return text || fallback;
+}
+
+function pushCopyLine(lines, label, value, fallback = "—") {
+  lines.push(`${label}: ${detailDisplayValue(value, fallback)}`);
+}
+
+function ticketCopyText(ticket) {
+  const details = ticketDetails(ticket);
+  const lines = [];
+
+  pushCopyLine(lines, "Ticket", ticket.ticket_id || `#${String(ticket.id || "").padStart(4, "0")}`);
+  pushCopyLine(lines, "Board", ticket.board_slug === "pais" ? "מפעל הפיס" : "Support Tickets");
+  if (ticket.board_slug !== "pais") {
+    pushCopyLine(lines, "Ticket Type", ticket.ticket_type);
+    pushCopyLine(lines, "Service Type", ticket.service_type);
+    pushCopyLine(lines, "Domain", ticket.domain);
+  }
+  pushCopyLine(lines, "Status", displayTicketStatus(ticket));
+  pushCopyLine(lines, "Priority", ticket.priority || "Medium");
+  pushCopyLine(lines, "Assigned To", ticket.assigned_to || "Unassigned");
+  pushCopyLine(lines, "Creator", ticket.creator);
+  pushCopyLine(lines, "Created", ticket.created_at_display);
+  pushCopyLine(lines, "Last Edited", ticket.last_edited_at_display);
+  pushCopyLine(lines, "Internal ID", ticket.id);
+
+  if (ticket.board_slug === "pais") {
+    lines.push("");
+    lines.push("Details");
+    pushCopyLine(lines, "Terminal Number", details.terminal_number);
+    pushCopyLine(lines, "Address", details.address);
+    pushCopyLine(lines, "Static IP", details.static_ip);
+    pushCopyLine(lines, "Altura", details.altura);
+    pushCopyLine(lines, "Loop Back", details.look_back);
+    pushCopyLine(lines, "Contact Name", details.contact_name);
+    pushCopyLine(lines, "Contact Phone", details.contact_phone);
+    pushCopyLine(lines, "Customer Request", details.customer_request);
+    pushCopyLine(lines, "Actions Taken", details.actions_taken);
+    pushCopyLine(lines, "Coordinated Worker", details.coordinated_worker);
+    pushCopyLine(lines, "Visit Date", details.visit_date);
+    pushCopyLine(lines, "Visit Hours", [details.visit_hour_from, details.visit_hour_to].filter(Boolean).join(" - "));
+    pushCopyLine(lines, "Failure Notes", details.failure_notes);
+  } else {
+    lines.push("");
+    lines.push("Details");
+    pushCopyLine(lines, "Description", ticket.description);
+    pushCopyLine(lines, "Solution", ticket.solution);
+  }
+
+  const attachments = Array.isArray(ticket.attachments) ? ticket.attachments : [];
+  lines.push("");
+  lines.push("Attachments");
+  if (attachments.length === 0) {
+    lines.push("None");
+  } else {
+    attachments.forEach((file, index) => {
+      const label = file?.original_name || file?.saved_name || `Image ${index + 1}`;
+      const url = String(file?.url || "").trim();
+      lines.push(`${index + 1}. ${label}${url ? ` - ${url}` : ""}`);
+    });
+  }
+
+  return lines.join("\n");
+}
+
+async function writeTextToClipboard(text) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  document.execCommand("copy");
+  textarea.remove();
+}
+
+function flashCopyButton(button, success) {
+  if (!button) return;
+  const originalTitle = button.dataset.originalTitle || button.getAttribute("title") || "";
+  if (!button.dataset.originalTitle) {
+    button.dataset.originalTitle = originalTitle;
+  }
+  button.setAttribute("title", success ? "Copied" : "Copy failed");
+  button.setAttribute("aria-label", success ? "Copied" : "Copy failed");
+  window.setTimeout(() => {
+    button.setAttribute("title", originalTitle || "Copy ticket details");
+    button.setAttribute("aria-label", originalTitle || "Copy ticket details");
+  }, 1400);
+}
+
+async function copyTicketDetails(ticketId, triggerButton = null) {
+  const ticket = getTicket(ticketId);
+  if (!ticket) return;
+
+  try {
+    await writeTextToClipboard(ticketCopyText(ticket));
+    flashCopyButton(triggerButton, true);
+  } catch (err) {
+    flashCopyButton(triggerButton, false);
+    alert("Copy failed");
+  }
+}
+
 function coordinationSummary(ticket) {
   const details = ticketDetails(ticket);
   if (!details.coordinated_worker && !details.visit_date) return "";
@@ -235,6 +347,7 @@ function renderTickets(tickets, users) {
       .concat((users || []).map((user) => `<option value="${escapeHtml(user)}" ${ticket.assigned_to === user ? "selected" : ""}>${escapeHtml(user)}</option>`))
       .join("");
     const firstAttachment = Array.isArray(ticket.attachments) ? ticket.attachments[0] : null;
+    const attachmentCount = Array.isArray(ticket.attachments) ? ticket.attachments.length : 0;
     const statusClass = statusClassName(ticket.status);
     const coordinationText = coordinationSummary(ticket);
 
@@ -243,6 +356,20 @@ function renderTickets(tickets, users) {
       <div class="ticket-main">
         <h3>${escapeHtml(ticketHeadline(ticket))}</h3>
         <p>${escapeHtml(ticketSnippet(ticket))}</p>
+      </div>
+      <div class="ticket-extra">
+        ${firstAttachment ? `
+          <button
+            class="ticket-attachment-indicator"
+            type="button"
+            data-image-url="${escapeHtml(firstAttachment.url)}"
+            title="${attachmentCount > 1 ? `${attachmentCount} images attached` : "1 image attached"}"
+            aria-label="${attachmentCount > 1 ? `${attachmentCount} images attached` : "1 image attached"}"
+          >
+            <i class="fa-regular fa-image"></i>
+            <span>${escapeHtml(attachmentCount)}</span>
+          </button>
+        ` : ""}
       </div>
       <div class="ticket-meta">
         <strong>${escapeHtml(ticketTypeLabel(ticket))}</strong><br>
@@ -254,7 +381,7 @@ function renderTickets(tickets, users) {
       <div class="ticket-actions">
         <span class="pill ${statusClass}">${escapeHtml(displayTicketStatus(ticket))}</span>
         <span class="pill ${priorityClass(ticket.priority || "Medium")}">${escapeHtml(ticket.priority || "Medium")}</span>
-        ${firstAttachment ? `<button class="attachment-link" type="button" data-image-url="${escapeHtml(firstAttachment.url)}" title="Open JPG"><i class="fa-regular fa-image"></i></button>` : ""}
+        <button class="copy-ticket-btn" type="button" data-ticket-id="${ticket.id}" title="Copy ticket details" aria-label="Copy ticket details"><i class="fa-regular fa-copy"></i></button>
         ${isAdmin ? `<button class="delete-ticket-btn" type="button" data-ticket-id="${ticket.id}" title="Delete ticket"><i class="fa-solid fa-trash"></i></button>` : ""}
       </div>
     `;
@@ -273,7 +400,7 @@ function renderTickets(tickets, users) {
     if (select.disabled) return;
     select.addEventListener("change", () => updateTicket(select.dataset.ticketId, { status: select.value }));
   });
-  document.querySelectorAll(".attachment-link").forEach((button) => {
+  document.querySelectorAll(".ticket-attachment-indicator").forEach((button) => {
     button.addEventListener("click", (event) => {
       event.stopPropagation();
       openImagePreview(button.dataset.imageUrl || "");
@@ -283,6 +410,12 @@ function renderTickets(tickets, users) {
     button.addEventListener("click", (event) => {
       event.stopPropagation();
       deleteTicket(button.dataset.ticketId);
+    });
+  });
+  document.querySelectorAll(".copy-ticket-btn").forEach((button) => {
+    button.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      await copyTicketDetails(button.dataset.ticketId, button);
     });
   });
 }
@@ -580,6 +713,14 @@ function openTicketDetail(ticketId) {
 
   document.getElementById("detail-grid").innerHTML = gridItems.join("");
   document.getElementById("detail-sections").innerHTML = renderDetailSections(ticket);
+  const detailCopyButton = document.getElementById("detail-copy-btn");
+  if (detailCopyButton) {
+    detailCopyButton.dataset.ticketId = ticket.id;
+  }
+  document.getElementById("detail-upload-ticket-id").value = ticket.id;
+  document.getElementById("detail-upload-form")?.reset();
+  document.getElementById("detail-upload-message").textContent = "";
+  syncDetailAttachmentInputState();
   if (ticket.board_slug === "pais") {
     clearCoordinationValidation();
     document.getElementById("detail-status-select")?.addEventListener("change", syncPaisDetailStatusFields);
@@ -597,14 +738,33 @@ function openTicketDetail(ticketId) {
   const attachmentHost = document.getElementById("detail-attachments");
   attachmentHost.innerHTML = attachments.length
     ? attachments.map((file, index) => `
-        <button class="detail-image-btn" type="button" data-image-url="${escapeHtml(file.url)}">
-          <i class="fa-regular fa-image"></i>
-          <span>JPG ${index + 1}</span>
-        </button>
+        <div class="detail-attachment-item">
+          <button class="detail-image-btn" type="button" data-image-url="${escapeHtml(file.url)}">
+            <i class="fa-regular fa-image"></i>
+            <span>Image ${index + 1}</span>
+          </button>
+          <button
+            class="detail-attachment-delete"
+            type="button"
+            data-ticket-id="${escapeHtml(ticket.id)}"
+            data-folder="${escapeHtml(file.folder || "")}"
+            data-saved-name="${escapeHtml(file.saved_name || "")}"
+            title="Delete image"
+          >
+            <i class="fa-solid fa-trash"></i>
+          </button>
+        </div>
       `).join("")
     : "";
   attachmentHost.querySelectorAll(".detail-image-btn").forEach((button) => {
     button.addEventListener("click", () => openImagePreview(button.dataset.imageUrl || ""));
+  });
+  attachmentHost.querySelectorAll(".detail-attachment-delete").forEach((button) => {
+    button.addEventListener("click", () => deleteDetailAttachment(
+      button.dataset.ticketId || "",
+      button.dataset.folder || "",
+      button.dataset.savedName || "",
+    ));
   });
 
   const modal = document.getElementById("ticket-detail-modal");
@@ -986,6 +1146,95 @@ function fillPaisFieldsFromPaste() {
   }
 }
 
+function syncAttachmentInputState() {
+  const input = document.getElementById("attachment-input");
+  const hint = document.getElementById("attachment-file-count");
+  if (!hint) return;
+  const files = Array.from(input?.files || []);
+  if (files.length === 0) {
+    hint.textContent = "Drag images here or click to choose JPG, PNG, WEBP, GIF";
+    return;
+  }
+  hint.textContent = files.length === 1
+    ? files[0].name
+    : `${files.length} images selected`;
+}
+
+function syncDetailAttachmentInputState() {
+  const input = document.getElementById("detail-attachment-input");
+  const hint = document.getElementById("detail-attachment-file-count");
+  if (!hint) return;
+  const files = Array.from(input?.files || []);
+  if (files.length === 0) {
+    hint.textContent = "Choose JPG, PNG, WEBP, GIF";
+    return;
+  }
+  hint.textContent = files.length === 1
+    ? files[0].name
+    : `${files.length} images selected`;
+}
+
+async function uploadDetailAttachments(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const message = document.getElementById("detail-upload-message");
+  const button = document.getElementById("detail-upload-btn");
+  const input = document.getElementById("detail-attachment-input");
+  const ticketId = document.getElementById("detail-upload-ticket-id")?.value || "";
+  if (message) message.textContent = "";
+  if (!input?.files?.length) {
+    if (message) message.textContent = "Please choose at least one image";
+    return;
+  }
+  if (button) button.disabled = true;
+
+  try {
+    const formData = new FormData(form);
+    formData.set("ticket_id", ticketId);
+    const res = await fetch("/support-tickets-attachments", {
+      method: "POST",
+      body: formData,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) {
+      throw new Error(data.message || "Upload failed");
+    }
+    form.reset();
+    syncDetailAttachmentInputState();
+    await loadTickets();
+    openTicketDetail(ticketId);
+  } catch (err) {
+    if (message) message.textContent = err.message;
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+async function deleteDetailAttachment(ticketId, folder, savedName) {
+  const message = document.getElementById("detail-upload-message");
+  if (message) message.textContent = "";
+
+  try {
+    const res = await fetch("/support-tickets-attachment-delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ticket_id: ticketId,
+        folder,
+        saved_name: savedName,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) {
+      throw new Error(data.message || "Delete failed");
+    }
+    await loadTickets();
+    openTicketDetail(ticketId);
+  } catch (err) {
+    if (message) message.textContent = err.message;
+  }
+}
+
 async function submitTicket(event) {
   event.preventDefault();
   const form = event.currentTarget;
@@ -1006,6 +1255,7 @@ async function submitTicket(event) {
     form.reset();
     const hiddenBoard = form.querySelector('input[name="board_slug"]');
     if (hiddenBoard) hiddenBoard.value = boardSlug;
+    syncAttachmentInputState();
     syncDomainRequirement();
     closeModal();
     await loadTickets();
@@ -1083,6 +1333,10 @@ document.addEventListener("DOMContentLoaded", () => {
     if (event.target.id === "ticket-modal") closeModal();
   });
   document.getElementById("close-detail-modal").addEventListener("click", closeTicketDetail);
+  document.getElementById("detail-copy-btn")?.addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    await copyTicketDetails(button.dataset.ticketId || "", button);
+  });
   document.getElementById("ticket-detail-modal").addEventListener("click", (event) => {
     if (event.target.id === "ticket-detail-modal") closeTicketDetail();
   });
@@ -1097,7 +1351,13 @@ document.addEventListener("DOMContentLoaded", () => {
     syncDomainRequirement();
   }
 
+  document.getElementById("attachment-input")?.addEventListener("change", syncAttachmentInputState);
+  document.getElementById("detail-attachment-input")?.addEventListener("change", syncDetailAttachmentInputState);
+  syncAttachmentInputState();
+  syncDetailAttachmentInputState();
+
   document.getElementById("ticket-form").addEventListener("submit", submitTicket);
+  document.getElementById("detail-upload-form")?.addEventListener("submit", uploadDetailAttachments);
   document.getElementById("parse-pais-paste")?.addEventListener("click", fillPaisFieldsFromPaste);
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) {

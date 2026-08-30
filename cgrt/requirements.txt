@@ -1,0 +1,6 @@
+Flask
+gspread
+google-auth
+python-dotenv
+selenium
+webdriver-manager

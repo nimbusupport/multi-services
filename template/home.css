@@ -1,3 +1,8 @@
+:root {
+  --dashboard-nav-height: 60px;
+  --dashboard-nav-z: 1200;
+}
+
 body.dashboard-page {
   margin: 0;
   font-family: "Manrope", "Segoe UI", sans-serif;
@@ -10,23 +15,24 @@ body.dashboard-page {
 
 body.dashboard-page.has-side-nav {
   padding-left: 0;
-  padding-top: 60px;
+  padding-top: var(--dashboard-nav-height);
 }
 
 body.dashboard-page .site-nav {
-  position: sticky;
+  position: fixed;
   top: 0;
   right: 0;
   left: 0;
   bottom: auto;
   width: auto;
-  height: 60px;
+  height: var(--dashboard-nav-height);
   border-right: none;
   border-bottom: 1px solid rgba(125, 152, 192, 0.18);
   background: rgba(255, 255, 255, 0.94);
   backdrop-filter: blur(12px);
   direction: ltr;
   box-shadow: 0 6px 20px rgba(48, 84, 135, 0.06);
+  z-index: var(--dashboard-nav-z);
 }
 
 body.dashboard-page .site-nav-inner {
@@ -448,11 +454,11 @@ body.dashboard-page .brand-word {
 
 @media (max-width: 860px) {
   body.dashboard-page.has-side-nav {
-    padding-top: 60px;
+    padding-top: var(--dashboard-nav-height);
   }
 
   body.dashboard-page .site-nav {
-    height: 60px;
+    height: var(--dashboard-nav-height);
   }
 
   body.dashboard-page .site-nav-inner {

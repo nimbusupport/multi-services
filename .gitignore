@@ -8,6 +8,10 @@ __pycache__/
 .env
 venv/
 env/
+.venv/
+.worktrees/
+.codex-push-staging/
+features_services/.git.nested-backup/
 
 # Google credentials
 credentials.json
@@ -15,6 +19,8 @@ credentials.json
 # Logs
 log/
 *.log
+Screens/
+*.rar
 
 # Runtime folders
 did_inforu/

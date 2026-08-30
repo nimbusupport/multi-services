@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>סטטוס פיצ'רים</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <link rel="stylesheet" href="./static/features_status.css">
+</head>
+<body>
+  <main class="feature-status-shell">
+    <section class="feature-status-panel">
+      <header class="feature-status-hero">
+        <div>
+          <p class="eyebrow">Nimbus Support</p>
+          <h1>סטטוס פיצ'רים</h1>
+          <p class="subtitle">בדיקה מרוכזת של כל השירותים לפי מספר ח.פ מתוך כל הגיליונות הרלוונטיים.</p>
+        </div>
+      </header>
+
+      <section class="lookup-card">
+        <form id="feature-status-form" class="lookup-form">
+          <label class="lookup-field" for="customer-id-input">
+            <span>מספר ח.פ</span>
+            <input id="customer-id-input" name="customer_id" type="search" inputmode="numeric" placeholder="יש להזין מספר ח.פ של העסק" autocomplete="off">
+          </label>
+          <button id="lookup-submit-btn" class="lookup-btn" type="submit">הצג</button>
+        </form>
+        <p id="lookup-message" class="lookup-message">הקלידו מספר ח.פ ולחצו על הצג כדי לראות את סטטוס הפיצ'רים.</p>
+      </section>
+
+      <section id="feature-status-summary" class="summary-card hidden"></section>
+      <section id="feature-status-results" class="results-grid"></section>
+    </section>
+  </main>
+
+  <script src="./config.js"></script>
+  <script src="./static/features_status.js"></script>
+</body>
+</html>
+

@@ -7,13 +7,16 @@ from werkzeug.security import check_password_hash
 import re
 import io
 import json
+import mimetypes
+import smtplib
 import pandas as pd
 import gspread
 import requests
 from datetime import datetime, timedelta
 from datetime import timezone
+from email.message import EmailMessage
 from zoneinfo import ZoneInfo
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import quote, urlparse, urlunparse
 from google.auth.exceptions import RefreshError
 from google.auth.transport.requests import Request
 from google.oauth2.service_account import Credentials
@@ -51,6 +54,15 @@ for configured_user in os.environ.get("ALLOWED_USERS", "").split(","):
     if configured_user:
         ALLOWED_USERS.add(configured_user)
 SHARED_PASSWORD = APP_PASSWORD or "Aa@0778066666"
+
+
+def env_flag(name, default=False):
+    value = (os.environ.get(name) or "").strip().lower()
+    if not value:
+        return default
+    return value in {"1", "true", "yes", "on"}
+
+
 # ====== .ENV ======
 SMS_URL = os.environ.get("SMS_URL")
 SMS_TOKEN = os.environ.get("SMS_TOKEN")
@@ -193,7 +205,7 @@ SUPABASE_KEY = (
     or os.environ.get("SUPABASE_ANON_KEY")
     or ""
 ).strip()
-SUPPORT_USERS = ["ניר", "יבגני", "גולן", "איציק", "זורה", "אסף", "נסטיה"]
+SUPPORT_USERS = ["ניר", "יבגני", "גולן", "איציק", "זורה", "אסף", "מוסטפה.א", "מוסטפה.ח", "נסטיה"]
 COORDINATION_USERS = ["נסטיה"]
 TECHNICIAN_SUPPORT_USERS = [user for user in SUPPORT_USERS if user not in COORDINATION_USERS]
 SUPPORT_STATUSES = ["Waiting", "Done"]
@@ -203,6 +215,7 @@ VISIT_SLOT_START_HOUR = 9
 VISIT_SLOT_END_HOUR = 18
 FULL_ACCESS_PAGES = {
     "home",
+    "configuration",
     "sms",
     "bot",
     "f2m",
@@ -238,6 +251,19 @@ SUPPORT_SERVICE_TYPES = [
     "Provision ymcs",
     "אפליקציה Cloud Softphone",
 ]
+SUPPORT_ATTACHMENT_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+SUPABASE_STORAGE_BUCKET = (os.environ.get("SUPABASE_STORAGE_BUCKET") or "").strip()
+SUPABASE_STORAGE_PREFIX = (
+    os.environ.get("SUPABASE_STORAGE_PREFIX") or "ticket-attachments"
+).strip().strip("/")
+NASTIA_NOTIFICATION_EMAIL = (os.environ.get("NASTIA_NOTIFICATION_EMAIL") or "orders@nimbusip.com").strip()
+SMTP_HOST = (os.environ.get("SMTP_HOST") or "").strip()
+SMTP_PORT = int((os.environ.get("SMTP_PORT") or "587").strip())
+SMTP_USERNAME = (os.environ.get("SMTP_USERNAME") or "").strip()
+SMTP_PASSWORD = (os.environ.get("SMTP_PASSWORD") or "").strip()
+SMTP_FROM = (os.environ.get("SMTP_FROM") or SMTP_USERNAME or f"no-reply@{ALLOWED_EMAIL_DOMAIN}").strip()
+SMTP_USE_TLS = env_flag("SMTP_USE_TLS", True)
+SMTP_USE_SSL = env_flag("SMTP_USE_SSL", False)
 TICKET_BOARD_DEFAULTS = {
     "support": {
         "slug": "support",
@@ -255,6 +281,7 @@ TICKET_BOARD_DEFAULTS = {
     },
 }
 SERVICE_ACTIVITY = {
+    "configuration": {},
     "sms": {},
     "bot": {},
     "recordings": {},
@@ -391,10 +418,14 @@ def user_can_access_page(page_key):
 
 def first_allowed_route():
     allowed = allowed_pages_for_current_user()
+    if "home" in allowed:
+        return url_for("home")
     if "support_tickets" in allowed:
         return url_for("support_tickets_page")
     if "pais_tickets" in allowed:
         return url_for("pais_tickets_page")
+    if "configuration" in allowed:
+        return url_for("configuration_page")
     return url_for("home")
 
 
@@ -412,6 +443,8 @@ def route_page_key(path):
         return "nastia_tickets"
     if normalized_path.startswith("/dashboard-data") or normalized_path == "/home":
         return "home"
+    if normalized_path.startswith("/configuration"):
+        return "configuration"
     if normalized_path.startswith("/sms"):
         return "sms"
     if normalized_path.startswith("/bot"):
@@ -521,6 +554,74 @@ def _supabase_request(method, path, *, params=None, json_body=None, prefer=None)
         json=json_body,
         timeout=20,
     )
+    if response.status_code >= 400:
+        raise RuntimeError(_supabase_error_message(response))
+    return response
+
+
+def supabase_storage_enabled():
+    return bool(SUPABASE_URL and SUPABASE_KEY and SUPABASE_STORAGE_BUCKET)
+
+
+def _supabase_storage_headers(*, content_type=None, extra_headers=None):
+    headers = _supabase_headers()
+    if content_type:
+        headers["Content-Type"] = content_type
+    if extra_headers:
+        headers.update(extra_headers)
+    return headers
+
+
+def _supabase_storage_url(path):
+    return f"{SUPABASE_URL}/storage/v1/{path.lstrip('/')}"
+
+
+def _supabase_storage_object_path(ticket_folder, saved_name):
+    object_parts = [part for part in (SUPABASE_STORAGE_PREFIX, ticket_folder, saved_name) if part]
+    return "/".join(object_parts)
+
+
+def upload_supabase_storage_object(object_path, file_storage, content_type):
+    if not supabase_storage_enabled():
+        raise RuntimeError("SUPABASE_STORAGE_BUCKET is not configured")
+    file_storage.stream.seek(0)
+    response = requests.post(
+        _supabase_storage_url(f"object/{SUPABASE_STORAGE_BUCKET}/{quote(object_path, safe='/')}"),
+        headers=_supabase_storage_headers(
+            content_type=content_type,
+            extra_headers={"x-upsert": "false", "cache-control": "3600"},
+        ),
+        data=file_storage.stream.read(),
+        timeout=20,
+    )
+    if response.status_code >= 400:
+        raise RuntimeError(_supabase_error_message(response))
+    return response
+
+
+def delete_supabase_storage_object(object_path):
+    if not supabase_storage_enabled():
+        return
+    response = requests.delete(
+        _supabase_storage_url(f"object/{SUPABASE_STORAGE_BUCKET}"),
+        headers=_supabase_storage_headers(content_type="application/json"),
+        json={"prefixes": [object_path]},
+        timeout=20,
+    )
+    if response.status_code >= 400 and response.status_code != 404:
+        raise RuntimeError(_supabase_error_message(response))
+
+
+def download_supabase_storage_object(object_path):
+    if not supabase_storage_enabled():
+        return None
+    response = requests.get(
+        _supabase_storage_url(f"object/authenticated/{SUPABASE_STORAGE_BUCKET}/{quote(object_path, safe='/')}"),
+        headers=_supabase_storage_headers(),
+        timeout=20,
+    )
+    if response.status_code == 404:
+        return None
     if response.status_code >= 400:
         raise RuntimeError(_supabase_error_message(response))
     return response
@@ -843,17 +944,25 @@ def save_support_attachment(file_storage, ticket_number):
 
     original = secure_filename(file_storage.filename)
     ext = os.path.splitext(original)[1].lower()
-    if ext not in {".jpg", ".jpeg"}:
-        raise ValueError("Only JPG files are supported")
+    if ext not in SUPPORT_ATTACHMENT_EXTENSIONS:
+        raise ValueError("Only image files (JPG, PNG, WEBP, GIF) are supported")
 
     ticket_folder = f"TicketID{ticket_number:04d}"
-    folder_path = os.path.join(SUPPORT_SCREEN_DIR, ticket_folder)
-    os.makedirs(folder_path, exist_ok=True)
-
-    timestamp = israel_now().strftime("%Y%m%d%H%M%S")
+    timestamp = israel_now().strftime("%Y%m%d%H%M%S%f")
     saved_name = secure_filename(f"{timestamp}_{original}")
-    saved_path = os.path.join(folder_path, saved_name)
-    file_storage.save(saved_path)
+    content_type = (file_storage.mimetype or mimetypes.guess_type(original)[0] or "application/octet-stream").strip()
+
+    if supabase_storage_enabled():
+        upload_supabase_storage_object(
+            _supabase_storage_object_path(ticket_folder, saved_name),
+            file_storage,
+            content_type,
+        )
+    else:
+        folder_path = os.path.join(SUPPORT_SCREEN_DIR, ticket_folder)
+        os.makedirs(folder_path, exist_ok=True)
+        saved_path = os.path.join(folder_path, saved_name)
+        file_storage.save(saved_path)
 
     return {
         "original_name": file_storage.filename,
@@ -861,6 +970,84 @@ def save_support_attachment(file_storage, ticket_number):
         "folder": ticket_folder,
         "url": f"/support-ticket-attachment/{ticket_folder}/{saved_name}",
     }
+
+
+def save_support_attachments(attachment_files, ticket_number):
+    attachments = []
+    for file_storage in attachment_files or []:
+        if not file_storage or not file_storage.filename:
+            continue
+        saved_attachment = save_support_attachment(file_storage, ticket_number)
+        if saved_attachment:
+            attachments.append(saved_attachment)
+    return attachments
+
+
+def smtp_email_enabled():
+    return bool(SMTP_HOST and SMTP_FROM)
+
+
+def send_plain_email(to_address, subject, body):
+    if not smtp_email_enabled():
+        raise RuntimeError("SMTP is not configured")
+
+    message = EmailMessage()
+    message["Subject"] = subject
+    message["From"] = SMTP_FROM
+    message["To"] = to_address
+    message.set_content(body)
+
+    if SMTP_USE_SSL:
+        with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=20) as smtp:
+            if SMTP_USERNAME and SMTP_PASSWORD:
+                smtp.login(SMTP_USERNAME, SMTP_PASSWORD)
+            smtp.send_message(message)
+        return
+
+    with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=20) as smtp:
+        if SMTP_USE_TLS:
+            smtp.starttls()
+        if SMTP_USERNAME and SMTP_PASSWORD:
+            smtp.login(SMTP_USERNAME, SMTP_PASSWORD)
+        smtp.send_message(message)
+
+
+def should_notify_nastia(previous_ticket, updated_ticket):
+    if (updated_ticket.get("board_slug") or "").strip().lower() != "pais":
+        return False
+
+    previous_ticket = previous_ticket or {}
+    previous_status = (previous_ticket.get("status") or "").strip()
+    updated_status = (updated_ticket.get("status") or "").strip()
+    previous_assignee = (previous_ticket.get("assigned_to") or "").strip()
+    updated_assignee = (updated_ticket.get("assigned_to") or "").strip()
+
+    moved_to_coordination = updated_status == "ממתין לתאום" and previous_status != "ממתין לתאום"
+    assigned_to_nastia = updated_assignee == "נסטיה" and previous_assignee != "נסטיה"
+    return moved_to_coordination or assigned_to_nastia
+
+
+def send_nastia_ticket_email(ticket):
+    details = ticket.get("details") or {}
+    terminal_number = (details.get("terminal_number") or "").strip()
+    customer_request = (details.get("customer_request") or "").strip()
+    address = (details.get("address") or "").strip()
+    ticket_label = ticket.get("ticket_id") or f"#{int(ticket.get('id') or 0):04d}"
+    subject = f"קריאת שירות פייס מספר מסוף {terminal_number or ticket_label}"
+    body_lines = [f"פניית לקוח: {customer_request or '-'}"]
+    if address:
+        body_lines.append(f"כתובת: {address}")
+    body_lines.append(f"מספר קריאה: {ticket_label}")
+    send_plain_email(NASTIA_NOTIFICATION_EMAIL, subject, "\n".join(body_lines))
+
+
+def maybe_send_nastia_ticket_notification(previous_ticket, updated_ticket):
+    if not should_notify_nastia(previous_ticket, updated_ticket):
+        return
+    try:
+        send_nastia_ticket_email(updated_ticket)
+    except Exception as exc:
+        print(f"Nastia notification email warning for ticket {updated_ticket.get('id')}: {exc}")
 
 
 def find_support_ticket(tickets, ticket_id):
@@ -875,10 +1062,19 @@ def find_support_ticket(tickets, ticket_id):
 
 
 def delete_support_attachments(ticket):
+    ticket_folders = set()
     for attachment in ticket.get("attachments") or []:
         folder = (attachment.get("folder") or "").strip()
+        saved_name = secure_filename(attachment.get("saved_name") or "")
         if not re.fullmatch(r"TicketID\d{4}", folder):
             continue
+        if saved_name and supabase_storage_enabled():
+            try:
+                delete_supabase_storage_object(_supabase_storage_object_path(folder, saved_name))
+            except Exception as exc:
+                print(f"Supabase attachment delete warning for {folder}/{saved_name}: {exc}")
+        ticket_folders.add(folder)
+    for folder in ticket_folders:
         folder_path = os.path.abspath(os.path.join(SUPPORT_SCREEN_DIR, folder))
         screen_root = os.path.abspath(SUPPORT_SCREEN_DIR)
         if os.path.commonpath([screen_root, folder_path]) != screen_root:
@@ -887,14 +1083,14 @@ def delete_support_attachments(ticket):
             shutil.rmtree(folder_path, ignore_errors=True)
 
 
-def create_support_ticket_record(ticket_payload, attachment_file=None):
+def create_support_ticket_record(ticket_payload, attachment_files=None, attachment_file=None):
+    attachment_files = [file_storage for file_storage in (attachment_files or []) if file_storage and file_storage.filename]
+    if attachment_file and attachment_file.filename:
+        attachment_files.append(attachment_file)
+
     if not supabase_ticketing_enabled():
         ticket_number = next_support_ticket_id()
-        attachments = []
-        if attachment_file:
-            saved_attachment = save_support_attachment(attachment_file, ticket_number)
-            if saved_attachment:
-                attachments.append(saved_attachment)
+        attachments = save_support_attachments(attachment_files, ticket_number)
         ticket = normalize_support_ticket({
             "id": ticket_number,
             **ticket_payload,
@@ -904,6 +1100,7 @@ def create_support_ticket_record(ticket_payload, attachment_file=None):
         tickets = load_support_tickets()
         tickets.append(ticket)
         save_support_tickets(tickets)
+        maybe_send_nastia_ticket_notification({}, ticket)
         return ticket
 
     response = _supabase_request(
@@ -918,14 +1115,13 @@ def create_support_ticket_record(ticket_payload, attachment_file=None):
     ticket = normalize_support_ticket(rows[0])
     attachments = []
     try:
-        if attachment_file:
-            saved_attachment = save_support_attachment(attachment_file, ticket["id"])
-            if saved_attachment:
-                attachments.append(saved_attachment)
+        if attachment_files:
+            attachments = save_support_attachments(attachment_files, ticket["id"])
+            if attachments:
                 _supabase_request(
                     "POST",
                     "ticket_attachments",
-                    json_body=[{"ticket_id": ticket["id"], **saved_attachment}],
+                    json_body=[{"ticket_id": ticket["id"], **saved_attachment} for saved_attachment in attachments],
                     prefer="return=minimal",
                 )
     except Exception:
@@ -936,7 +1132,118 @@ def create_support_ticket_record(ticket_payload, attachment_file=None):
         raise
     ticket["attachments"] = attachments
     ticket["updates"] = []
+    maybe_send_nastia_ticket_notification({}, ticket)
     return ticket
+
+
+def append_support_ticket_attachments(ticket_id, attachment_files):
+    attachment_files = [file_storage for file_storage in (attachment_files or []) if file_storage and file_storage.filename]
+    if not attachment_files:
+        raise ValueError("No images were selected")
+
+    tickets = load_support_tickets()
+    ticket = find_support_ticket(tickets, ticket_id)
+    if not ticket:
+        raise LookupError("Ticket not found")
+
+    saved_attachments = save_support_attachments(attachment_files, int(ticket.get("id") or 0))
+    if not saved_attachments:
+        raise ValueError("No images were selected")
+
+    if supabase_ticketing_enabled():
+        _supabase_request(
+            "POST",
+            "ticket_attachments",
+            json_body=[{"ticket_id": ticket["id"], **saved_attachment} for saved_attachment in saved_attachments],
+            prefer="return=minimal",
+        )
+        normalized_ticket = normalize_support_ticket({
+            **ticket,
+            "attachments": (ticket.get("attachments") or []) + saved_attachments,
+        })
+        return normalized_ticket
+
+    persisted = load_support_tickets()
+    local_ticket = find_support_ticket(persisted, ticket_id)
+    if not local_ticket:
+        raise LookupError("Ticket not found")
+    local_ticket["attachments"] = (local_ticket.get("attachments") or []) + saved_attachments
+    save_support_tickets(persisted)
+    return normalize_support_ticket(local_ticket)
+
+
+def delete_support_ticket_attachment(ticket_id, folder, saved_name):
+    safe_folder = (folder or "").strip()
+    safe_name = secure_filename(saved_name or "")
+    if not re.fullmatch(r"TicketID\d{4}", safe_folder) or not safe_name:
+        raise ValueError("Invalid attachment")
+
+    tickets = load_support_tickets()
+    ticket = find_support_ticket(tickets, ticket_id)
+    if not ticket:
+        raise LookupError("Ticket not found")
+
+    attachments = list(ticket.get("attachments") or [])
+    target_attachment = next(
+        (
+            attachment for attachment in attachments
+            if (attachment.get("folder") or "").strip() == safe_folder
+            and secure_filename(attachment.get("saved_name") or "") == safe_name
+        ),
+        None,
+    )
+    if not target_attachment:
+        raise LookupError("Attachment not found")
+
+    remaining_attachments = [
+        attachment for attachment in attachments
+        if not (
+            (attachment.get("folder") or "").strip() == safe_folder
+            and secure_filename(attachment.get("saved_name") or "") == safe_name
+        )
+    ]
+
+    if supabase_storage_enabled():
+        try:
+            delete_supabase_storage_object(_supabase_storage_object_path(safe_folder, safe_name))
+        except Exception as exc:
+            print(f"Supabase attachment delete warning for {safe_folder}/{safe_name}: {exc}")
+
+    file_path = os.path.abspath(os.path.join(SUPPORT_SCREEN_DIR, safe_folder, safe_name))
+    screen_root = os.path.abspath(SUPPORT_SCREEN_DIR)
+    if os.path.commonpath([screen_root, file_path]) == screen_root and os.path.exists(file_path):
+        try:
+            os.remove(file_path)
+        except OSError:
+            pass
+        folder_path = os.path.abspath(os.path.join(SUPPORT_SCREEN_DIR, safe_folder))
+        if os.path.commonpath([screen_root, folder_path]) == screen_root and os.path.isdir(folder_path):
+            if not os.listdir(folder_path):
+                shutil.rmtree(folder_path, ignore_errors=True)
+
+    if supabase_ticketing_enabled():
+        _supabase_request(
+            "DELETE",
+            "ticket_attachments",
+            params={
+                "ticket_id": f"eq.{int(ticket.get('id') or 0)}",
+                "folder": f"eq.{safe_folder}",
+                "saved_name": f"eq.{safe_name}",
+            },
+            prefer="return=minimal",
+        )
+        return normalize_support_ticket({
+            **ticket,
+            "attachments": remaining_attachments,
+        })
+
+    persisted = load_support_tickets()
+    local_ticket = find_support_ticket(persisted, ticket_id)
+    if not local_ticket:
+        raise LookupError("Ticket not found")
+    local_ticket["attachments"] = remaining_attachments
+    save_support_tickets(persisted)
+    return normalize_support_ticket(local_ticket)
 
 
 def update_support_ticket_record(ticket_id, changes, actor):
@@ -944,6 +1251,14 @@ def update_support_ticket_record(ticket_id, changes, actor):
     ticket = find_support_ticket(tickets, ticket_id)
     if not ticket:
         raise LookupError("Ticket not found")
+    previous_ticket = {
+        "id": ticket.get("id"),
+        "ticket_id": ticket.get("ticket_id"),
+        "board_slug": ticket.get("board_slug"),
+        "status": ticket.get("status", ""),
+        "assigned_to": ticket.get("assigned_to", ""),
+        "details": dict(ticket.get("details") or {}),
+    }
 
     updates = []
     now = israel_now().isoformat(timespec="seconds")
@@ -1011,7 +1326,7 @@ def update_support_ticket_record(ticket_id, changes, actor):
                 json_body=ticket_updates,
                 prefer="return=minimal",
             )
-        return normalize_support_ticket({**ticket, "updates": (ticket.get("updates") or []) + [
+        normalized_ticket = normalize_support_ticket({**ticket, "updates": (ticket.get("updates") or []) + [
             {
                 "at": update["changed_at"],
                 "actor": update["actor"],
@@ -1021,6 +1336,8 @@ def update_support_ticket_record(ticket_id, changes, actor):
             }
             for update in updates
         ]})
+        maybe_send_nastia_ticket_notification(previous_ticket, normalized_ticket)
+        return normalized_ticket
 
     persisted = load_support_tickets()
     local_ticket = find_support_ticket(persisted, ticket_id)
@@ -1042,7 +1359,9 @@ def update_support_ticket_record(ticket_id, changes, actor):
             "to": update["new_value"],
         })
     save_support_tickets(persisted)
-    return normalize_support_ticket(local_ticket)
+    normalized_ticket = normalize_support_ticket(local_ticket)
+    maybe_send_nastia_ticket_notification(previous_ticket, normalized_ticket)
+    return normalized_ticket
 
 
 def delete_support_ticket_record(ticket_id):
@@ -1245,8 +1564,8 @@ def digits_only(s: str) -> str:
 
 def normalize_idnumber_for_fireberry(idnumber: str) -> str:
     id_digits = digits_only(idnumber)
-    if len(id_digits) == 8:
-        return f"0{id_digits}"
+    if 0 < len(id_digits) < 9:
+        return id_digits.zfill(9)
     return id_digits
 
 
@@ -1712,6 +2031,81 @@ def count_done_recordings_from_drive(selected_month, client, config):
     return result
 
 
+def iter_month_values(start_month, end_month):
+    current = datetime(start_month.year, start_month.month, 1)
+    finish = datetime(end_month.year, end_month.month, 1)
+
+    while current <= finish:
+        yield current.strftime("%Y-%m")
+        if current.month == 12:
+            current = datetime(current.year + 1, 1, 1)
+        else:
+            current = datetime(current.year, current.month + 1, 1)
+
+
+def count_done_recordings_by_month(start_month, end_month):
+    service = get_drive_service(readonly=True)
+    query = (
+        f"'{DRIVE_DONE_FOLDER_ID}' in parents and "
+        "mimeType = 'audio/wav' and trashed=false"
+    )
+    totals = {month_value: 0 for month_value in iter_month_values(start_month, end_month)}
+    page_token = None
+
+    while True:
+        response = service.files().list(
+            q=query,
+            fields="nextPageToken, files(modifiedTime)",
+            pageSize=1000,
+            pageToken=page_token,
+        ).execute()
+
+        for file_item in response.get("files", []):
+            modified_date = parse_drive_modified_time(file_item.get("modifiedTime"))
+            if not modified_date:
+                continue
+
+            month_value = modified_date.strftime("%Y-%m")
+            if month_value in totals:
+                totals[month_value] += 1
+
+        page_token = response.get("nextPageToken")
+        if not page_token:
+            break
+
+    return totals
+
+
+def count_sheet_feature_by_month(config, start_month, end_month, client):
+    ws = client.open_by_key(SPREADSHEET_ID).worksheet(config["sheet"])
+    rows = ws.get_all_values()[1:]
+    totals = {month_value: 0 for month_value in iter_month_values(start_month, end_month)}
+
+    for row in rows:
+        status_col = config["status_col"]
+        date_col = config["date_col"]
+        status = row[status_col - 1].strip() if len(row) >= status_col else ""
+        date_value = row[date_col - 1].strip() if len(row) >= date_col else ""
+
+        if config.get("checkbox"):
+            is_done = report_checkbox_marked(status)
+        else:
+            is_done = status == config["status_value"]
+
+        if not is_done:
+            continue
+
+        done_date = parse_report_date(date_value, config.get("date_order", "mdy"))
+        if not done_date:
+            continue
+
+        month_value = done_date.strftime("%Y-%m")
+        if month_value in totals:
+            totals[month_value] += 1
+
+    return totals
+
+
 def get_feature_report_counts(month_value):
     selected_month = datetime.strptime(month_value, "%Y-%m")
     client = get_gspread_client()
@@ -1765,6 +2159,48 @@ def get_feature_report_counts(month_value):
         "services": reports,
         "total": sum(item["count"] for item in reports),
     }
+
+
+def get_feature_report_monthly_totals(start_month_value, end_month_value):
+    start_month = datetime.strptime(start_month_value, "%Y-%m")
+    end_month = datetime.strptime(end_month_value, "%Y-%m")
+    if start_month > end_month:
+        raise ValueError("Start month must be before end month")
+
+    monthly_totals = {month_value: 0 for month_value in iter_month_values(start_month, end_month)}
+    client = get_gspread_client()
+
+    for config in FEATURE_REPORT_SERVICES.values():
+        if config.get("source") == "drive_done":
+            service_totals = count_done_recordings_by_month(start_month, end_month)
+        else:
+            service_totals = count_sheet_feature_by_month(config, start_month, end_month, client)
+
+        for month_value, count in service_totals.items():
+            monthly_totals[month_value] += count
+
+    months = []
+    for month_value in iter_month_values(start_month, end_month):
+        month_label = datetime.strptime(month_value, "%Y-%m").strftime("%m/%Y")
+        months.append({
+            "month": month_value,
+            "month_display": month_label,
+            "total": monthly_totals[month_value],
+        })
+
+    return {
+        "start_month": start_month_value,
+        "end_month": end_month_value,
+        "months": months,
+    }
+
+
+def get_feature_report_graph_range():
+    now = datetime.now(ZoneInfo("Asia/Jerusalem"))
+    start_year = now.year if now.month >= 4 else now.year - 1
+    start_month = f"{start_year}-04"
+    end_month = now.strftime("%Y-%m")
+    return start_month, end_month
 
 
 def normalize_feature_status_customer_id(value):
@@ -1911,6 +2347,18 @@ def home():
     return render_template("home.html", current_user=session.get("username", ""))
 
 
+@app.route("/configuration")
+def configuration_page():
+
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+    if not user_can_access_page("configuration"):
+        return redirect(first_allowed_route())
+
+    register_service_activity("configuration")
+    return render_template("configuration.html", current_user=session.get("username", ""))
+
+
 # ================= SMS PAGE =================
 @app.route("/sms")
 def sms_page():
@@ -2024,6 +2472,26 @@ def features_report_data():
     return jsonify({"ok": True, "report": report})
 
 
+@app.route("/features-report-monthly-totals")
+def features_report_monthly_totals():
+
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    default_start_month, default_end_month = get_feature_report_graph_range()
+    start_month = request.args.get("start_month", default_start_month)
+    end_month = request.args.get("end_month", default_end_month)
+
+    try:
+        totals = get_feature_report_monthly_totals(start_month, end_month)
+    except ValueError:
+        return jsonify({"ok": False, "error": "Invalid month range"}), 400
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+    return jsonify({"ok": True, **totals})
+
+
 @app.route("/features-report-recordings-detail")
 def features_report_recordings_detail():
 
@@ -2031,81 +2499,6 @@ def features_report_recordings_detail():
         return redirect(url_for("login"))
 
     month_value = request.args.get("month", datetime.now().strftime("%Y-%m"))
-def iter_month_values(start_month, end_month):
-    current = datetime(start_month.year, start_month.month, 1)
-    finish = datetime(end_month.year, end_month.month, 1)
-
-    while current <= finish:
-        yield current.strftime("%Y-%m")
-        if current.month == 12:
-            current = datetime(current.year + 1, 1, 1)
-        else:
-            current = datetime(current.year, current.month + 1, 1)
-
-
-def count_done_recordings_by_month(start_month, end_month):
-    service = get_drive_service(readonly=True)
-    query = (
-        f"'{DRIVE_DONE_FOLDER_ID}' in parents and "
-        "mimeType = 'audio/wav' and trashed=false"
-    )
-    totals = {month_value: 0 for month_value in iter_month_values(start_month, end_month)}
-    page_token = None
-
-    while True:
-        response = service.files().list(
-            q=query,
-            fields="nextPageToken, files(modifiedTime)",
-            pageSize=1000,
-            pageToken=page_token,
-        ).execute()
-
-        for file_item in response.get("files", []):
-            modified_date = parse_drive_modified_time(file_item.get("modifiedTime"))
-            if not modified_date:
-                continue
-
-            month_value = modified_date.strftime("%Y-%m")
-            if month_value in totals:
-                totals[month_value] += 1
-
-        page_token = response.get("nextPageToken")
-        if not page_token:
-            break
-
-    return totals
-
-
-def count_sheet_feature_by_month(config, start_month, end_month, client):
-    ws = client.open_by_key(SPREADSHEET_ID).worksheet(config["sheet"])
-    rows = ws.get_all_values()[1:]
-    totals = {month_value: 0 for month_value in iter_month_values(start_month, end_month)}
-
-    for row in rows:
-        status_col = config["status_col"]
-        date_col = config["date_col"]
-        status = row[status_col - 1].strip() if len(row) >= status_col else ""
-        date_value = row[date_col - 1].strip() if len(row) >= date_col else ""
-
-        if config.get("checkbox"):
-            is_done = report_checkbox_marked(status)
-        else:
-            is_done = status == config["status_value"]
-
-        if not is_done:
-            continue
-
-        done_date = parse_report_date(date_value, config.get("date_order", "mdy"))
-        if not done_date:
-            continue
-
-        month_value = done_date.strftime("%Y-%m")
-        if month_value in totals:
-            totals[month_value] += 1
-
-    return totals
-
-
 
     try:
         selected_month = datetime.strptime(month_value, "%Y-%m")
@@ -2161,48 +2554,6 @@ def dashboard_data():
         "nastia_tickets": service_dashboard_entry(
             "nastia_tickets",
             lambda: len([t for t in load_support_tickets("pais") if (t.get("status") or "").strip() == "ממתין לתאום"]),
-def get_feature_report_monthly_totals(start_month_value, end_month_value):
-    start_month = datetime.strptime(start_month_value, "%Y-%m")
-    end_month = datetime.strptime(end_month_value, "%Y-%m")
-    if start_month > end_month:
-        raise ValueError("Start month must be before end month")
-
-    monthly_totals = {month_value: 0 for month_value in iter_month_values(start_month, end_month)}
-    client = get_gspread_client()
-
-    for config in FEATURE_REPORT_SERVICES.values():
-        if config.get("source") == "drive_done":
-            service_totals = count_done_recordings_by_month(start_month, end_month)
-        else:
-            service_totals = count_sheet_feature_by_month(config, start_month, end_month, client)
-
-        for month_value, count in service_totals.items():
-            monthly_totals[month_value] += count
-
-    months = []
-    for month_value in iter_month_values(start_month, end_month):
-        month_label = datetime.strptime(month_value, "%Y-%m").strftime("%m/%Y")
-        months.append({
-            "month": month_value,
-            "month_display": month_label,
-            "total": monthly_totals[month_value],
-        })
-
-    return {
-        "start_month": start_month_value,
-        "end_month": end_month_value,
-        "months": months,
-    }
-
-
-def get_feature_report_graph_range():
-    now = datetime.now(ZoneInfo("Asia/Jerusalem"))
-    start_year = now.year if now.month >= 4 else now.year - 1
-    start_month = f"{start_year}-04"
-    end_month = now.strftime("%Y-%m")
-    return start_month, end_month
-
-
         ),
     })
 
@@ -2472,26 +2823,6 @@ def support_tickets_create():
             "altura": (request.form.get("altura") or "").strip(),
             "look_back": (request.form.get("look_back") or "").strip(),
             "contact_name": (request.form.get("contact_name") or "").strip(),
-@app.route("/features-report-monthly-totals")
-def features_report_monthly_totals():
-
-    if not session.get("logged_in"):
-        return redirect(url_for("login"))
-
-    default_start_month, default_end_month = get_feature_report_graph_range()
-    start_month = request.args.get("start_month", default_start_month)
-    end_month = request.args.get("end_month", default_end_month)
-
-    try:
-        totals = get_feature_report_monthly_totals(start_month, end_month)
-    except ValueError:
-        return jsonify({"ok": False, "error": "Invalid month range"}), 400
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
-
-    return jsonify({"ok": True, **totals})
-
-
             "contact_phone": (request.form.get("contact_phone") or "").strip(),
             "customer_request": customer_request,
             "actions_taken": actions_taken,
@@ -2533,8 +2864,14 @@ def features_report_monthly_totals():
         "details": details,
     }
 
+    attachment_files = [file_storage for file_storage in request.files.getlist("attachments") if file_storage and file_storage.filename]
+    if not attachment_files:
+        legacy_attachment = request.files.get("attachment")
+        if legacy_attachment and legacy_attachment.filename:
+            attachment_files.append(legacy_attachment)
+
     try:
-        ticket = create_support_ticket_record(ticket_payload, attachment_file=request.files.get("attachment"))
+        ticket = create_support_ticket_record(ticket_payload, attachment_files=attachment_files)
     except ValueError as exc:
         return jsonify({"ok": False, "message": str(exc)}), 400
     except RuntimeError as exc:
@@ -2604,6 +2941,56 @@ def support_tickets_update():
     return jsonify({"ok": True, "ticket": ticket})
 
 
+@app.route("/support-tickets-attachments", methods=["POST"])
+def support_tickets_attachments():
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    ticket_id = (request.form.get("ticket_id") or "").strip()
+    attachment_files = [file_storage for file_storage in request.files.getlist("attachments") if file_storage and file_storage.filename]
+    if not attachment_files:
+        legacy_attachment = request.files.get("attachment")
+        if legacy_attachment and legacy_attachment.filename:
+            attachment_files.append(legacy_attachment)
+
+    try:
+        ticket = append_support_ticket_attachments(ticket_id, attachment_files)
+    except ValueError as exc:
+        return jsonify({"ok": False, "message": str(exc)}), 400
+    except LookupError:
+        return jsonify({"ok": False, "message": "Ticket not found"}), 404
+    except RuntimeError as exc:
+        return jsonify({"ok": False, "message": str(exc)}), 502
+    return jsonify({"ok": True, "ticket": ticket})
+
+
+@app.route("/support-tickets-attachment-delete", methods=["POST"])
+def support_tickets_attachment_delete():
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    payload = request.get_json(silent=True) or {}
+    try:
+        ticket = delete_support_ticket_attachment(
+            payload.get("ticket_id"),
+            payload.get("folder"),
+            payload.get("saved_name"),
+        )
+    except ValueError as exc:
+        return jsonify({"ok": False, "message": str(exc)}), 400
+    except LookupError as exc:
+        message = str(exc) or "Attachment not found"
+        status = 404
+        if "ticket" in message.lower():
+            message = "Ticket not found"
+        else:
+            message = "Attachment not found"
+        return jsonify({"ok": False, "message": message}), status
+    except RuntimeError as exc:
+        return jsonify({"ok": False, "message": str(exc)}), 502
+    return jsonify({"ok": True, "ticket": ticket})
+
+
 @app.route("/support-tickets-delete", methods=["POST"])
 def support_tickets_delete():
     if not session.get("logged_in"):
@@ -2632,10 +3019,23 @@ def support_ticket_attachment(ticket_folder, filename):
     safe_name = secure_filename(filename)
     file_path = os.path.abspath(os.path.join(SUPPORT_SCREEN_DIR, ticket_folder, safe_name))
     screen_root = os.path.abspath(SUPPORT_SCREEN_DIR)
-    if os.path.commonpath([screen_root, file_path]) != screen_root or not os.path.exists(file_path):
-        return jsonify({"ok": False, "message": "Attachment not found"}), 404
+    if os.path.commonpath([screen_root, file_path]) == screen_root and os.path.exists(file_path):
+        return send_file(file_path)
 
-    return send_file(file_path)
+    if supabase_storage_enabled():
+        object_path = _supabase_storage_object_path(ticket_folder, safe_name)
+        try:
+            response = download_supabase_storage_object(object_path)
+        except RuntimeError as exc:
+            return jsonify({"ok": False, "message": str(exc)}), 502
+        if response is not None:
+            return send_file(
+                io.BytesIO(response.content),
+                mimetype=response.headers.get("Content-Type") or mimetypes.guess_type(safe_name)[0] or "application/octet-stream",
+                download_name=safe_name,
+            )
+
+    return jsonify({"ok": False, "message": "Attachment not found"}), 404
 
 
 @app.route("/recordings-data")
@@ -3097,6 +3497,53 @@ def normalize_voipappz_sms_url(url):
     return urlunparse(parsed._replace(netloc=netloc))
 
 
+def summarize_sms_response_message(response, fallback="API Error"):
+    if response is None:
+        return fallback
+
+    if isinstance(response, str):
+        text = response.strip()
+        return text or fallback
+
+    if isinstance(response, (int, float, bool)):
+        return str(response)
+
+    if isinstance(response, list):
+        messages = []
+        for item in response:
+            message = summarize_sms_response_message(item, fallback="")
+            if message and message not in messages:
+                messages.append(message)
+        return "; ".join(messages) or fallback
+
+    if isinstance(response, dict):
+        prioritized_keys = ("message", "error", "detail", "title", "description", "status")
+        for key in prioritized_keys:
+            if key in response:
+                message = summarize_sms_response_message(response.get(key), fallback="")
+                if message:
+                    return message
+
+        errors = response.get("errors")
+        if errors is not None:
+            message = summarize_sms_response_message(errors, fallback="")
+            if message:
+                return message
+
+        field_messages = []
+        for key, value in response.items():
+            if key in prioritized_keys or key == "errors":
+                continue
+            message = summarize_sms_response_message(value, fallback="")
+            if message:
+                field_messages.append(f"{key}: {message}")
+
+        if field_messages:
+            return "; ".join(field_messages)
+
+    return fallback
+
+
 @app.route("/create-sms", methods=["POST"])
 def create_sms():
 
@@ -3124,7 +3571,8 @@ def create_sms():
             results.append({
                 "domain": "UNKNOWN",
                 "success": False,
-                "response": "Missing Domain"
+                "response": "Missing Domain",
+                "message": "Missing Domain"
             })
             continue
 
@@ -3158,7 +3606,8 @@ def create_sms():
                 results.append({
                     "domain": domain,
                     "success": True,
-                    "response": resp if resp else SMS_CREATED_MESSAGE
+                    "response": SMS_CREATED_MESSAGE,
+                    "message": SMS_CREATED_MESSAGE
                 })
 
             else:
@@ -3166,7 +3615,8 @@ def create_sms():
                 results.append({
                     "domain": domain,
                     "success": False,
-                    "response": resp
+                    "response": resp,
+                    "message": summarize_sms_response_message(resp)
                 })
 
         except requests.exceptions.RequestException as e:
@@ -3176,7 +3626,8 @@ def create_sms():
             results.append({
                 "domain": domain,
                 "success": True,
-                "response": SMS_CREATED_MESSAGE
+                "response": SMS_CREATED_MESSAGE,
+                "message": SMS_CREATED_MESSAGE
             })
 
     return jsonify({

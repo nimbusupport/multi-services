@@ -348,10 +348,6 @@
             {% endfor %}
           </select>
         </label>
-        <label>
-          <span>JPG file</span>
-          <input name="attachment" type="file" accept=".jpg,.jpeg,image/jpeg">
-        </label>
       </div>
 
       <label class="description-field">
@@ -424,6 +420,19 @@
       </label>
       {% endif %}
 
+      <section class="ticket-upload-panel">
+        <div class="ticket-upload-copy">
+          <h3>העלאת תמונה</h3>
+          <p>אפשר לצרף כמה תמונות לכל קריאה. הקבצים יישמרו ב-Supabase Storage אם הוגדר bucket, או באחסון המקומי כברירת מחדל.</p>
+        </div>
+        <label class="ticket-upload-dropzone" for="attachment-input">
+          <input id="attachment-input" name="attachments" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple hidden>
+          <span class="ticket-upload-icon"><i class="fa-regular fa-images"></i></span>
+          <strong>Upload Images</strong>
+          <small id="attachment-file-count">Drag images here or click to choose JPG, PNG, WEBP, GIF</small>
+        </label>
+      </section>
+
       <footer>
         <span id="ticket-form-message"></span>
         <button class="create-ticket-btn" type="submit"><i class="fa-solid fa-check"></i><span>Create Ticket</span></button>
@@ -438,10 +447,36 @@
           <p id="detail-kicker">Ticket</p>
           <h2 id="detail-title">#0001</h2>
         </div>
-        <button class="icon-btn" id="close-detail-modal" type="button" title="Close"><i class="fa-solid fa-xmark"></i></button>
+        <div class="detail-header-actions">
+          <button class="icon-btn detail-copy-btn" id="detail-copy-btn" type="button" title="Copy ticket details" aria-label="Copy ticket details">
+            <i class="fa-regular fa-copy"></i>
+          </button>
+          <button class="icon-btn" id="close-detail-modal" type="button" title="Close"><i class="fa-solid fa-xmark"></i></button>
+        </div>
       </header>
       <div class="detail-grid" id="detail-grid"></div>
       <div id="detail-sections"></div>
+      <section class="detail-upload-panel" id="detail-upload-panel">
+        <div class="detail-upload-copy">
+          <h3>Add Images</h3>
+          <p>Attach more images to this ticket after it was created.</p>
+        </div>
+        <form class="detail-upload-form" id="detail-upload-form">
+          <input type="hidden" id="detail-upload-ticket-id" name="ticket_id" value="">
+          <label class="ticket-upload-dropzone detail-upload-dropzone" for="detail-attachment-input">
+            <input id="detail-attachment-input" name="attachments" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple hidden>
+            <span class="ticket-upload-icon"><i class="fa-regular fa-images"></i></span>
+            <strong>Upload Images</strong>
+            <small id="detail-attachment-file-count">Choose JPG, PNG, WEBP, GIF</small>
+          </label>
+          <div class="detail-save-row">
+            <span id="detail-upload-message"></span>
+            <button class="create-ticket-btn" id="detail-upload-btn" type="submit">
+              <i class="fa-solid fa-upload"></i><span>Add Images</span>
+            </button>
+          </div>
+        </form>
+      </section>
       <section class="detail-attachments" id="detail-attachments"></section>
     </section>
   </div>

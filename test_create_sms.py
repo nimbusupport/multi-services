@@ -67,7 +67,42 @@ class CreateSmsTests(unittest.TestCase):
         payload = response.get_json()
         self.assertTrue(payload["results"][0]["success"])
         self.assertEqual(payload["results"][0]["response"], "Created")
+        self.assertEqual(payload["results"][0]["message"], "Created")
         self.assertEqual(post.call_args.args[0], "https://cloud.voipappz.io/api/schemas")
+
+    @patch("app.requests.post")
+    def test_success_response_is_compacted_to_created(self, post):
+        post.return_value = FakeResponse(
+            201,
+            {
+                "environment": [
+                    {
+                        "name": "6101",
+                        "created_at": "2026-08-10T08:34:07+00:00",
+                    }
+                ]
+            },
+        )
+
+        response = self.client.post(
+            "/create-sms",
+            json={
+                "customers": [
+                    {
+                        "domain": "6101",
+                        "did": "0747041404",
+                        "numbercgr": "0777315857",
+                        "text": "hello",
+                    }
+                ]
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertTrue(payload["results"][0]["success"])
+        self.assertEqual(payload["results"][0]["response"], "Created")
+        self.assertEqual(payload["results"][0]["message"], "Created")
 
     @patch("app.requests.post")
     def test_api_error_response_is_preserved(self, post):
@@ -91,12 +126,27 @@ class CreateSmsTests(unittest.TestCase):
         payload = response.get_json()
         self.assertFalse(payload["results"][0]["success"])
         self.assertEqual(payload["results"][0]["response"], {"message": "environment name exists"})
+        self.assertEqual(payload["results"][0]["message"], "environment name exists")
+
+    def test_summarize_sms_response_message_handles_nested_errors(self):
+        self.assertEqual(
+            sms_app.summarize_sms_response_message(
+                {
+                    "errors": {
+                        "environment_name": ["has already been taken"],
+                        "number": ["is invalid"],
+                    }
+                }
+            ),
+            "environment_name: has already been taken; number: is invalid",
+        )
 
 
 class FireberryIdNumberTests(unittest.TestCase):
     def test_eight_digit_idnumber_gets_leading_zero(self):
         self.assertEqual(sms_app.normalize_idnumber_for_fireberry("29702305"), "029702305")
         self.assertEqual(sms_app.normalize_idnumber_for_fireberry("029702305"), "029702305")
+        self.assertEqual(sms_app.normalize_idnumber_for_fireberry("66252990"), "066252990")
 
     @patch("app.requests.post")
     def test_fireberry_lookup_queries_padded_idnumber(self, post):

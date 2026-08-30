@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Yealink Configuration</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <link rel="stylesheet" href="/nav.css">
+  <link rel="stylesheet" href="/configuration.css">
+</head>
+<body>
+  <nav class="site-nav">
+    <div class="site-nav-inner">
+      <a class="brand" href="/home"><span class="brand-kicker">Support Suite</span><span class="brand-main">Services</span></a>
+      <button class="nav-toggle" type="button">Menu</button>
+      <div class="nav-links">
+        <a class="nav-link" href="/sms"><span class="nav-icon"><i class="fa-solid fa-comment-sms"></i></span><span class="nav-label">SMS</span></a>
+        <a class="nav-link" href="/bot"><span class="nav-icon"><i class="fa-solid fa-robot"></i></span><span class="nav-label">Bot</span></a>
+        <a class="nav-link" href="/f2m"><span class="nav-icon"><i class="fa-solid fa-envelope-open-text"></i></span><span class="nav-label">F2M</span></a>
+        <a class="nav-link" href="/recording-storage"><span class="nav-icon"><i class="fa-solid fa-database"></i></span><span class="nav-label">אחסון</span></a>
+        <a class="nav-link" href="/human-service"><span class="nav-icon"><i class="fa-solid fa-headset"></i></span><span class="nav-label">מוקד</span></a>
+        <a class="nav-link" href="/record"><span class="nav-icon"><i class="fa-solid fa-record-vinyl"></i></span><span class="nav-label">Recordings</span></a>
+        <a class="nav-link active" href="/configuration"><span class="nav-icon"><i class="fa-solid fa-sliders"></i></span><span class="nav-label">Configuration</span></a>
+        <a class="nav-link" href="/features-report"><span class="nav-icon"><i class="fa-solid fa-chart-simple"></i></span><span class="nav-label">Features Report</span></a>
+        <a class="nav-link" href="/support-tickets"><span class="nav-icon"><i class="fa-solid fa-ticket"></i></span><span class="nav-label">Tickets</span></a>
+        <a class="nav-link" href="/pais-tickets"><span class="nav-icon"><img src="/picture/pais.png" alt="" style="width:18px;height:18px;object-fit:contain"></span><span class="nav-label">מפעל הפיס</span></a>
+        <a class="nav-link" href="/nastia-tickets"><span class="nav-icon"><i class="fa-solid fa-user-clock"></i></span><span class="nav-label">נסטיה</span></a>
+        <a class="nav-link" href="/home"><span class="nav-icon"><i class="fa-solid fa-chart-column"></i></span><span class="nav-label">Dashboard</span></a>
+      </div>
+      <div class="nav-footer">
+        <div class="nav-user">{{ (current_user or "").split("@")[0] }}</div>
+        <a class="nav-logout" href="/logout"><i class="fa-solid fa-right-from-bracket"></i> Logout</a>
+      </div>
+    </div>
+  </nav>
+
+  <main class="config-shell">
+    <section class="config-hero">
+      <div>
+        <p class="eyebrow">Provisioning Tool</p>
+        <h1>Yealink Configuration Builder</h1>
+        <p class="hero-copy">Generate a plain-text `.cfg` file with Nimbus defaults, manual Dsskey BLF entries, and a dedicated W70B multi-account mode.</p>
+      </div>
+      <div class="hero-device">
+        <img src="/picture/w70b.png" alt="Yealink W70B base station">
+        <label class="w70b-toggle">
+          <input id="is-w70b" type="checkbox">
+          <span>Use W70B logic</span>
+        </label>
+      </div>
+    </section>
+
+    <section class="config-layout">
+      <form class="config-panel" data-config-form>
+        <div class="panel-head">
+          <h2>Configuration Input</h2>
+          <p id="cfg-status" class="status-box" data-state="info">Enter the values to generate the Yealink cfg preview.</p>
+        </div>
+
+        <div class="field-grid">
+          <label class="field-card">
+            <span>Domain</span>
+            <div class="domain-input-wrap">
+              <input id="domain-prefix" type="text" inputmode="numeric" placeholder="1234" autocomplete="off">
+              <strong>.nimbusip.com</strong>
+            </div>
+            <small>Numbers only. Final domain: <b id="full-domain">1234.nimbusip.com</b></small>
+          </label>
+
+          <label class="field-card">
+            <span>Extension</span>
+            <input id="extension" type="text" placeholder="200" autocomplete="off">
+            <small>Main extension / account. In W70B mode this becomes account 1.</small>
+          </label>
+
+          <label class="field-card">
+            <span>Password</span>
+            <input id="password" type="text" placeholder="Password" autocomplete="off">
+            <small>Main account password. W70B extra rows can reuse this or override it.</small>
+          </label>
+        </div>
+
+        <div class="tool-row">
+          <button id="toggle-dsskey" class="secondary-btn" type="button">Dsskey</button>
+          <button id="add-dsskey-row" class="secondary-btn" type="button">Add BLF Row</button>
+          <button id="add-w70b-row" class="secondary-btn" type="button">Add W70B Account</button>
+        </div>
+
+        <section id="dsskey-section" class="sub-panel" data-open="false" hidden>
+          <div class="sub-panel-head">
+            <div>
+              <h3>Dsskey BLF</h3>
+              <p>Rows generate `linekey.2` and up with type `16`.</p>
+            </div>
+          </div>
+          <div class="row-grid row-grid-head">
+            <span>Value</span>
+            <span>Label</span>
+            <span>Line</span>
+            <span>Extension</span>
+            <span>Action</span>
+          </div>
+          <div id="dsskey-rows" class="rows-stack"></div>
+        </section>
+
+        <section id="w70b-section" class="sub-panel" hidden>
+          <div class="sub-panel-head">
+            <div>
+              <h3>W70B Accounts</h3>
+              <p>Add extra SIP accounts for the generated W70B cfg. Empty passwords inherit the main password.</p>
+            </div>
+          </div>
+          <div class="w70b-note">
+            <strong>Account 1</strong>
+            <span>Uses the main Extension and Password fields above.</span>
+          </div>
+          <div class="row-grid row-grid-head row-grid-w70b">
+            <span>Extension</span>
+            <span>Password Override</span>
+            <span>Action</span>
+          </div>
+          <div id="w70b-rows" class="rows-stack"></div>
+        </section>
+
+        <div class="action-row">
+          <button id="generate-preview" class="primary-btn" type="button">Generate Preview</button>
+          <button id="download-generated" class="primary-btn accent" type="button">Download CFG</button>
+          <button id="download-template" class="secondary-btn" type="button">Download CFG Temp</button>
+        </div>
+      </form>
+
+      <aside class="preview-panel">
+        <div class="panel-head">
+          <h2>CFG Preview</h2>
+          <p>Review the exact file content before downloading.</p>
+        </div>
+        <pre id="cfg-preview" class="preview-box"></pre>
+      </aside>
+    </section>
+  </main>
+
+  <script src="/nav.js"></script>
+  <script type="module" src="/configuration.js"></script>
+</body>
+</html>

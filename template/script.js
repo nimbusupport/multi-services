@@ -1,7 +1,7 @@
 let loadedData = []; // {sheet_row, name, text, status, idnumber(hidden), domain, did, numbercgr, cgr_row, cgr_marked, checked}
 let searchQuery = "";
 
-const FIREBERRY_LOGO_URL = "https://app.fireberry.com/app/static/media/fireberry-logo.ebef34ab.svg";
+const FIREBERRY_LOGO_URL = "https://app.fireberry.com/app/static/img/fireberry-logo-CIplsT_n.svg";
 const SMS_GUIDE_STEPS = {
   1: "Fireberry Sync לטעינת לקוחות.",
   2: "יש לבחור את הלקוח או הלקוחות לביצוע SMS ולסמן ב-V. אפשר לבחור את כלל הלקוחות בלחיצה על Select All.",
@@ -605,6 +605,21 @@ function formatSmsResponse(response){
   return JSON.stringify(response);
 }
 
+function formatSmsResultLine(result){
+  const domain = (result.domain || "UNKNOWN").trim() || "UNKNOWN";
+
+  if(result.success){
+    return `✅ ${domain} Created`;
+  }
+
+  const message =
+    (typeof result.message === "string" && result.message.trim())
+      ? result.message.trim()
+      : formatSmsResponse(result.response) || "API Error";
+
+  return `❌ ${domain} Failed: ${message}`;
+}
+
 async function createSMS(){
 
     const selected = loadedData.filter(x => x.checked);
@@ -638,28 +653,10 @@ async function createSMS(){
         return;
       }
   
-      let successMsg = "";
-      let errorMsg = "";
-  
-      json.results.forEach(r => {
-        const responseText = formatSmsResponse(r.response);
+      const lines = (json.results || []).map(formatSmsResultLine).filter(Boolean);
 
-        if(r.success){
-          successMsg += responseText
-            ? `✅ ${r.domain} Created\n${responseText}\n\n`
-            : `✅ ${r.domain} Created\n`;
-        }else{
-          errorMsg += `❌ ${r.domain}\n${responseText || "API Error"}\n\n`;
-        }
-  
-      });
-  
-      if(successMsg){
-        alert(successMsg);
-      }
-  
-      if(errorMsg){
-        alert(errorMsg);
+      if(lines.length){
+        alert(lines.join("\n"));
       }
   
     }catch(e){

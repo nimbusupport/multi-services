@@ -1,4 +1,5 @@
 import importlib
+import io
 import os
 import sys
 import tempfile
@@ -97,6 +98,7 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.original_supabase_key = self.app_module.SUPABASE_KEY
         self.original_israel_now = self.app_module.israel_now
         self.original_get_gspread_client = self.app_module.get_gspread_client
+        self.original_send_nastia_ticket_email = self.app_module.send_nastia_ticket_email
         self.app_module.SUPPORT_LOG_FILE = self.support_log_file
         self.app_module.SUPPORT_SCREEN_DIR = self.screens_dir
         self.app_module.SUPABASE_URL = ""
@@ -110,6 +112,7 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.app_module.SUPABASE_KEY = self.original_supabase_key
         self.app_module.israel_now = self.original_israel_now
         self.app_module.get_gspread_client = self.original_get_gspread_client
+        self.app_module.send_nastia_ticket_email = self.original_send_nastia_ticket_email
         self.tempdir.cleanup()
 
     def seed_tickets(self):
@@ -379,9 +382,125 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertEqual(payload["ticket"]["description"], "")
         self.assertEqual(payload["ticket"]["solution"], "")
 
+    def test_can_create_ticket_with_multiple_image_attachments(self):
+        self.login("admin@nimbusip.com")
+        response = self.client.post(
+            "/support-tickets-create",
+            data={
+                "board_slug": "support",
+                "ticket_type": "תקלה",
+                "service_type": "מצלמות",
+                "priority": "Medium",
+                "assigned_to": "ניר",
+                "description": "Need image evidence",
+                "solution": "",
+                "attachments": [
+                    (io.BytesIO(b"image-one"), "first.jpg"),
+                    (io.BytesIO(b"image-two"), "second.png"),
+                ],
+            },
+            content_type="multipart/form-data",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(len(payload["ticket"]["attachments"]), 2)
+
+        ticket_folder = os.path.join(self.screens_dir, "TicketID0002")
+        self.assertTrue(os.path.isdir(ticket_folder))
+        self.assertEqual(len(os.listdir(ticket_folder)), 2)
+
+    def test_can_add_image_attachments_to_existing_ticket(self):
+        self.login("admin@nimbusip.com")
+        response = self.client.post(
+            "/support-tickets-attachments",
+            data={
+                "ticket_id": "1",
+                "attachments": [
+                    (io.BytesIO(b"image-three"), "third.jpg"),
+                    (io.BytesIO(b"image-four"), "fourth.png"),
+                ],
+            },
+            content_type="multipart/form-data",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(len(payload["ticket"]["attachments"]), 3)
+
+        ticket_folder = os.path.join(self.screens_dir, "TicketID0001")
+        self.assertTrue(os.path.isdir(ticket_folder))
+        self.assertEqual(len(os.listdir(ticket_folder)), 3)
+
+    def test_can_delete_image_attachment_from_existing_ticket(self):
+        self.login("admin@nimbusip.com")
+        response = self.client.post(
+            "/support-tickets-attachment-delete",
+            json={
+                "ticket_id": "1",
+                "folder": "TicketID0001",
+                "saved_name": "example.jpg",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(len(payload["ticket"]["attachments"]), 0)
+
+        ticket_folder = os.path.join(self.screens_dir, "TicketID0001")
+        self.assertFalse(os.path.exists(os.path.join(ticket_folder, "example.jpg")))
+
+    def test_pais_coordination_status_sends_nastia_email(self):
+        tickets = self.app_module.load_support_tickets()
+        tickets.append({
+            "id": 2,
+            "board_slug": "pais",
+            "created_at": "2026-07-08T09:00:00+03:00",
+            "created_at_display": "08/07/2026 09:00",
+            "creator": "Admin",
+            "ticket_type": "שירות",
+            "service_type": "מפעל הפיס",
+            "domain": "",
+            "priority": "Medium",
+            "description": "",
+            "solution": "",
+            "status": "ממתין",
+            "assigned_to": "ניר",
+            "details": {
+                "terminal_number": "9988",
+                "address": "Email street 4",
+                "customer_request": "לקוח מבקש תיאום",
+                "actions_taken": "",
+            },
+            "attachments": [],
+            "updates": [],
+        })
+        self.app_module.save_support_tickets(tickets)
+        sent_tickets = []
+        self.app_module.send_nastia_ticket_email = lambda ticket: sent_tickets.append(ticket)
+
+        self.login("admin@nimbusip.com")
+        response = self.client.post(
+            "/support-tickets-update",
+            json={
+                "ticket_id": 2,
+                "status": "ממתין לתאום",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(sent_tickets), 1)
+        self.assertEqual(sent_tickets[0]["details"]["terminal_number"], "9988")
+        self.assertEqual(sent_tickets[0]["details"]["customer_request"], "לקוח מבקש תיאום")
+
     def test_extended_assignee_list_is_available(self):
         self.assertIn("איציק", self.app_module.SUPPORT_USERS)
         self.assertIn("זורה", self.app_module.SUPPORT_USERS)
+        self.assertIn("מוסטפה.א", self.app_module.SUPPORT_USERS)
+        self.assertIn("מוסטפה.ח", self.app_module.SUPPORT_USERS)
         self.assertIn("נסטיה", self.app_module.SUPPORT_USERS)
         self.assertIn("ממתין לתאום", self.app_module.PAIS_STATUSES)
         self.assertIn("אין מענה", self.app_module.PAIS_STATUSES)
@@ -524,6 +643,7 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertEqual(payload["leaderboard"][0]["done"], 1)
 
     def test_pais_csv_export_contains_counter_and_total(self):
+        self.app_module.israel_now = lambda: datetime(2026, 7, 15, 10, 0, tzinfo=ZoneInfo("Asia/Jerusalem"))
         tickets = self.app_module.load_support_tickets()
         tickets.append({
             "id": 2,
@@ -633,6 +753,8 @@ class SupportTicketsTestCase(unittest.TestCase):
     def test_asaf_is_in_worker_lists(self):
         self.assertIn("אסף", self.app_module.SUPPORT_USERS)
         self.assertIn("אסף", self.app_module.TECHNICIAN_SUPPORT_USERS)
+        self.assertIn("מוסטפה.א", self.app_module.TECHNICIAN_SUPPORT_USERS)
+        self.assertIn("מוסטפה.ח", self.app_module.TECHNICIAN_SUPPORT_USERS)
 
     def test_limited_ticket_user_can_only_access_ticket_pages(self):
         response = self.login("nastya@nimbusip.com", "tygeydfuyw5t3g")
