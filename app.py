@@ -256,6 +256,10 @@ SUPABASE_STORAGE_BUCKET = (os.environ.get("SUPABASE_STORAGE_BUCKET") or "").stri
 SUPABASE_STORAGE_PREFIX = (
     os.environ.get("SUPABASE_STORAGE_PREFIX") or "ticket-attachments"
 ).strip().strip("/")
+SUPABASE_BUCKET_URL = (os.environ.get("SUPABASE_BUCKET_URL") or "").strip()
+SUPABASE_BUCKET_REGION = (os.environ.get("SUPABASE_BUCKET_REGION") or "").strip()
+SUPABASE_BUCKET_ACCESS_KEY = (os.environ.get("SUPABASE_BUCKET_ACCESS_KEY") or "").strip()
+SUPABASE_BUCKET_SECRET_KEY = (os.environ.get("SUPABASE_BUCKET_SECRET_KEY") or "").strip()
 NASTIA_NOTIFICATION_EMAIL = (os.environ.get("NASTIA_NOTIFICATION_EMAIL") or "orders@nimbusip.com").strip()
 SMTP_HOST = (os.environ.get("SMTP_HOST") or "").strip()
 SMTP_PORT = int((os.environ.get("SMTP_PORT") or "587").strip())
@@ -2696,6 +2700,10 @@ def support_tickets_storage_health():
             "supabase_key_configured": bool(SUPABASE_KEY),
             "supabase_storage_bucket_configured": bool(SUPABASE_STORAGE_BUCKET),
             "supabase_storage_bucket": SUPABASE_STORAGE_BUCKET,
+            "supabase_bucket_url_configured": bool(SUPABASE_BUCKET_URL),
+            "supabase_bucket_region_configured": bool(SUPABASE_BUCKET_REGION),
+            "supabase_bucket_access_key_configured": bool(SUPABASE_BUCKET_ACCESS_KEY),
+            "supabase_bucket_secret_key_configured": bool(SUPABASE_BUCKET_SECRET_KEY),
             "attachment_mode": attachment_mode,
             "warning": warning,
         },
