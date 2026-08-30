@@ -563,6 +563,10 @@ def supabase_storage_enabled():
     return bool(SUPABASE_URL and SUPABASE_KEY and SUPABASE_STORAGE_BUCKET)
 
 
+def running_on_vercel():
+    return bool((os.environ.get("VERCEL") or "").strip())
+
+
 def _supabase_storage_headers(*, content_type=None, extra_headers=None):
     headers = _supabase_headers()
     if content_type:
@@ -959,6 +963,11 @@ def save_support_attachment(file_storage, ticket_number):
             content_type,
         )
     else:
+        if running_on_vercel():
+            raise RuntimeError(
+                "Ticket image storage is not configured for Vercel. "
+                "Set SUPABASE_STORAGE_BUCKET so attachments can be saved in Supabase Storage."
+            )
         folder_path = os.path.join(SUPPORT_SCREEN_DIR, ticket_folder)
         os.makedirs(folder_path, exist_ok=True)
         saved_path = os.path.join(folder_path, saved_name)
@@ -1244,6 +1253,70 @@ def delete_support_ticket_attachment(ticket_id, folder, saved_name):
     local_ticket["attachments"] = remaining_attachments
     save_support_tickets(persisted)
     return normalize_support_ticket(local_ticket)
+
+
+def recent_attachment_diagnostics(limit=5):
+    attachments = []
+    if supabase_ticketing_enabled():
+        try:
+            rows = _supabase_request(
+                "GET",
+                "ticket_attachments",
+                params={
+                    "select": "id,ticket_id,original_name,saved_name,folder,url",
+                    "order": "id.desc",
+                    "limit": str(limit),
+                },
+            ).json()
+        except Exception as exc:
+            return {"items": [], "load_error": str(exc)}
+
+        for row in rows:
+            folder = (row.get("folder") or "").strip()
+            saved_name = secure_filename(row.get("saved_name") or "")
+            object_path = _supabase_storage_object_path(folder, saved_name) if folder and saved_name else ""
+            local_path = os.path.abspath(os.path.join(SUPPORT_SCREEN_DIR, folder, saved_name)) if folder and saved_name else ""
+            item = {
+                "ticket_id": row.get("ticket_id"),
+                "original_name": row.get("original_name") or "",
+                "saved_name": saved_name,
+                "folder": folder,
+                "url": row.get("url") or "",
+                "object_path": object_path,
+                "local_exists": bool(local_path and os.path.exists(local_path)),
+                "supabase_exists": None,
+                "supabase_error": "",
+            }
+            if supabase_storage_enabled() and object_path:
+                try:
+                    response = download_supabase_storage_object(object_path)
+                    item["supabase_exists"] = response is not None
+                except Exception as exc:
+                    item["supabase_exists"] = False
+                    item["supabase_error"] = str(exc)
+            attachments.append(item)
+        return {"items": attachments, "load_error": ""}
+
+    tickets = load_support_tickets()
+    for ticket in sorted(tickets, key=lambda item: int(item.get("id") or 0), reverse=True):
+        for attachment in reversed(ticket.get("attachments") or []):
+            folder = (attachment.get("folder") or "").strip()
+            saved_name = secure_filename(attachment.get("saved_name") or "")
+            local_path = os.path.abspath(os.path.join(SUPPORT_SCREEN_DIR, folder, saved_name)) if folder and saved_name else ""
+            attachments.append({
+                "ticket_id": ticket.get("id"),
+                "original_name": attachment.get("original_name") or "",
+                "saved_name": saved_name,
+                "folder": folder,
+                "url": attachment.get("url") or "",
+                "object_path": "",
+                "local_exists": bool(local_path and os.path.exists(local_path)),
+                "supabase_exists": None,
+                "supabase_error": "",
+            })
+            if len(attachments) >= limit:
+                return {"items": attachments, "load_error": ""}
+    return {"items": attachments, "load_error": ""}
 
 
 def update_support_ticket_record(ticket_id, changes, actor):
@@ -2597,6 +2670,40 @@ def support_tickets_page():
     return render_ticket_board_page("support")
 
 
+@app.route("/support-tickets-storage-health")
+def support_tickets_storage_health():
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+    if not support_user_is_admin():
+        return jsonify({"ok": False, "message": "Admin access required"}), 403
+
+    diagnostics = recent_attachment_diagnostics(limit=5)
+    attachment_mode = "supabase" if supabase_storage_enabled() else "local"
+    warning = ""
+    if running_on_vercel() and attachment_mode == "local":
+        warning = (
+            "Attachments are currently using local storage on Vercel. "
+            "Set SUPABASE_STORAGE_BUCKET to keep uploaded images available."
+        )
+
+    return jsonify({
+        "ok": True,
+        "runtime": {
+            "on_vercel": running_on_vercel(),
+            "ticketing_uses_supabase": supabase_ticketing_enabled(),
+            "storage_uses_supabase": supabase_storage_enabled(),
+            "supabase_url_configured": bool(SUPABASE_URL),
+            "supabase_key_configured": bool(SUPABASE_KEY),
+            "supabase_storage_bucket_configured": bool(SUPABASE_STORAGE_BUCKET),
+            "supabase_storage_bucket": SUPABASE_STORAGE_BUCKET,
+            "attachment_mode": attachment_mode,
+            "warning": warning,
+        },
+        "recent_attachments": diagnostics["items"],
+        "load_error": diagnostics["load_error"],
+    })
+
+
 @app.route("/pais-tickets")
 def pais_tickets_page():
     return render_ticket_board_page("pais")
@@ -3036,6 +3143,11 @@ def support_ticket_attachment(ticket_folder, filename):
             )
 
     return jsonify({"ok": False, "message": "Attachment not found"}), 404
+
+
+@app.route("/favicon.ico")
+def favicon():
+    return redirect("/favicon/favicon.jpg", code=307)
 
 
 @app.route("/recordings-data")
