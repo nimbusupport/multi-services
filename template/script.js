@@ -515,7 +515,11 @@ async function sendInforuMail(){
         headers:{ "Content-Type":"application/json" },
         body:JSON.stringify({dids})
       });
-  
+      const contentType = res.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        throw new Error("Server returned an HTML error page instead of JSON. Check Vercel logs.");
+      }
+
       const json = await res.json();
   
       if(!json.ok){

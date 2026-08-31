@@ -2,6 +2,7 @@
 import os
 import shutil
 import csv
+import tempfile
 from werkzeug.utils import secure_filename
 from werkzeug.security import check_password_hash
 import re
@@ -43,7 +44,11 @@ app = Flask(
     static_folder="template",
     static_url_path=""
 )
-TOKEN_INFORU = os.environ.get("TOKEN_INFORU")
+TOKEN_INFORU = (
+    os.environ.get("TOKEN_INFORU")
+    or os.environ.get("INFORU_MAKE_WEBHOOK_URL")
+    or os.environ.get("MAKE_WEBHOOK_URL")
+)
 app.secret_key = os.environ.get("SECRET_KEY", "super-secret-key")
 APP_USERNAME = os.environ.get("APP_USERNAME")
 APP_PASSWORD = os.environ.get("APP_PASSWORD")
@@ -603,6 +608,16 @@ def supabase_storage_enabled():
 
 def running_on_vercel():
     return bool((os.environ.get("VERCEL") or "").strip())
+
+
+def inforu_log_dir():
+    if running_on_vercel():
+        return os.path.join(tempfile.gettempdir(), "did_inforu")
+    return "did_inforu"
+
+
+def inforu_log_path():
+    return os.path.join(inforu_log_dir(), INFORU_LOG_FILENAME)
 
 
 def _supabase_storage_headers(*, content_type=None, extra_headers=None):
@@ -3751,8 +3766,9 @@ def send_inforu_mail():
     # remove duplicates
     dids = list(dict.fromkeys(dids))
 
-    os.makedirs("did_inforu", exist_ok=True)
-    path = os.path.join("did_inforu", INFORU_LOG_FILENAME)
+    log_dir = inforu_log_dir()
+    os.makedirs(log_dir, exist_ok=True)
+    path = inforu_log_path()
 
     # read existing numbers
     existing_numbers = set()
@@ -3784,19 +3800,29 @@ def send_inforu_mail():
     with open(path, "a", encoding="utf-8") as f:
         f.write(block)
 
-    # SEND TO MAKE WEBHOOK
+    if not TOKEN_INFORU:
+        return jsonify({
+            "ok": False,
+            "message": "Inforu Make webhook is not configured. Set TOKEN_INFORU or INFORU_MAKE_WEBHOOK_URL.",
+        }), 500
+
     try:
-        requests.post(
-    TOKEN_INFORU,
-    json={
-        "body": numbers_str,
-        "numbers": ", ".join(new_dids),
-        "count": len(new_dids)
-    },
-    timeout=20
-)
+        response = requests.post(
+            TOKEN_INFORU,
+            json={
+                "body": numbers_str,
+                "numbers": ", ".join(new_dids),
+                "count": len(new_dids),
+            },
+            timeout=20,
+        )
+        response.raise_for_status()
     except Exception as e:
         print("Make webhook error:", e)
+        return jsonify({
+            "ok": False,
+            "message": "Failed to send Inforu email via Make webhook.",
+        }), 502
 
     return jsonify({
         "ok": True,
@@ -3812,10 +3838,10 @@ def send_inforu_mail():
 @app.route("/inforu-log", methods=["GET"])
 def get_inforu_log():
 
-    path = os.path.join("did_inforu", INFORU_LOG_FILENAME)
+    path = inforu_log_path()
 
     if not os.path.exists(path):
-        fallback_dir = "did_inforu"
+        fallback_dir = inforu_log_dir()
         if os.path.isdir(fallback_dir):
             txt_files = [f for f in os.listdir(fallback_dir) if f.lower().endswith(".txt")]
             if txt_files:

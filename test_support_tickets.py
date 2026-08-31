@@ -100,6 +100,11 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.original_get_gspread_client = self.app_module.get_gspread_client
         self.original_get_feature_report_counts = self.app_module.get_feature_report_counts
         self.original_send_nastia_ticket_email = self.app_module.send_nastia_ticket_email
+        self.original_token_inforu = self.app_module.TOKEN_INFORU
+        self.original_requests_post = self.app_module.requests.post
+        self.original_inforu_log_dir = self.app_module.inforu_log_dir
+        self.original_inforu_log_path = self.app_module.inforu_log_path
+        self.original_vercel = os.environ.get("VERCEL")
         self.app_module.SUPPORT_LOG_FILE = self.support_log_file
         self.app_module.SUPPORT_SCREEN_DIR = self.screens_dir
         self.app_module.SUPABASE_URL = ""
@@ -115,6 +120,14 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.app_module.get_gspread_client = self.original_get_gspread_client
         self.app_module.get_feature_report_counts = self.original_get_feature_report_counts
         self.app_module.send_nastia_ticket_email = self.original_send_nastia_ticket_email
+        self.app_module.TOKEN_INFORU = self.original_token_inforu
+        self.app_module.requests.post = self.original_requests_post
+        self.app_module.inforu_log_dir = self.original_inforu_log_dir
+        self.app_module.inforu_log_path = self.original_inforu_log_path
+        if self.original_vercel is None:
+            os.environ.pop("VERCEL", None)
+        else:
+            os.environ["VERCEL"] = self.original_vercel
         self.tempdir.cleanup()
 
     def seed_tickets(self):
@@ -787,6 +800,42 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertEqual(bold_font, "AppPdfFontHebrewBold")
         self.assertEqual(extra_bold_font, "AppPdfFontHebrewExtraBold")
         self.assertEqual(latin_bold_font, "Helvetica-Bold")
+
+    def test_send_inforu_mail_returns_error_when_webhook_missing(self):
+        self.app_module.TOKEN_INFORU = ""
+        self.app_module.inforu_log_dir = lambda: self.tempdir.name
+        self.app_module.inforu_log_path = lambda: os.path.join(self.tempdir.name, self.app_module.INFORU_LOG_FILENAME)
+
+        response = self.client.post("/send-inforu-mail", json={"dids": ["031234568"]})
+
+        self.assertEqual(response.status_code, 500)
+        payload = response.get_json()
+        self.assertFalse(payload["ok"])
+        self.assertIn("TOKEN_INFORU", payload["message"])
+
+    def test_send_inforu_mail_returns_error_when_webhook_fails(self):
+        self.app_module.TOKEN_INFORU = "https://hook.example"
+        self.app_module.inforu_log_dir = lambda: self.tempdir.name
+        self.app_module.inforu_log_path = lambda: os.path.join(self.tempdir.name, self.app_module.INFORU_LOG_FILENAME)
+
+        def failing_post(*args, **kwargs):
+            raise RuntimeError("boom")
+
+        self.app_module.requests.post = failing_post
+        response = self.client.post("/send-inforu-mail", json={"dids": ["031234569"]})
+
+        self.assertEqual(response.status_code, 502)
+        payload = response.get_json()
+        self.assertFalse(payload["ok"])
+        self.assertIn("Failed to send Inforu email", payload["message"])
+
+    def test_inforu_log_path_uses_temp_directory_on_vercel(self):
+        os.environ["VERCEL"] = "1"
+
+        path = self.app_module.inforu_log_path()
+
+        self.assertIn(tempfile.gettempdir(), path)
+        self.assertTrue(path.endswith(self.app_module.INFORU_LOG_FILENAME))
 
     def test_pais_search_uses_terminal_number(self):
         tickets = self.app_module.load_support_tickets()
