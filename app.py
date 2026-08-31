@@ -18,6 +18,7 @@ from email.message import EmailMessage
 from zoneinfo import ZoneInfo
 from urllib.parse import quote, urlparse, urlunparse
 from xml.sax.saxutils import escape as xml_escape
+from bidi.algorithm import get_display
 from google.auth.exceptions import RefreshError
 from google.auth.transport.requests import Request
 from google.oauth2.service_account import Credentials
@@ -2424,18 +2425,10 @@ def format_rtl_pdf_text(value):
     text = str(value or "").replace("\r\n", "\n").strip()
     if not text:
         return "-"
+    if not HEBREW_TEXT_RE.search(text):
+        return text
 
-    rendered_lines = []
-    for line in text.split("\n"):
-        tokens = re.findall(r"\s+|[^\s]+", line)
-        rendered_tokens = []
-        for token in reversed(tokens):
-            if HEBREW_TEXT_RE.search(token):
-                rendered_tokens.append(token[::-1])
-            else:
-                rendered_tokens.append(token)
-        rendered_lines.append("".join(rendered_tokens))
-    return "\n".join(rendered_lines)
+    return "\n".join(get_display(line) for line in text.split("\n"))
 
 
 def pdf_paragraph(value, style, rtl=False):

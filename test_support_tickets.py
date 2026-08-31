@@ -774,6 +774,14 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertIn("features-report-2026-07.pdf", response.headers["Content-Disposition"])
         self.assertTrue(response.data.startswith(b"%PDF"))
 
+    def test_pdf_rtl_format_keeps_non_hebrew_text_order(self):
+        formatted = self.app_module.format_rtl_pdf_text("2026-08-01 - 2026-08-31")
+        self.assertEqual(formatted, "2026-08-01 - 2026-08-31")
+
+    def test_pdf_font_prefers_bundled_hebrew_font(self):
+        font_name = self.app_module.get_pdf_font_name()
+        self.assertEqual(font_name, "AppPdfFont")
+
     def test_pais_search_uses_terminal_number(self):
         tickets = self.app_module.load_support_tickets()
         tickets.append({

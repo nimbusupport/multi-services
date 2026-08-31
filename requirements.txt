@@ -6,3 +6,4 @@ google-auth
 google-api-python-client
 python-dotenv
 reportlab
+python-bidi
