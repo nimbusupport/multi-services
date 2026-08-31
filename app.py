@@ -338,9 +338,10 @@ SERVICE_ACTIVITY = {
 
 
 def ensure_log_file():
-    os.makedirs(LOG_DIR, exist_ok=True)
-    if not os.path.exists(LOG_FILE):
-        with open(LOG_FILE, "a", encoding="utf-8") as f:
+    log_path = app_log_path(os.path.basename(LOG_FILE))
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    if not os.path.exists(log_path):
+        with open(log_path, "a", encoding="utf-8") as f:
             f.write("")
 
 
@@ -350,7 +351,8 @@ def append_log(customers):
     """
     ensure_log_file()
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    with open(LOG_FILE, "a", encoding="utf-8") as f:
+    log_path = app_log_path(os.path.basename(LOG_FILE))
+    with open(log_path, "a", encoding="utf-8") as f:
         f.write(f"=== {ts} | Status -> {STATUS_DONE} | Count: {len(customers)} ===\n")
         f.write("׳©׳ ׳׳§׳•׳—\tDomain\tDID\n")
         for c in customers:
@@ -362,9 +364,10 @@ def append_log(customers):
 
 
 def ensure_support_log_file():
-    os.makedirs(LOG_DIR, exist_ok=True)
-    if not os.path.exists(SUPPORT_LOG_FILE):
-        with open(SUPPORT_LOG_FILE, "a", encoding="utf-8") as f:
+    log_path = support_log_path()
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    if not os.path.exists(log_path):
+        with open(log_path, "a", encoding="utf-8") as f:
             f.write("")
 
 
@@ -610,6 +613,22 @@ def running_on_vercel():
     return bool((os.environ.get("VERCEL") or "").strip())
 
 
+def app_log_dir():
+    if running_on_vercel():
+        return os.path.join(tempfile.gettempdir(), "app_logs")
+    return LOG_DIR
+
+
+def app_log_path(filename):
+    return os.path.join(app_log_dir(), filename)
+
+
+def support_log_path():
+    if running_on_vercel():
+        return app_log_path(os.path.basename(SUPPORT_LOG_FILE))
+    return SUPPORT_LOG_FILE
+
+
 def inforu_log_dir():
     if running_on_vercel():
         return os.path.join(tempfile.gettempdir(), "did_inforu")
@@ -783,7 +802,7 @@ def load_support_tickets(board_slug=None):
 
     ensure_support_log_file()
     tickets = []
-    with open(SUPPORT_LOG_FILE, "r", encoding="utf-8") as f:
+    with open(support_log_path(), "r", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             if not line:
@@ -799,7 +818,7 @@ def load_support_tickets(board_slug=None):
 
 def save_support_tickets(tickets):
     ensure_support_log_file()
-    with open(SUPPORT_LOG_FILE, "w", encoding="utf-8") as f:
+    with open(support_log_path(), "w", encoding="utf-8") as f:
         for ticket in tickets:
             f.write(json.dumps(ticket, ensure_ascii=False) + "\n")
 
@@ -3679,78 +3698,81 @@ def domain_by_order():
 
 @app.route("/mark-done", methods=["POST"])
 def mark_done():
+    if not session.get("logged_in"):
+        return api_error("Unauthorized", 401, "unauthorized")
 
-    payload = request.get_json(silent=True) or {}
-    customers = payload.get("customers", [])
+    try:
+        payload = request.get_json(silent=True) or {}
+        customers = payload.get("customers", [])
 
-    if not isinstance(customers, list) or not customers:
-        return jsonify({"ok": False, "message": "No customers provided."}), 400
+        if not isinstance(customers, list) or not customers:
+            return api_error("No customers provided.", 400, "missing_customers")
 
-    rows = []
-    cgr_updates = []
-    clean_customers = []
+        rows = []
+        cgr_updates = []
+        clean_customers = []
 
-    for c in customers:
+        for c in customers:
+            if not isinstance(c, dict):
+                continue
 
-        if not isinstance(c, dict):
-            continue
+            r = c.get("sheet_row")
+            cgr_row = c.get("cgr_row")
 
-        r = c.get("sheet_row")
-        cgr_row = c.get("cgr_row")
+            if not isinstance(r, int) or r < 2:
+                continue
 
-        if not isinstance(r, int) or r < 2:
-            continue
+            name = (c.get("name") or "").strip()
+            domain = (c.get("domain") or "").strip()
+            did = (c.get("did") or "").strip()
 
-        name = (c.get("name") or "").strip()
-        domain = (c.get("domain") or "").strip()
-        did = (c.get("did") or "").strip()
-
-        rows.append(r)
-
-        clean_customers.append({
-            "name": name,
-            "domain": domain,
-            "did": did
-        })
-
-        # CGR sheet update (׳—׳™׳₪_׳¡׳׳¡ columns C:E)
-        if isinstance(cgr_row, int) and domain:
-            cgr_updates.append({
-                "range": (
-                    f"{gspread.utils.rowcol_to_a1(cgr_row, CGR_COL_DOMAIN)}:"
-                    f"{gspread.utils.rowcol_to_a1(cgr_row, CGR_COL_USED)}"
-                ),
-                "values": [[domain, datetime.now().strftime("%Y-%m-%d"), True]]
+            rows.append(r)
+            clean_customers.append({
+                "name": name,
+                "domain": domain,
+                "did": did,
             })
 
-    if not rows:
-        return jsonify({"ok": False, "message": "No valid rows to update."}), 400
+            if isinstance(cgr_row, int) and domain:
+                cgr_updates.append({
+                    "range": (
+                        f"{gspread.utils.rowcol_to_a1(cgr_row, CGR_COL_DOMAIN)}:"
+                        f"{gspread.utils.rowcol_to_a1(cgr_row, CGR_COL_USED)}"
+                    ),
+                    "values": [[domain, datetime.now().strftime("%Y-%m-%d"), True]],
+                })
 
-    client = get_gspread_client()
+        if not rows:
+            return api_error("No valid rows to update.", 400, "missing_rows")
 
-    # Update SMS sheet
-    ws = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
+        client = get_gspread_client()
+        spreadsheet = client.open_by_key(SPREADSHEET_ID)
 
-    updates = []
-    for r in rows:
-        updates.append({
-            "range": gspread.utils.rowcol_to_a1(r, COL_STATUS),
-            "values": [[STATUS_DONE]]
+        ws = spreadsheet.worksheet(SHEET_NAME)
+        updates = []
+        for r in rows:
+            updates.append({
+                "range": gspread.utils.rowcol_to_a1(r, COL_STATUS),
+                "values": [[STATUS_DONE]],
+            })
+
+        ws.batch_update(updates)
+
+        if cgr_updates:
+            cgr_ws = spreadsheet.worksheet(CGR_SHEET_NAME)
+            cgr_ws.batch_update(cgr_updates)
+
+        try:
+            append_log(clean_customers)
+        except Exception as log_exc:
+            print(f"Mark-done log warning: {log_exc}")
+
+        return jsonify({
+            "ok": True,
+            "updated": len(rows),
         })
-
-    ws.batch_update(updates)
-
-    # Update CGR sheet
-    if cgr_updates:
-        cgr_ws = client.open_by_key(SPREADSHEET_ID).worksheet(CGR_SHEET_NAME)
-        cgr_ws.batch_update(cgr_updates)
-
-    append_log(clean_customers)
-
-    return jsonify({
-        "ok": True,
-        "updated": len(rows)
-    })
+    except Exception as exc:
+        return api_error(exc, 500, "mark_done_failed")
 
 @app.route("/send-inforu-mail", methods=["POST"])
 def send_inforu_mail():

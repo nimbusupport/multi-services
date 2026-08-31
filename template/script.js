@@ -11,6 +11,83 @@ const SMS_GUIDE_STEPS = {
 };
 
 /* Helpers */
+function showAppNotice(message, type = "info", timeout = 30000){
+  const region = document.getElementById("appNoticeRegion");
+  if(!region){
+    return;
+  }
+
+  const notice = document.createElement("section");
+  notice.className = `app-notice is-${type}`;
+
+  const titleByType = {
+    success: "Success",
+    error: "Error",
+    info: "Notice"
+  };
+
+  notice.innerHTML = `
+    <div class="app-notice-body">
+      <p class="app-notice-title">${titleByType[type] || titleByType.info}</p>
+      <p class="app-notice-message">${escapeHtml(String(message ?? ""))}</p>
+    </div>
+    <button class="app-notice-close" type="button" aria-label="Close">×</button>
+  `;
+
+  const close = () => {
+    notice.remove();
+  };
+
+  notice.querySelector(".app-notice-close")?.addEventListener("click", close);
+  region.appendChild(notice);
+  window.setTimeout(close, timeout);
+}
+
+function showAppSuccess(message){
+  showAppNotice(message, "success");
+}
+
+function inferNoticeType(message){
+  const text = String(message ?? "").toLowerCase();
+  if(
+    text.includes("שגיאה") ||
+    text.includes("error") ||
+    text.includes("failed") ||
+    text.includes("unauthorized")
+  ){
+    return "error";
+  }
+  if(
+    text.includes("נשלח") ||
+    text.includes("עודכן") ||
+    text.includes("created") ||
+    text.includes("success")
+  ){
+    return "success";
+  }
+  return "info";
+}
+
+function formatErrorMessage(error){
+  if(error instanceof Error){
+    return error.message;
+  }
+  return String(error ?? "Unknown error");
+}
+
+async function readJsonResponse(res){
+  const contentType = res.headers.get("content-type") || "";
+  if(contentType.includes("application/json")){
+    return res.json();
+  }
+
+  const text = await res.text();
+  if(text && text.trim().startsWith("<")){
+    throw new Error("Server returned an HTML error page instead of JSON. Check Vercel logs.");
+  }
+  throw new Error(text || "Server returned a non-JSON response.");
+}
+
 function setCounts(){
   document.getElementById("countPill").innerHTML =
     `<span class="dot dot-amber"></span> נטענו: ${loadedData.length}`;
@@ -89,9 +166,7 @@ async function lookupSmsDomain(){
 async function loadData() {
     try{
       const res = await fetch('/load-data');
-      const payload = await res.json().catch(() => {
-        throw new Error("Server returned non-JSON response");
-      });
+      const payload = await readJsonResponse(res);
       if(!res.ok || payload.ok === false){
         throw new Error(payload.message || res.statusText || "Load failed");
       }
@@ -114,7 +189,7 @@ async function loadData() {
   
       renderTable();
     }catch(e){
-      alert("שגיאה בטעינת נתונים: " + e);
+      alert("שגיאה בטעינת נתונים: " + formatErrorMessage(e));
     }
   }
 
@@ -300,21 +375,21 @@ async function markDoneSelected(){
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ customers })
       });
-  
-      const json = await res.json();
+
+      const json = await readJsonResponse(res);
   
       if(!res.ok || !json.ok){
         alert("שגיאה בעדכון סטטוס: " + (json.message || "Unknown"));
         return;
       }
-  
-      alert(`עודכן ל"בוצע": ${json.updated} לקוחות\nנרשם לוג ב: log/created.log`);
+
+      showAppSuccess(`עודכן ל"בוצע": ${json.updated} לקוחות`);
   
       await loadData();
   
     }catch(e){
-  
-      alert("שגיאה בעדכון סטטוס: " + e);
+
+      alert("שגיאה בעדכון סטטוס: " + formatErrorMessage(e));
   
     }
   
@@ -515,12 +590,7 @@ async function sendInforuMail(){
         headers:{ "Content-Type":"application/json" },
         body:JSON.stringify({dids})
       });
-      const contentType = res.headers.get("content-type") || "";
-      if (!contentType.includes("application/json")) {
-        throw new Error("Server returned an HTML error page instead of JSON. Check Vercel logs.");
-      }
-
-      const json = await res.json();
+      const json = await readJsonResponse(res);
   
       if(!json.ok){
         alert(json.message);
@@ -534,10 +604,10 @@ async function sendInforuMail(){
   
       renderTable();
   
-      alert("נשלח אימות Inforu️✅");
+      showAppSuccess("נשלח אימות Inforu️✅");
   
     }catch(e){
-      alert("שגיאה בשליחה: " + e);
+      alert("שגיאה בשליחה: " + formatErrorMessage(e));
     }
   
   }
@@ -650,7 +720,7 @@ async function createSMS(){
         body:JSON.stringify({customers})
       });
   
-      const json = await res.json();
+      const json = await readJsonResponse(res);
   
       if(!json.ok){
         alert("API Error");
@@ -660,17 +730,18 @@ async function createSMS(){
       const lines = (json.results || []).map(formatSmsResultLine).filter(Boolean);
 
       if(lines.length){
-        alert(lines.join("\n"));
+        showAppSuccess(lines.join("\n"));
       }
   
     }catch(e){
   
-      alert("Connection error: " + e);
+      alert("Connection error: " + formatErrorMessage(e));
   
     }
   
   }
 
 document.addEventListener("DOMContentLoaded", () => {
+  window.alert = (message) => showAppNotice(message, inferNoticeType(message));
   loadData();
 });
