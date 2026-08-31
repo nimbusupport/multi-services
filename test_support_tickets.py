@@ -98,6 +98,7 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.original_supabase_key = self.app_module.SUPABASE_KEY
         self.original_israel_now = self.app_module.israel_now
         self.original_get_gspread_client = self.app_module.get_gspread_client
+        self.original_get_feature_report_counts = self.app_module.get_feature_report_counts
         self.original_send_nastia_ticket_email = self.app_module.send_nastia_ticket_email
         self.app_module.SUPPORT_LOG_FILE = self.support_log_file
         self.app_module.SUPPORT_SCREEN_DIR = self.screens_dir
@@ -112,6 +113,7 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.app_module.SUPABASE_KEY = self.original_supabase_key
         self.app_module.israel_now = self.original_israel_now
         self.app_module.get_gspread_client = self.original_get_gspread_client
+        self.app_module.get_feature_report_counts = self.original_get_feature_report_counts
         self.app_module.send_nastia_ticket_email = self.original_send_nastia_ticket_email
         self.tempdir.cleanup()
 
@@ -678,6 +680,99 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertIn("counter,terminal_number,address", body)
         self.assertIn("1,3001,C", body)
         self.assertIn("TOTAL,1,", body)
+
+    def test_pais_pdf_export_downloads_attachment(self):
+        self.app_module.israel_now = lambda: datetime(2026, 7, 15, 10, 0, tzinfo=ZoneInfo("Asia/Jerusalem"))
+        tickets = self.app_module.load_support_tickets()
+        tickets.append({
+            "id": 2,
+            "board_slug": "pais",
+            "created_at": "2026-07-08T09:00:00+03:00",
+            "created_at_display": "08/07/2026 09:00",
+            "creator": "Admin",
+            "ticket_type": "׳©׳™׳¨׳•׳×",
+            "service_type": "׳׳₪׳¢׳ ׳”׳₪׳™׳¡",
+            "domain": "",
+            "priority": "Medium",
+            "description": "",
+            "solution": "",
+            "status": "׳׳׳×׳™׳ ׳׳×׳׳•׳",
+            "assigned_to": "׳ ׳¡׳˜׳™׳”",
+            "details": {
+                "terminal_number": "3001",
+                "address": "C",
+                "customer_request": "R3",
+                "actions_taken": "A3",
+            },
+            "attachments": [],
+            "updates": [],
+        })
+        self.app_module.save_support_tickets(tickets)
+
+        self.login("admin@nimbusip.com")
+        response = self.client.get("/pais-tickets-report-export?period=monthly&format=pdf")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.mimetype, "application/pdf")
+        self.assertTrue(response.headers["Content-Disposition"].startswith("attachment;"))
+        self.assertIn(".pdf", response.headers["Content-Disposition"])
+        self.assertTrue(response.data.startswith(b"%PDF"))
+
+    def test_pais_report_export_defaults_to_monthly_period(self):
+        self.app_module.israel_now = lambda: datetime(2026, 7, 15, 10, 0, tzinfo=ZoneInfo("Asia/Jerusalem"))
+        tickets = self.app_module.load_support_tickets()
+        tickets.append({
+            "id": 2,
+            "board_slug": "pais",
+            "created_at": "2026-07-08T09:00:00+03:00",
+            "created_at_display": "08/07/2026 09:00",
+            "creator": "Admin",
+            "ticket_type": "׳©׳™׳¨׳•׳×",
+            "service_type": "׳׳₪׳¢׳ ׳”׳₪׳™׳¡",
+            "domain": "",
+            "priority": "Medium",
+            "description": "",
+            "solution": "",
+            "status": "׳׳׳×׳™׳ ׳׳×׳׳•׳",
+            "assigned_to": "׳ ׳¡׳˜׳™׳”",
+            "details": {
+                "terminal_number": "3001",
+                "address": "C",
+                "customer_request": "R3",
+                "actions_taken": "A3",
+            },
+            "attachments": [],
+            "updates": [],
+        })
+        self.app_module.save_support_tickets(tickets)
+
+        self.login("admin@nimbusip.com")
+        response = self.client.get("/pais-tickets-report-export?format=csv")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("pais_tickets_monthly_", response.headers["Content-Disposition"])
+        body = response.data.decode("utf-8-sig")
+        self.assertIn("1,3001,C", body)
+
+    def test_features_pdf_export_downloads_attachment(self):
+        self.app_module.get_feature_report_counts = lambda month: {
+            "month": month,
+            "month_display": "07/2026",
+            "services": [
+                {"label": "SMS", "count": 3, "children": []},
+                {"label": "מוקד", "count": 2, "children": [{"label": "משנה", "count": 1}]},
+            ],
+            "total": 5,
+        }
+
+        self.login("admin@nimbusip.com")
+        response = self.client.get("/features-report-export?month=2026-07&format=pdf")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.mimetype, "application/pdf")
+        self.assertTrue(response.headers["Content-Disposition"].startswith("attachment;"))
+        self.assertIn("features-report-2026-07.pdf", response.headers["Content-Disposition"])
+        self.assertTrue(response.data.startswith(b"%PDF"))
 
     def test_pais_search_uses_terminal_number(self):
         tickets = self.app_module.load_support_tickets()

@@ -17,6 +17,7 @@ from datetime import timezone
 from email.message import EmailMessage
 from zoneinfo import ZoneInfo
 from urllib.parse import quote, urlparse, urlunparse
+from xml.sax.saxutils import escape as xml_escape
 from google.auth.exceptions import RefreshError
 from google.auth.transport.requests import Request
 from google.oauth2.service_account import Credentials
@@ -24,6 +25,14 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 from dotenv import load_dotenv
 from flask import session, redirect, url_for
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import mm
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 load_dotenv()
 
@@ -160,6 +169,18 @@ FEATURE_STATUS_SERVICES = [
         "status_col": 8,  # H
     },
 ]
+
+PDF_FONT_CANDIDATES = [
+    os.path.join(os.path.dirname(__file__), "template", "fonts", "NotoSansHebrew-Regular.ttf"),
+    os.path.join(os.path.dirname(__file__), "template", "fonts", "DejaVuSans.ttf"),
+    r"C:\Windows\Fonts\arial.ttf",
+    r"C:\Windows\Fonts\Arial.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
+    "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+]
+PDF_FONT_NAME = None
+HEBREW_TEXT_RE = re.compile(r"[\u0590-\u05FF]")
 
 # Column mapping (1-based for gspread)
 COL_NAME = 1       # A
@@ -2380,6 +2401,175 @@ def lookup_feature_status_by_customer_id(customer_id):
     }
 
 
+def get_pdf_font_name():
+    global PDF_FONT_NAME
+    if PDF_FONT_NAME:
+        return PDF_FONT_NAME
+
+    for font_path in PDF_FONT_CANDIDATES:
+        if not font_path or not os.path.exists(font_path):
+            continue
+        try:
+            pdfmetrics.registerFont(TTFont("AppPdfFont", font_path))
+            PDF_FONT_NAME = "AppPdfFont"
+            return PDF_FONT_NAME
+        except Exception:
+            continue
+
+    PDF_FONT_NAME = "Helvetica"
+    return PDF_FONT_NAME
+
+
+def format_rtl_pdf_text(value):
+    text = str(value or "").replace("\r\n", "\n").strip()
+    if not text:
+        return "-"
+
+    rendered_lines = []
+    for line in text.split("\n"):
+        tokens = re.findall(r"\s+|[^\s]+", line)
+        rendered_tokens = []
+        for token in reversed(tokens):
+            if HEBREW_TEXT_RE.search(token):
+                rendered_tokens.append(token[::-1])
+            else:
+                rendered_tokens.append(token)
+        rendered_lines.append("".join(rendered_tokens))
+    return "\n".join(rendered_lines)
+
+
+def pdf_paragraph(value, style, rtl=False):
+    text = format_rtl_pdf_text(value) if rtl else str(value or "-").replace("\r\n", "\n").strip() or "-"
+    return Paragraph(xml_escape(text).replace("\n", "<br/>"), style)
+
+
+def build_pdf_buffer(title, metadata_rows, headers, rows, rtl_columns=None):
+    rtl_columns = set(rtl_columns or [])
+    buffer = io.BytesIO()
+    font_name = get_pdf_font_name()
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        "PdfTitle",
+        parent=styles["Heading1"],
+        fontName=font_name,
+        fontSize=18,
+        leading=22,
+        alignment=TA_RIGHT,
+        textColor=colors.HexColor("#16365d"),
+        spaceAfter=8,
+    )
+    meta_label_style = ParagraphStyle(
+        "PdfMetaLabel",
+        parent=styles["BodyText"],
+        fontName=font_name,
+        fontSize=10,
+        leading=13,
+        alignment=TA_LEFT,
+        textColor=colors.HexColor("#4b5563"),
+    )
+    meta_value_style = ParagraphStyle(
+        "PdfMetaValue",
+        parent=styles["BodyText"],
+        fontName=font_name,
+        fontSize=10,
+        leading=13,
+        alignment=TA_RIGHT,
+        textColor=colors.HexColor("#111827"),
+    )
+    header_style = ParagraphStyle(
+        "PdfHeader",
+        parent=styles["BodyText"],
+        fontName=font_name,
+        fontSize=10,
+        leading=12,
+        alignment=TA_CENTER,
+        textColor=colors.white,
+    )
+    cell_style = ParagraphStyle(
+        "PdfCell",
+        parent=styles["BodyText"],
+        fontName=font_name,
+        fontSize=9,
+        leading=11,
+        alignment=TA_RIGHT,
+        textColor=colors.HexColor("#111827"),
+    )
+
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=14 * mm,
+        leftMargin=14 * mm,
+        topMargin=14 * mm,
+        bottomMargin=14 * mm,
+    )
+
+    story = [pdf_paragraph(title, title_style, rtl=True)]
+    for label, value in metadata_rows:
+        story.append(
+            Table(
+                [[
+                    pdf_paragraph(label, meta_label_style),
+                    pdf_paragraph(value, meta_value_style, rtl=True),
+                ]],
+                colWidths=[40 * mm, 130 * mm],
+                hAlign="RIGHT",
+                style=TableStyle([
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                ]),
+            )
+        )
+    story.append(Spacer(1, 8))
+
+    table_data = [[pdf_paragraph(header, header_style) for header in headers]]
+    for row in rows:
+        table_data.append([
+            pdf_paragraph(value, cell_style, rtl=index in rtl_columns)
+            for index, value in enumerate(row)
+        ])
+
+    table = Table(table_data, repeatRows=1, hAlign="RIGHT")
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1d4f91")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#d7deea")),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("ALIGN", (0, 0), (-1, -1), "RIGHT"),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f8fbff")]),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    story.append(table)
+    doc.build(story)
+    buffer.seek(0)
+    return buffer
+
+
+def build_pais_export_rows(report):
+    rows = []
+    for index, ticket in enumerate(report["tickets"], start=1):
+        details = ticket.get("details") or {}
+        rows.append({
+            "counter": index,
+            "terminal_number": details.get("terminal_number") or "",
+            "address": details.get("address") or "",
+        })
+    return rows
+
+
+def build_features_export_rows(report):
+    rows = []
+    for service in report.get("services", []):
+        rows.append([service.get("label") or "", report.get("month_display") or "", service.get("count") or 0])
+        for child in service.get("children") or []:
+            rows.append([f"{service.get('label') or ''} - {child.get('label') or ''}", report.get("month_display") or "", child.get("count") or 0])
+    rows.append(["Total", report.get("month_display") or "", report.get("total") or 0])
+    return rows
+
+
 # ================= ROOT =================
 @app.route("/")
 def root():
@@ -2547,6 +2737,56 @@ def features_report_data():
         return jsonify({"ok": False, "error": str(e)}), 500
 
     return jsonify({"ok": True, "report": report})
+
+
+@app.route("/features-report-export")
+def features_report_export():
+
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    month_value = request.args.get("month", datetime.now().strftime("%Y-%m"))
+    export_format = (request.args.get("format") or "pdf").strip().lower()
+
+    try:
+        report = get_feature_report_counts(month_value)
+    except ValueError:
+        return jsonify({"ok": False, "error": "Invalid month"}), 400
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+    if export_format == "csv":
+        rows = [["Service", "Month", "Completed Count"], *build_features_export_rows(report)]
+        output = io.StringIO()
+        for row in rows:
+            output.write(",".join(f'"{str(value).replace(chr(34), chr(34) + chr(34))}"' for value in row))
+            output.write("\r\n")
+        csv_buffer = io.BytesIO(("\ufeff" + output.getvalue()).encode("utf-8"))
+        csv_buffer.seek(0)
+        return send_file(
+            csv_buffer,
+            mimetype="text/csv",
+            as_attachment=True,
+            download_name=f"features-report-{report['month']}.csv",
+        )
+
+    rows = build_features_export_rows(report)
+    pdf_buffer = build_pdf_buffer(
+        title="דו\"ח פיצ'רים",
+        metadata_rows=[
+            ("Month", report.get("month_display") or ""),
+            ("Total", report.get("total") or 0),
+        ],
+        headers=["Service", "Month", "Completed Count"],
+        rows=rows,
+        rtl_columns={0},
+    )
+    return send_file(
+        pdf_buffer,
+        mimetype="application/pdf",
+        as_attachment=True,
+        download_name=f"features-report-{report['month']}.pdf",
+    )
 
 
 @app.route("/features-report-monthly-totals")
@@ -2825,11 +3065,11 @@ def pais_tickets_report_data():
 
     register_service_activity("pais_tickets")
     status_filter = (request.args.get("status") or "").strip()
-    period = (request.args.get("period") or "daily").strip().lower()
+    period = (request.args.get("period") or "monthly").strip().lower()
     date_from = (request.args.get("date_from") or "").strip()
     date_to = (request.args.get("date_to") or "").strip()
     if period not in {"daily", "weekly", "monthly"}:
-        period = "daily"
+        period = "monthly"
 
     report = build_pais_report(
         load_support_tickets("pais"),
@@ -2848,12 +3088,12 @@ def pais_tickets_report_export():
 
     register_service_activity("pais_tickets")
     status_filter = (request.args.get("status") or "").strip()
-    period = (request.args.get("period") or "daily").strip().lower()
+    period = (request.args.get("period") or "monthly").strip().lower()
     export_format = (request.args.get("format") or "csv").strip().lower()
     date_from = (request.args.get("date_from") or "").strip()
     date_to = (request.args.get("date_to") or "").strip()
     if period not in {"daily", "weekly", "monthly"}:
-        period = "daily"
+        period = "monthly"
     if export_format not in {"csv", "pdf"}:
         export_format = "csv"
 
@@ -2865,21 +3105,26 @@ def pais_tickets_report_export():
         date_to_raw=date_to,
     )
 
-    rows = []
-    for index, ticket in enumerate(report["tickets"], start=1):
-        details = ticket.get("details") or {}
-        rows.append({
-            "counter": index,
-            "terminal_number": details.get("terminal_number") or "",
-            "address": details.get("address") or "",
-        })
+    rows = build_pais_export_rows(report)
 
     if export_format == "pdf":
-        return render_template(
-            "pais_report_print.html",
-            rows=rows,
-            report=report,
-            total_rows=len(rows),
+        pdf_buffer = build_pdf_buffer(
+            title="מפעל הפיס",
+            metadata_rows=[
+                ("Period", report.get("period") or ""),
+                ("Dates", f"{report.get('date_from') or ''} - {report.get('date_to') or ''}"),
+                ("Status", report.get("status") or "All"),
+                ("Rows", len(rows)),
+            ],
+            headers=["#", "Terminal Number", "Address"],
+            rows=[[row["counter"], row["terminal_number"], row["address"]] for row in rows] or [["-", "-", "No rows found for this report."]],
+            rtl_columns={2},
+        )
+        return send_file(
+            pdf_buffer,
+            mimetype="application/pdf",
+            as_attachment=True,
+            download_name=f"pais_tickets_{period}_{report['date_from']}_to_{report['date_to']}.pdf",
         )
 
     csv_text = io.StringIO()

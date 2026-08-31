@@ -843,7 +843,7 @@ function startAutoRefresh() {
 
 function paisReportParams() {
   return new URLSearchParams({
-    period: document.getElementById("pais-report-period")?.value || "daily",
+    period: document.getElementById("pais-report-period")?.value || "monthly",
     status: document.getElementById("pais-report-status")?.value || "",
     format: document.getElementById("pais-report-format")?.value || "csv",
     date_from: document.getElementById("pais-report-from")?.value || "",
@@ -946,12 +946,7 @@ async function loadPaisReport() {
 function exportPaisReport() {
   if (boardSlug !== "pais") return;
   const params = paisReportParams();
-  const format = params.get("format") || "csv";
   const url = `/pais-tickets-report-export?${params.toString()}`;
-  if (format === "pdf") {
-    window.open(url, "_blank", "noopener");
-    return;
-  }
   window.location.href = url;
 }
 
