@@ -172,34 +172,25 @@ FEATURE_STATUS_SERVICES = [
 ]
 
 PDF_FONT_CANDIDATES = {
-    "regular": [
-        os.path.join(os.path.dirname(__file__), "template", "fonts", "NotoSansHebrew-Regular.ttf"),
-        os.path.join(os.path.dirname(__file__), "template", "fonts", "DejaVuSans.ttf"),
-        r"C:\Windows\Fonts\arial.ttf",
-        r"C:\Windows\Fonts\Arial.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
-        "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
-    ],
-    "bold": [
-        os.path.join(os.path.dirname(__file__), "template", "fonts", "NotoSansHebrew-Bold.ttf"),
-        os.path.join(os.path.dirname(__file__), "template", "fonts", "NotoSansHebrew-Regular.ttf"),
-        r"C:\Windows\Fonts\arialbd.ttf",
-        r"C:\Windows\Fonts\Arialbd.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-        "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf",
-        "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
-    ],
-    "extra_bold": [
-        os.path.join(os.path.dirname(__file__), "template", "fonts", "NotoSansHebrew-ExtraBold.ttf"),
-        os.path.join(os.path.dirname(__file__), "template", "fonts", "NotoSansHebrew-Bold.ttf"),
-        os.path.join(os.path.dirname(__file__), "template", "fonts", "NotoSansHebrew-Regular.ttf"),
-        r"C:\Windows\Fonts\arialbd.ttf",
-        r"C:\Windows\Fonts\Arialbd.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-        "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf",
-        "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
-    ],
+    "hebrew": {
+        "regular": [
+            os.path.join(os.path.dirname(__file__), "template", "fonts", "NotoSansHebrew-Regular.ttf"),
+        ],
+        "bold": [
+            os.path.join(os.path.dirname(__file__), "template", "fonts", "NotoSansHebrew-Bold.ttf"),
+            os.path.join(os.path.dirname(__file__), "template", "fonts", "NotoSansHebrew-Regular.ttf"),
+        ],
+        "extra_bold": [
+            os.path.join(os.path.dirname(__file__), "template", "fonts", "NotoSansHebrew-ExtraBold.ttf"),
+            os.path.join(os.path.dirname(__file__), "template", "fonts", "NotoSansHebrew-Bold.ttf"),
+            os.path.join(os.path.dirname(__file__), "template", "fonts", "NotoSansHebrew-Regular.ttf"),
+        ],
+    },
+    "latin": {
+        "regular": [],
+        "bold": [],
+        "extra_bold": [],
+    },
 }
 PDF_FONT_NAMES = {}
 HEBREW_TEXT_RE = re.compile(r"[\u0590-\u05FF]")
@@ -2423,23 +2414,21 @@ def lookup_feature_status_by_customer_id(customer_id):
     }
 
 
-def get_pdf_font_name(weight="regular"):
-    cached_name = PDF_FONT_NAMES.get(weight)
+def get_pdf_font_name(weight="regular", script="hebrew"):
+    cache_key = f"{script}:{weight}"
+    cached_name = PDF_FONT_NAMES.get(cache_key)
     if cached_name:
         return cached_name
 
-    font_alias = {
-        "regular": "AppPdfFontRegular",
-        "bold": "AppPdfFontBold",
-        "extra_bold": "AppPdfFontExtraBold",
-    }.get(weight, "AppPdfFontRegular")
+    font_alias = f"AppPdfFont{script.title().replace('_', '')}{weight.title().replace('_', '')}"
+    font_paths = PDF_FONT_CANDIDATES.get(script, {}).get(weight, [])
 
-    for font_path in PDF_FONT_CANDIDATES.get(weight, PDF_FONT_CANDIDATES["regular"]):
+    for font_path in font_paths:
         if not font_path or not os.path.exists(font_path):
             continue
         try:
             pdfmetrics.registerFont(TTFont(font_alias, font_path))
-            PDF_FONT_NAMES[weight] = font_alias
+            PDF_FONT_NAMES[cache_key] = font_alias
             return font_alias
         except Exception:
             continue
@@ -2449,7 +2438,7 @@ def get_pdf_font_name(weight="regular"):
         "bold": "Helvetica-Bold",
         "extra_bold": "Helvetica-Bold",
     }.get(weight, "Helvetica")
-    PDF_FONT_NAMES[weight] = fallback
+    PDF_FONT_NAMES[cache_key] = fallback
     return fallback
 
 
@@ -2463,9 +2452,17 @@ def format_rtl_pdf_text(value):
     return "\n".join(get_display(line) for line in text.split("\n"))
 
 
-def pdf_paragraph(value, style, rtl=False):
+def pdf_paragraph(value, style, rtl=False, latin_font_name=None, hebrew_font_name=None):
     text = format_rtl_pdf_text(value) if rtl else str(value or "-").replace("\r\n", "\n").strip() or "-"
-    return Paragraph(xml_escape(text).replace("\n", "<br/>"), style)
+    paragraph_style = style
+    if latin_font_name and hebrew_font_name:
+        font_name = hebrew_font_name if HEBREW_TEXT_RE.search(str(value or "")) else latin_font_name
+        paragraph_style = ParagraphStyle(
+            f"{style.name}{font_name}",
+            parent=style,
+            fontName=font_name,
+        )
+    return Paragraph(xml_escape(text).replace("\n", "<br/>"), paragraph_style)
 
 
 def build_pdf_buffer(title, metadata_rows, headers, rows, rtl_columns=None, emphasis_columns=None, emphasis_meta_labels=None):
@@ -2473,13 +2470,15 @@ def build_pdf_buffer(title, metadata_rows, headers, rows, rtl_columns=None, emph
     emphasis_columns = set(emphasis_columns or [])
     emphasis_meta_labels = {str(label) for label in (emphasis_meta_labels or [])}
     buffer = io.BytesIO()
-    bold_font = get_pdf_font_name("bold")
-    extra_bold_font = get_pdf_font_name("extra_bold")
+    latin_bold_font = get_pdf_font_name("bold", "latin")
+    latin_extra_bold_font = get_pdf_font_name("extra_bold", "latin")
+    hebrew_bold_font = get_pdf_font_name("bold", "hebrew")
+    hebrew_extra_bold_font = get_pdf_font_name("extra_bold", "hebrew")
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle(
         "PdfTitle",
         parent=styles["Heading1"],
-        fontName=extra_bold_font,
+        fontName=hebrew_extra_bold_font,
         fontSize=19,
         leading=23,
         alignment=TA_RIGHT,
@@ -2489,7 +2488,7 @@ def build_pdf_buffer(title, metadata_rows, headers, rows, rtl_columns=None, emph
     meta_label_style = ParagraphStyle(
         "PdfMetaLabel",
         parent=styles["BodyText"],
-        fontName=bold_font,
+        fontName=latin_bold_font,
         fontSize=11,
         leading=14,
         alignment=TA_LEFT,
@@ -2498,7 +2497,7 @@ def build_pdf_buffer(title, metadata_rows, headers, rows, rtl_columns=None, emph
     meta_value_style = ParagraphStyle(
         "PdfMetaValue",
         parent=styles["BodyText"],
-        fontName=bold_font,
+        fontName=latin_bold_font,
         fontSize=11,
         leading=14,
         alignment=TA_RIGHT,
@@ -2507,7 +2506,7 @@ def build_pdf_buffer(title, metadata_rows, headers, rows, rtl_columns=None, emph
     meta_value_emphasis_style = ParagraphStyle(
         "PdfMetaValueEmphasis",
         parent=meta_value_style,
-        fontName=extra_bold_font,
+        fontName=latin_extra_bold_font,
         fontSize=12,
         leading=15,
         textColor=colors.HexColor("#0b1f3a"),
@@ -2515,7 +2514,7 @@ def build_pdf_buffer(title, metadata_rows, headers, rows, rtl_columns=None, emph
     header_style = ParagraphStyle(
         "PdfHeader",
         parent=styles["BodyText"],
-        fontName=extra_bold_font,
+        fontName=latin_extra_bold_font,
         fontSize=11,
         leading=13,
         alignment=TA_CENTER,
@@ -2524,7 +2523,7 @@ def build_pdf_buffer(title, metadata_rows, headers, rows, rtl_columns=None, emph
     cell_style = ParagraphStyle(
         "PdfCell",
         parent=styles["BodyText"],
-        fontName=bold_font,
+        fontName=latin_bold_font,
         fontSize=10,
         leading=12,
         alignment=TA_RIGHT,
@@ -2533,7 +2532,7 @@ def build_pdf_buffer(title, metadata_rows, headers, rows, rtl_columns=None, emph
     emphasis_cell_style = ParagraphStyle(
         "PdfCellEmphasis",
         parent=cell_style,
-        fontName=extra_bold_font,
+        fontName=latin_extra_bold_font,
         fontSize=11,
         leading=13,
         textColor=colors.HexColor("#0b1f3a"),
@@ -2548,14 +2547,14 @@ def build_pdf_buffer(title, metadata_rows, headers, rows, rtl_columns=None, emph
         bottomMargin=14 * mm,
     )
 
-    story = [pdf_paragraph(title, title_style, rtl=True)]
+    story = [pdf_paragraph(title, title_style, rtl=True, latin_font_name=latin_extra_bold_font, hebrew_font_name=hebrew_extra_bold_font)]
     for label, value in metadata_rows:
         value_style = meta_value_emphasis_style if str(label) in emphasis_meta_labels else meta_value_style
         story.append(
             Table(
                 [[
-                    pdf_paragraph(label, meta_label_style),
-                    pdf_paragraph(value, value_style, rtl=True),
+                    pdf_paragraph(label, meta_label_style, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
+                    pdf_paragraph(value, value_style, rtl=True, latin_font_name=latin_extra_bold_font if str(label) in emphasis_meta_labels else latin_bold_font, hebrew_font_name=hebrew_extra_bold_font if str(label) in emphasis_meta_labels else hebrew_bold_font),
                 ]],
                 colWidths=[40 * mm, 130 * mm],
                 hAlign="RIGHT",
@@ -2567,10 +2566,19 @@ def build_pdf_buffer(title, metadata_rows, headers, rows, rtl_columns=None, emph
         )
     story.append(Spacer(1, 10))
 
-    table_data = [[pdf_paragraph(header, header_style) for header in headers]]
+    table_data = [[
+        pdf_paragraph(header, header_style, latin_font_name=latin_extra_bold_font, hebrew_font_name=hebrew_extra_bold_font)
+        for header in headers
+    ]]
     for row in rows:
         table_data.append([
-            pdf_paragraph(value, emphasis_cell_style if index in emphasis_columns else cell_style, rtl=index in rtl_columns)
+            pdf_paragraph(
+                value,
+                emphasis_cell_style if index in emphasis_columns else cell_style,
+                rtl=index in rtl_columns,
+                latin_font_name=latin_extra_bold_font if index in emphasis_columns else latin_bold_font,
+                hebrew_font_name=hebrew_extra_bold_font if index in emphasis_columns else hebrew_bold_font,
+            )
             for index, value in enumerate(row)
         ])
 

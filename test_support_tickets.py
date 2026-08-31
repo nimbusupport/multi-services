@@ -779,12 +779,14 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertEqual(formatted, "2026-08-01 - 2026-08-31")
 
     def test_pdf_font_prefers_bundled_hebrew_font(self):
-        regular_font = self.app_module.get_pdf_font_name()
-        bold_font = self.app_module.get_pdf_font_name("bold")
-        extra_bold_font = self.app_module.get_pdf_font_name("extra_bold")
-        self.assertEqual(regular_font, "AppPdfFontRegular")
-        self.assertEqual(bold_font, "AppPdfFontBold")
-        self.assertEqual(extra_bold_font, "AppPdfFontExtraBold")
+        regular_font = self.app_module.get_pdf_font_name("regular", "hebrew")
+        bold_font = self.app_module.get_pdf_font_name("bold", "hebrew")
+        extra_bold_font = self.app_module.get_pdf_font_name("extra_bold", "hebrew")
+        latin_bold_font = self.app_module.get_pdf_font_name("bold", "latin")
+        self.assertEqual(regular_font, "AppPdfFontHebrewRegular")
+        self.assertEqual(bold_font, "AppPdfFontHebrewBold")
+        self.assertEqual(extra_bold_font, "AppPdfFontHebrewExtraBold")
+        self.assertEqual(latin_bold_font, "Helvetica-Bold")
 
     def test_pais_search_uses_terminal_number(self):
         tickets = self.app_module.load_support_tickets()
