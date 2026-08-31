@@ -131,15 +131,24 @@ Selected: 0
 
 <div class="card" id="inforuLogCard" style="display:none">
 <div class="log-header">
+<b>Inforu DID Log</b>
+<input
+id="inforuLogSearch"
+class="search log-search"
+type="text"
+placeholder="Search DID / Date"
+oninput="setInforuLogSearch(this.value)"
+/>
 <div class="log-tools">
 <button class="copy-btn" onclick="closeInforuLog()" title="Close Log">X</button>
 <button class="copy-btn" onclick="copyInforuLog()" title="Copy Log">
 <i class="fa-solid fa-copy"></i>
 </button>
 </div>
-<b>Inforu DID Log</b>
 </div>
-<pre id="inforuLogText" style="display:none;"></pre>
+<div id="inforuLogSummary" class="log-summary"></div>
+<div id="inforuLogEmpty" class="log-empty" style="display:none">No Inforu log records found.</div>
+<div id="inforuLogList" class="inforu-log-list"></div>
 </div>
 </div>
 

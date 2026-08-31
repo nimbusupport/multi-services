@@ -140,6 +140,19 @@ def install_import_stubs():
         sys.modules["reportlab.platypus"] = platypus
 
 
+class FakeJsonResponse:
+    def __init__(self, payload):
+        self.payload = payload
+
+    def json(self):
+        return self.payload
+
+
+class FakeWebhookResponse:
+    def raise_for_status(self):
+        return None
+
+
 class SmsStatusDoneTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -157,10 +170,32 @@ class SmsStatusDoneTests(unittest.TestCase):
         self.original_get_gspread_client = self.app_module.get_gspread_client
         self.original_append_log = self.app_module.append_log
         self.original_gspread_utils = getattr(self.app_module.gspread, "utils", None)
+        self.original_supabase_request = self.app_module._supabase_request
+        self.original_supabase_url = self.app_module.SUPABASE_URL
+        self.original_supabase_key = self.app_module.SUPABASE_KEY
+        self.original_inforu_log_table = self.app_module.INFORU_LOG_TABLE
+        self.original_inforu_did_column = self.app_module.INFORU_LOG_DID_COLUMN
+        self.original_inforu_sent_at_column = self.app_module.INFORU_LOG_SENT_AT_COLUMN
+        self.original_inforu_table_cache = self.app_module._INFORU_LOG_TABLE_CACHE
+        self.original_parse_local_inforu_log_entries = self.app_module.parse_local_inforu_log_entries
+        self.original_append_local_inforu_log_entries = self.app_module.append_local_inforu_log_entries
+        self.original_token_inforu = self.app_module.TOKEN_INFORU
+        self.original_requests_post = self.app_module.requests.post
 
     def tearDown(self):
         self.app_module.get_gspread_client = self.original_get_gspread_client
         self.app_module.append_log = self.original_append_log
+        self.app_module._supabase_request = self.original_supabase_request
+        self.app_module.SUPABASE_URL = self.original_supabase_url
+        self.app_module.SUPABASE_KEY = self.original_supabase_key
+        self.app_module.INFORU_LOG_TABLE = self.original_inforu_log_table
+        self.app_module.INFORU_LOG_DID_COLUMN = self.original_inforu_did_column
+        self.app_module.INFORU_LOG_SENT_AT_COLUMN = self.original_inforu_sent_at_column
+        self.app_module._INFORU_LOG_TABLE_CACHE = self.original_inforu_table_cache
+        self.app_module.parse_local_inforu_log_entries = self.original_parse_local_inforu_log_entries
+        self.app_module.append_local_inforu_log_entries = self.original_append_local_inforu_log_entries
+        self.app_module.TOKEN_INFORU = self.original_token_inforu
+        self.app_module.requests.post = self.original_requests_post
         if self.original_gspread_utils is None:
             if hasattr(self.app_module.gspread, "utils"):
                 delattr(self.app_module.gspread, "utils")
@@ -251,6 +286,73 @@ class SmsStatusDoneTests(unittest.TestCase):
             spreadsheet.cgr.updates,
             [{"range": "C7:E7", "values": [["6404", today, True]]}],
         )
+
+    def test_inforu_log_data_returns_supabase_entries(self):
+        self.app_module.SUPABASE_URL = "https://example.supabase.co"
+        self.app_module.SUPABASE_KEY = "service-key"
+        self.app_module.INFORU_LOG_TABLE = "inforu_logs"
+        self.app_module.INFORU_LOG_DID_COLUMN = "did"
+        self.app_module.INFORU_LOG_SENT_AT_COLUMN = "sent_at"
+        self.app_module._INFORU_LOG_TABLE_CACHE = None
+        self.app_module.parse_local_inforu_log_entries = lambda: []
+
+        rows = [
+            {"did": "031234567", "sent_at": "2026-08-31T10:15:00+03:00"},
+            {"did": "046116362", "sent_at": "2026-08-30T11:00:00+03:00"},
+        ]
+
+        def fake_supabase_request(method, path, *, params=None, json_body=None, prefer=None):
+            self.assertEqual(path, "inforu_logs")
+            if method == "GET":
+                return FakeJsonResponse(rows)
+            raise AssertionError(f"Unexpected method: {method}")
+
+        self.app_module._supabase_request = fake_supabase_request
+
+        self.login()
+        response = self.client.get("/inforu-log-data")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["sent_numbers"], ["031234567", "046116362"])
+        self.assertEqual(payload["entries"][0]["did"], "031234567")
+        self.assertEqual(payload["entries"][0]["source"], "supabase")
+
+    def test_send_inforu_mail_saves_entries_to_supabase_after_webhook(self):
+        self.app_module.SUPABASE_URL = "https://example.supabase.co"
+        self.app_module.SUPABASE_KEY = "service-key"
+        self.app_module.INFORU_LOG_TABLE = "inforu_logs"
+        self.app_module.INFORU_LOG_DID_COLUMN = "did"
+        self.app_module.INFORU_LOG_SENT_AT_COLUMN = "sent_at"
+        self.app_module._INFORU_LOG_TABLE_CACHE = None
+        self.app_module.parse_local_inforu_log_entries = lambda: []
+        self.app_module.append_local_inforu_log_entries = lambda entries: None
+        self.app_module.TOKEN_INFORU = "https://hook.example"
+
+        inserted_rows = []
+
+        def fake_supabase_request(method, path, *, params=None, json_body=None, prefer=None):
+            self.assertEqual(path, "inforu_logs")
+            if method == "GET":
+                return FakeJsonResponse([])
+            if method == "POST":
+                inserted_rows.extend(json_body or [])
+                return FakeJsonResponse([])
+            raise AssertionError(f"Unexpected method: {method}")
+
+        self.app_module._supabase_request = fake_supabase_request
+        self.app_module.requests.post = lambda *args, **kwargs: FakeWebhookResponse()
+
+        self.login()
+        response = self.client.post("/send-inforu-mail", json={"dids": ["03-1234567"]})
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["numbers"], ["031234567"])
+        self.assertEqual(inserted_rows[0]["did"], "031234567")
+        self.assertIn("T", inserted_rows[0]["sent_at"])
 
 
 if __name__ == "__main__":

@@ -1,5 +1,8 @@
 let loadedData = []; // {sheet_row, name, text, status, idnumber(hidden), domain, did, numbercgr, cgr_row, cgr_marked, checked}
 let searchQuery = "";
+let inforuSentNumbers = new Set();
+let inforuLogEntries = [];
+let inforuLogSearchQuery = "";
 
 const FIREBERRY_LOGO_URL = "https://app.fireberry.com/app/static/img/fireberry-logo-CIplsT_n.svg";
 const SMS_GUIDE_STEPS = {
@@ -111,6 +114,38 @@ function setSearch(val){
   renderTable();
 }
 
+function normalizeDidValue(value){
+  return String(value ?? "").replace(/\D/g, "");
+}
+
+function setInforuSentNumbers(numbers){
+  inforuSentNumbers = new Set(
+    (Array.isArray(numbers) ? numbers : [])
+      .map(normalizeDidValue)
+      .filter(Boolean)
+  );
+}
+
+function refreshInforuSentFlag(item){
+  if(!item){
+    return;
+  }
+  item.inforu_sent = inforuSentNumbers.has(normalizeDidValue(item.did));
+}
+
+function refreshAllInforuSentFlags(){
+  loadedData.forEach(refreshInforuSentFlag);
+}
+
+function syncDidInputState(sheetRow){
+  const item = loadedData.find(entry => entry.sheet_row === sheetRow);
+  const input = document.querySelector(`input[data-did-row="${sheetRow}"]`);
+  if(!item || !input){
+    return;
+  }
+  input.classList.toggle("did-sent", !!item.inforu_sent);
+}
+
 function showSmsGuideStep(step){
   const textEl = document.getElementById("smsGuideText");
   if(textEl){
@@ -171,6 +206,7 @@ async function loadData() {
         throw new Error(payload.message || res.statusText || "Load failed");
       }
       const data = Array.isArray(payload) ? payload : (payload.customers || []);
+      setInforuSentNumbers(payload.inforu_sent_numbers || []);
   
       if(!Array.isArray(data) || data.length === 0){
         loadedData = [];
@@ -183,10 +219,12 @@ async function loadData() {
         ...x,
         domain: "",
         did: "",
+        inforu_sent: false,
         checked: false,
         fbLoading: false
       }));
-  
+
+      refreshAllInforuSentFlags();
       renderTable();
     }catch(e){
       alert("שגיאה בטעינת נתונים: " + formatErrorMessage(e));
@@ -243,7 +281,7 @@ function renderTable(){
       </td>
 
       <td class="right">
-       <input class="input ${item.inforu_sent ? 'did-sent' : ''}" placeholder="031234567"
+       <input class="input ${item.inforu_sent ? 'did-sent' : ''}" data-did-row="${item.sheet_row}" placeholder="031234567"
          value="${escapeHtml(item.did)}"
          oninput="updateField(${idx}, 'did', this.value)" />
       </td>
@@ -273,6 +311,10 @@ function renderTable(){
 /* Selection & updates */
 function updateField(idx, field, value){
   loadedData[idx][field] = value;
+  if(field === "did"){
+    refreshInforuSentFlag(loadedData[idx]);
+    syncDidInputState(loadedData[idx].sheet_row);
+  }
 }
 
 function selectAll(val){
@@ -487,8 +529,9 @@ async function fireberryFill(idx){
       return;
     }
 
-    if((json.domain || "").trim()) item.domain = (json.domain || "").trim();
-    if((json.did || "").trim()) item.did = (json.did || "").trim();
+      if((json.domain || "").trim()) item.domain = (json.domain || "").trim();
+      if((json.did || "").trim()) item.did = (json.did || "").trim();
+      refreshInforuSentFlag(item);
 
   }catch(e){
     alert("שגיאה ב-Fireberry: " + e);
@@ -544,6 +587,7 @@ async function fireberryFillAll(){
 
       if((json.domain || "").trim()) item.domain = (json.domain || "").trim();
       if((json.did || "").trim()) item.did = (json.did || "").trim();
+      refreshInforuSentFlag(item);
 
       okCount++;
 
@@ -596,14 +640,23 @@ async function sendInforuMail(){
         alert(json.message);
         return;
       }
-  
-      // mark sent
-      selected.forEach(row=>{
-        row.inforu_sent = true;
-      });
+
+      const sentNumbers = Array.isArray(json.numbers) ? json.numbers : [];
+      sentNumbers.forEach(number => inforuSentNumbers.add(normalizeDidValue(number)));
+      refreshAllInforuSentFlags();
+      inforuLogEntries = [];
   
       renderTable();
-  
+
+      if(document.getElementById("inforuLogCard")?.style.display !== "none"){
+        await openInforuLog(true);
+      }
+
+      if(json.warning){
+        alert("אימות Inforu נשלח, אך שמירת הלוג ב-Supabase נכשלה: " + json.warning);
+        return;
+      }
+
       showAppSuccess("נשלח אימות Inforu️✅");
   
     }catch(e){
@@ -616,34 +669,96 @@ async function sendInforuMail(){
    OPEN INFORU LOG
 ================================ */
 
-async function openInforuLog(){
+function getFilteredInforuLogEntries(){
+  if(!inforuLogSearchQuery){
+    return inforuLogEntries;
+  }
+
+  return inforuLogEntries.filter(entry => {
+    const did = normalizeDidValue(entry.did);
+    const sentDate = String(entry.sent_date || "").toLowerCase();
+    const source = String(entry.source || "").toLowerCase();
+    return did.includes(inforuLogSearchQuery) || sentDate.includes(inforuLogSearchQuery) || source.includes(inforuLogSearchQuery);
+  });
+}
+
+function buildInforuLogText(entries){
+  return entries.map(entry => {
+    const sentDate = entry.sent_date || "-";
+    const source = entry.source || "supabase";
+    const did = normalizeDidValue(entry.did) || "";
+    return `${sentDate}\t${did}\t${source}`;
+  }).join("\n");
+}
+
+function renderInforuLog(){
+  const logCard = document.getElementById("inforuLogCard");
+  const logList = document.getElementById("inforuLogList");
+  const logSummary = document.getElementById("inforuLogSummary");
+  const logEmpty = document.getElementById("inforuLogEmpty");
+  if(!logCard || !logList || !logSummary || !logEmpty){
+    return;
+  }
+
+  const filteredEntries = getFilteredInforuLogEntries();
+  logSummary.textContent = `Total: ${inforuLogEntries.length} | Result: ${filteredEntries.length}`;
+  logList.innerHTML = "";
+
+  if(!filteredEntries.length){
+    logEmpty.style.display = "block";
+    return;
+  }
+
+  logEmpty.style.display = "none";
+  filteredEntries.forEach(entry => {
+    const row = document.createElement("div");
+    row.className = "inforu-log-row";
+    row.innerHTML = `
+      <span class="inforu-log-date">${escapeHtml(entry.sent_date || "-")}</span>
+      <span class="inforu-log-did">${escapeHtml(normalizeDidValue(entry.did))}</span>
+      <span class="inforu-log-source">${escapeHtml(entry.source || "supabase")}</span>
+    `;
+    logList.appendChild(row);
+  });
+  logCard.style.display = "block";
+}
+
+function setInforuLogSearch(value){
+  inforuLogSearchQuery = String(value ?? "").trim().toLowerCase();
+  renderInforuLog();
+}
+
+async function hydrateInforuLogData(forceRefresh = false){
+  if(!forceRefresh && inforuLogEntries.length){
+    return;
+  }
+
+  const res = await fetch("/inforu-log-data");
+  const json = await readJsonResponse(res);
+  if(!res.ok || !json.ok){
+    throw new Error(json.message || "Failed to load Inforu log");
+  }
+
+  inforuLogEntries = Array.isArray(json.entries) ? json.entries : [];
+  setInforuSentNumbers(json.sent_numbers || []);
+  refreshAllInforuSentFlags();
+  renderTable();
+}
+
+async function openInforuLog(forceRefresh = false){
 
     try{
-  
-      const res = await fetch("/inforu-log");
-      const text = await res.text();
-  
-      const logText = document.getElementById("inforuLogText");
-      const logCard = document.getElementById("inforuLogCard");
-  
-      logText.textContent = text;
-      logText.style.display = "block";
-      logCard.style.display = "block";
-  
+      await hydrateInforuLogData(forceRefresh);
+      renderInforuLog();
     }catch(e){
-      alert("שגיאה בטעינת הלוג");
+      alert("שגיאה בטעינת הלוג: " + formatErrorMessage(e));
     }
   
   }
 // Close log
 function closeInforuLog(){
 
-    const logText = document.getElementById("inforuLogText");
     const logCard = document.getElementById("inforuLogCard");
-  
-    if(logText){
-      logText.style.display = "none";
-    }
   
     if(logCard){
       logCard.style.display = "none";
@@ -656,8 +771,7 @@ function closeInforuLog(){
 ================================ */
 
 function copyInforuLog(){
-
-  const text = document.getElementById("inforuLogText").textContent;
+  const text = buildInforuLogText(getFilteredInforuLogEntries());
 
   navigator.clipboard.writeText(text);
 

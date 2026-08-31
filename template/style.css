@@ -316,20 +316,75 @@ border:1px solid #f2dc9e;
 margin-top:20px;
 }
 
-#inforuLogText{
+.inforu-log-list{
 background:#fff;
 border:1px solid var(--line);
-padding:14px;
 border-radius:12px;
 max-height:350px;
 overflow:auto;
-font-family:monospace;
+padding:8px;
 }
 
 .log-header{
 display:flex;
 align-items:center;
 justify-content:space-between;
+gap:12px;
+flex-wrap:wrap;
+}
+
+.log-search{
+min-width:220px;
+width:260px;
+}
+
+.log-summary{
+margin:12px 0 10px;
+font-size:13px;
+font-weight:700;
+color:var(--muted);
+}
+
+.log-empty{
+padding:14px 0;
+font-size:14px;
+color:var(--muted);
+}
+
+.inforu-log-row{
+display:grid;
+grid-template-columns:120px 1fr 90px;
+gap:12px;
+align-items:center;
+padding:10px 12px;
+border-radius:10px;
+font-size:14px;
+font-weight:600;
+}
+
+.inforu-log-row:nth-child(odd){
+background:#f8f6f1;
+}
+
+.inforu-log-date{
+color:#5e655f;
+}
+
+.inforu-log-did{
+font-family:monospace;
+font-size:15px;
+color:#173b2e;
+}
+
+.inforu-log-source{
+justify-self:start;
+padding:4px 10px;
+border-radius:999px;
+background:#edf7f1;
+border:1px solid #cfe6d8;
+color:#1f6b47;
+font-size:12px;
+text-transform:capitalize;
 }
 
 .log-tools{
@@ -465,6 +520,10 @@ gap:14px;
 
 .search{
 width:100%;
+}
+
+.log-search{
+min-width:0;
 }
 
 #dataTable{

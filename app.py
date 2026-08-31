@@ -231,6 +231,21 @@ LOG_FILE = os.path.join(LOG_DIR, "created.log")
 SUPPORT_LOG_FILE = os.path.join(LOG_DIR, "support.log")
 SUPPORT_SCREEN_DIR = "Screens"
 INFORU_LOG_FILENAME = "\u05de\u05e1\u05e4\u05e8\u05d9\u05dd \u05dc\u05d0\u05d9\u05de\u05d5\u05ea.txt"
+INFORU_LOG_TABLE = (
+    os.environ.get("SUPABASE_INFORU_LOG_TABLE")
+    or os.environ.get("INFORU_LOG_TABLE")
+    or "inforu_logs"
+).strip()
+INFORU_LOG_DID_COLUMN = (
+    os.environ.get("SUPABASE_INFORU_LOG_DID_COLUMN")
+    or os.environ.get("INFORU_LOG_DID_COLUMN")
+    or "did"
+).strip()
+INFORU_LOG_SENT_AT_COLUMN = (
+    os.environ.get("SUPABASE_INFORU_LOG_SENT_AT_COLUMN")
+    or os.environ.get("INFORU_LOG_SENT_AT_COLUMN")
+    or "sent_at"
+).strip()
 ACTIVE_WINDOW_MINUTES = 30
 _RAW_SUPABASE_URL = (
     os.environ.get("SUPABASE_URL")
@@ -629,6 +644,51 @@ def support_log_path():
     return SUPPORT_LOG_FILE
 
 
+_INFORU_LOG_TABLE_CACHE = None
+
+
+def normalize_did_value(value):
+    return re.sub(r"\D", "", str(value or ""))
+
+
+def supabase_inforu_log_enabled():
+    return bool(SUPABASE_URL and SUPABASE_KEY and INFORU_LOG_TABLE and INFORU_LOG_DID_COLUMN and INFORU_LOG_SENT_AT_COLUMN)
+
+
+def inforu_log_table_candidates():
+    candidates = []
+    for table_name in (INFORU_LOG_TABLE, "inforu_logs", "inforu_log"):
+        table_name = (table_name or "").strip()
+        if table_name and table_name not in candidates:
+            candidates.append(table_name)
+    return candidates
+
+
+def resolve_inforu_log_table_name():
+    global _INFORU_LOG_TABLE_CACHE
+    if _INFORU_LOG_TABLE_CACHE:
+        return _INFORU_LOG_TABLE_CACHE
+
+    last_error = None
+    for table_name in inforu_log_table_candidates():
+        try:
+            _supabase_request(
+                "GET",
+                table_name,
+                params={
+                    "select": f"{INFORU_LOG_DID_COLUMN},{INFORU_LOG_SENT_AT_COLUMN}",
+                    "limit": "1",
+                    "order": f"{INFORU_LOG_SENT_AT_COLUMN}.desc",
+                },
+            )
+            _INFORU_LOG_TABLE_CACHE = table_name
+            return table_name
+        except Exception as exc:
+            last_error = exc
+
+    raise RuntimeError(last_error or "Inforu Supabase log table is not available")
+
+
 def inforu_log_dir():
     if running_on_vercel():
         return os.path.join(tempfile.gettempdir(), "did_inforu")
@@ -637,6 +697,254 @@ def inforu_log_dir():
 
 def inforu_log_path():
     return os.path.join(inforu_log_dir(), INFORU_LOG_FILENAME)
+
+
+def read_local_inforu_log_text():
+    path = inforu_log_path()
+
+    if not os.path.exists(path):
+        fallback_dir = inforu_log_dir()
+        if os.path.isdir(fallback_dir):
+            txt_files = [f for f in os.listdir(fallback_dir) if f.lower().endswith(".txt")]
+            if txt_files:
+                path = os.path.join(fallback_dir, txt_files[0])
+            else:
+                return ""
+        else:
+            return ""
+
+    with open(path, "rb") as f:
+        raw = f.read()
+
+    try:
+        content = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        content = raw.decode("cp1255", errors="replace")
+
+    if "׳" in content:
+        try:
+            repaired = content.encode("latin1", errors="ignore").decode("utf-8", errors="ignore")
+            if repaired.strip():
+                content = repaired
+        except Exception:
+            pass
+
+    return content
+
+
+def format_sent_date(sent_at):
+    raw = str(sent_at or "").strip()
+    if not raw:
+        return ""
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00")).strftime("%d.%m.%Y")
+    except Exception:
+        return raw
+
+
+def parse_local_inforu_log_entries():
+    text = read_local_inforu_log_text()
+    if not text.strip():
+        return []
+
+    entries = []
+    matches = list(re.finditer(r"==(\d{2}\.\d{2}\.\d{4})==", text))
+    if not matches:
+        for did in re.findall(r"0\d{8,9}", text):
+            entries.append({
+                "did": did,
+                "sent_at": "",
+                "sent_date": "",
+                "source": "local",
+            })
+        return entries
+
+    for index, match in enumerate(matches):
+        sent_date = match.group(1)
+        block_start = match.end()
+        block_end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        block = text[block_start:block_end]
+        try:
+            sent_at = datetime.strptime(sent_date, "%d.%m.%Y").isoformat()
+        except Exception:
+            sent_at = ""
+        for did in re.findall(r"0\d{8,9}", block):
+            entries.append({
+                "did": did,
+                "sent_at": sent_at,
+                "sent_date": sent_date,
+                "source": "local",
+            })
+
+    return entries
+
+
+def load_supabase_inforu_log_entries():
+    if not supabase_inforu_log_enabled():
+        return []
+
+    table_name = resolve_inforu_log_table_name()
+    rows = _supabase_request(
+        "GET",
+        table_name,
+        params={
+            "select": f"{INFORU_LOG_DID_COLUMN},{INFORU_LOG_SENT_AT_COLUMN}",
+            "order": f"{INFORU_LOG_SENT_AT_COLUMN}.desc",
+            "limit": "5000",
+        },
+    ).json()
+
+    entries = []
+    for row in rows if isinstance(rows, list) else []:
+        did = normalize_did_value(row.get(INFORU_LOG_DID_COLUMN))
+        if not did:
+            continue
+        sent_at = str(row.get(INFORU_LOG_SENT_AT_COLUMN) or "").strip()
+        entries.append({
+            "did": did,
+            "sent_at": sent_at,
+            "sent_date": format_sent_date(sent_at),
+            "source": "supabase",
+        })
+    return entries
+
+
+def sort_inforu_log_entries(entries):
+    def sort_key(entry):
+        raw = str(entry.get("sent_at") or "").strip()
+        try:
+            dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            return (dt, entry.get("did") or "")
+        except Exception:
+            return (datetime.min, entry.get("did") or "")
+
+    return sorted(entries, key=sort_key, reverse=True)
+
+
+def collect_inforu_log_entries():
+    entries = []
+    supabase_error = None
+
+    if supabase_inforu_log_enabled():
+        try:
+            entries.extend(load_supabase_inforu_log_entries())
+        except Exception as exc:
+            supabase_error = exc
+
+    entries.extend(parse_local_inforu_log_entries())
+
+    latest_by_did = {}
+    for entry in entries:
+        did = normalize_did_value(entry.get("did"))
+        if not did:
+            continue
+        normalized = {
+            "did": did,
+            "sent_at": str(entry.get("sent_at") or "").strip(),
+            "sent_date": str(entry.get("sent_date") or "").strip(),
+            "source": entry.get("source") or "local",
+        }
+        current = latest_by_did.get(did)
+        if current is None:
+            latest_by_did[did] = normalized
+            continue
+
+        current_sent_at = current.get("sent_at") or ""
+        next_sent_at = normalized.get("sent_at") or ""
+        if next_sent_at >= current_sent_at:
+            if current.get("source") == "supabase" and normalized.get("source") != "supabase":
+                normalized["source"] = "supabase"
+            latest_by_did[did] = normalized
+
+    merged = sort_inforu_log_entries(list(latest_by_did.values()))
+    return merged, supabase_error
+
+
+def inforu_sent_numbers():
+    entries, _ = collect_inforu_log_entries()
+    return {entry["did"] for entry in entries if entry.get("did")}
+
+
+def append_local_inforu_log_entries(entries):
+    entries = [entry for entry in entries if normalize_did_value(entry.get("did"))]
+    if not entries:
+        return
+
+    log_dir = inforu_log_dir()
+    os.makedirs(log_dir, exist_ok=True)
+    path = inforu_log_path()
+
+    grouped = {}
+    for entry in sort_inforu_log_entries(entries):
+        sent_date = entry.get("sent_date") or format_sent_date(entry.get("sent_at")) or datetime.now().strftime("%d.%m.%Y")
+        grouped.setdefault(sent_date, []).append(normalize_did_value(entry.get("did")))
+
+    with open(path, "a", encoding="utf-8") as f:
+        for sent_date, dids in grouped.items():
+            numbers_str = " , ".join(dict.fromkeys(dids))
+            block = f"""
+=={sent_date}==
+\u05e9\u05dc\u05d5\u05dd \u05e8\u05d1,
+\u05d0\u05e0\u05d5 \u05d7\u05d1\u05e8\u05ea \u05e0\u05d9\u05de\u05d1\u05d5\u05e1 \u05d8\u05dc\u05e7\u05d5\u05dd \u05d1\u05e2\"\u05de (\u05d7.\u05e4 514684125), \u05de\u05d0\u05e9\u05e8\u05d9\u05dd \u05d1\u05d6\u05d0\u05ea \u05db\u05d9 \u05de\u05e1\u05e4\u05e8\u05d9 \u05d4\u05e7\u05d5 \u05d4\u05d1\u05d0\u05d9\u05dd:
+{numbers_str}
+\u05d4\u05dd \u05d1\u05d1\u05e2\u05dc\u05d5\u05ea\u05e0\u05d5/\u05d1\u05d1\u05e2\u05dc\u05d5\u05ea \u05dc\u05e7\u05d5\u05d7 \u05e9\u05dc\u05e0\u05d5 \u05d5\u05d0\u05d9\u05e0\u05dd \u05de\u05ea\u05d7\u05d6\u05d9\u05dd.
+\u05e0\u05e9\u05de\u05d7 \u05dc\u05d1\u05d9\u05e6\u05d5\u05e2 \u05d0\u05d9\u05de\u05d5\u05ea \u05de\u05e1\u05e4\u05e8 \u05dc\u05e6\u05d5\u05e8\u05da \u05e7\u05d9\u05d3\u05d5\u05dd \u05d4\u05e7\u05de\u05ea \u05d4\u05e9\u05d9\u05e8\u05d5\u05ea.
+\u05ea\u05d5\u05d3\u05d4
+
+"""
+            f.write(block)
+
+
+def save_inforu_log_entries(entries):
+    clean_entries = []
+    for entry in entries:
+        did = normalize_did_value(entry.get("did"))
+        if not did:
+            continue
+        sent_at = str(entry.get("sent_at") or "").strip() or datetime.now(timezone.utc).isoformat()
+        clean_entries.append({
+            "did": did,
+            "sent_at": sent_at,
+            "sent_date": format_sent_date(sent_at),
+            "source": entry.get("source") or "supabase",
+        })
+
+    if not clean_entries:
+        return
+
+    supabase_error = None
+    if supabase_inforu_log_enabled():
+        try:
+            table_name = resolve_inforu_log_table_name()
+            payload = []
+            for entry in clean_entries:
+                payload.append({
+                    INFORU_LOG_DID_COLUMN: entry["did"],
+                    INFORU_LOG_SENT_AT_COLUMN: entry["sent_at"],
+                })
+            _supabase_request(
+                "POST",
+                table_name,
+                json_body=payload,
+                prefer="return=minimal",
+            )
+        except Exception as exc:
+            supabase_error = exc
+            print(f"Inforu Supabase log warning: {exc}")
+
+    append_local_inforu_log_entries(clean_entries)
+
+    if supabase_inforu_log_enabled() and supabase_error:
+        raise supabase_error
+
+
+def build_inforu_log_text(entries):
+    lines = []
+    for entry in sort_inforu_log_entries(entries):
+        sent_date = entry.get("sent_date") or format_sent_date(entry.get("sent_at")) or "-"
+        source = entry.get("source") or "local"
+        lines.append(f"{sent_date}\t{entry.get('did') or ''}\t{source}")
+    return "\n".join(lines)
 
 
 def _supabase_storage_headers(*, content_type=None, extra_headers=None):
@@ -3616,7 +3924,11 @@ def load_data():
         return api_error("Login required", 401, "login_required")
     register_service_activity("sms")
     try:
-        return jsonify({"ok": True, "customers": get_pending_customers()})
+        return jsonify({
+            "ok": True,
+            "customers": get_pending_customers(),
+            "inforu_sent_numbers": sorted(inforu_sent_numbers()),
+        })
     except Exception as exc:
         return api_error(exc, 500, "google_auth_or_sheet_error")
 
@@ -3776,11 +4088,13 @@ def mark_done():
 
 @app.route("/send-inforu-mail", methods=["POST"])
 def send_inforu_mail():
+    if not session.get("logged_in"):
+        return api_error("Unauthorized", 401, "unauthorized")
 
     payload = request.get_json(silent=True) or {}
     dids = payload.get("dids", [])
     # normalize numbers
-    dids = [re.sub(r"\D", "", d) for d in dids]
+    dids = [normalize_did_value(d) for d in dids]
 
     if not dids:
         return jsonify({"ok": False, "message": "No DID provided"}), 400
@@ -3788,16 +4102,7 @@ def send_inforu_mail():
     # remove duplicates
     dids = list(dict.fromkeys(dids))
 
-    log_dir = inforu_log_dir()
-    os.makedirs(log_dir, exist_ok=True)
-    path = inforu_log_path()
-
-    # read existing numbers
-    existing_numbers = set()
-    if os.path.exists(path):
-        with open(path, "r", encoding="utf-8") as f:
-            text = f.read()
-            existing_numbers = set(re.findall(r"0\d{8,9}", text))
+    existing_numbers = inforu_sent_numbers()
 
     # filter only new numbers
     new_dids = [d for d in dids if d not in existing_numbers]
@@ -3806,21 +4111,6 @@ def send_inforu_mail():
         return jsonify({"ok": False, "message": "All numbers already logged"}), 400
 
     numbers_str = " , ".join(new_dids)
-    date_str = datetime.now().strftime("%d.%m.%Y")
-
-    block = f"""
-=={date_str}==
-\u05e9\u05dc\u05d5\u05dd \u05e8\u05d1,
-\u05d0\u05e0\u05d5 \u05d7\u05d1\u05e8\u05ea \u05e0\u05d9\u05de\u05d1\u05d5\u05e1 \u05d8\u05dc\u05e7\u05d5\u05dd \u05d1\u05e2\"\u05de (\u05d7.\u05e4 514684125), \u05de\u05d0\u05e9\u05e8\u05d9\u05dd \u05d1\u05d6\u05d0\u05ea \u05db\u05d9 \u05de\u05e1\u05e4\u05e8\u05d9 \u05d4\u05e7\u05d5 \u05d4\u05d1\u05d0\u05d9\u05dd:
-{numbers_str}
-\u05d4\u05dd \u05d1\u05d1\u05e2\u05dc\u05d5\u05ea\u05e0\u05d5/\u05d1\u05d1\u05e2\u05dc\u05d5\u05ea \u05dc\u05e7\u05d5\u05d7 \u05e9\u05dc\u05e0\u05d5 \u05d5\u05d0\u05d9\u05e0\u05dd \u05de\u05ea\u05d7\u05d6\u05d9\u05dd.
-\u05e0\u05e9\u05de\u05d7 \u05dc\u05d1\u05d9\u05e6\u05d5\u05e2 \u05d0\u05d9\u05de\u05d5\u05ea \u05de\u05e1\u05e4\u05e8 \u05dc\u05e6\u05d5\u05e8\u05da \u05e7\u05d9\u05d3\u05d5\u05dd \u05d4\u05e7\u05de\u05ea \u05d4\u05e9\u05d9\u05e8\u05d5\u05ea.
-\u05ea\u05d5\u05d3\u05d4
-
-"""
-
-    with open(path, "a", encoding="utf-8") as f:
-        f.write(block)
 
     if not TOKEN_INFORU:
         return jsonify({
@@ -3846,10 +4136,20 @@ def send_inforu_mail():
             "message": "Failed to send Inforu email via Make webhook.",
         }), 502
 
+    sent_at = datetime.now(ZoneInfo("Asia/Jerusalem")).isoformat()
+    log_entries = [{"did": did, "sent_at": sent_at, "source": "supabase"} for did in new_dids]
+    log_warning = ""
+    try:
+        save_inforu_log_entries(log_entries)
+    except Exception as exc:
+        log_warning = str(exc)
+
     return jsonify({
         "ok": True,
         "added": len(new_dids),
-        "numbers": new_dids
+        "numbers": new_dids,
+        "entries": sort_inforu_log_entries(log_entries),
+        "warning": log_warning,
     })
 
 
@@ -3857,40 +4157,26 @@ def send_inforu_mail():
 # RETURN INFORU LOG TO FRONTEND
 # ================================
 
+@app.route("/inforu-log-data", methods=["GET"])
+def get_inforu_log_data():
+    if not session.get("logged_in"):
+        return api_error("Unauthorized", 401, "unauthorized")
+
+    entries, supabase_error = collect_inforu_log_entries()
+    return jsonify({
+        "ok": True,
+        "entries": entries,
+        "sent_numbers": [entry["did"] for entry in entries if entry.get("did")],
+        "warning": str(supabase_error) if supabase_error else "",
+    })
+
 @app.route("/inforu-log", methods=["GET"])
 def get_inforu_log():
+    if not session.get("logged_in"):
+        return api_error("Unauthorized", 401, "unauthorized")
 
-    path = inforu_log_path()
-
-    if not os.path.exists(path):
-        fallback_dir = inforu_log_dir()
-        if os.path.isdir(fallback_dir):
-            txt_files = [f for f in os.listdir(fallback_dir) if f.lower().endswith(".txt")]
-            if txt_files:
-                path = os.path.join(fallback_dir, txt_files[0])
-            else:
-                return ""
-        else:
-            return ""
-
-    with open(path, "rb") as f:
-        raw = f.read()
-
-    try:
-        content = raw.decode("utf-8")
-    except UnicodeDecodeError:
-        content = raw.decode("cp1255", errors="replace")
-
-    # Repair common mojibake pattern seen in old log entries.
-    if "׳" in content:
-        try:
-            repaired = content.encode("latin1", errors="ignore").decode("utf-8", errors="ignore")
-            if repaired.strip():
-                content = repaired
-        except Exception:
-            pass
-
-    return content
+    entries, _ = collect_inforu_log_entries()
+    return build_inforu_log_text(entries)
 
 
 @app.route("/export", methods=["POST"])
