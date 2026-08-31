@@ -703,6 +703,7 @@ function renderInforuLog(){
   const filteredEntries = getFilteredInforuLogEntries();
   logSummary.textContent = `Total: ${inforuLogEntries.length} | Result: ${filteredEntries.length}`;
   logList.innerHTML = "";
+  logCard.style.display = "block";
 
   if(!filteredEntries.length){
     logEmpty.style.display = "block";
@@ -720,7 +721,6 @@ function renderInforuLog(){
     `;
     logList.appendChild(row);
   });
-  logCard.style.display = "block";
 }
 
 function setInforuLogSearch(value){
