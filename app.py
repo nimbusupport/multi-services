@@ -171,16 +171,37 @@ FEATURE_STATUS_SERVICES = [
     },
 ]
 
-PDF_FONT_CANDIDATES = [
-    os.path.join(os.path.dirname(__file__), "template", "fonts", "NotoSansHebrew-Regular.ttf"),
-    os.path.join(os.path.dirname(__file__), "template", "fonts", "DejaVuSans.ttf"),
-    r"C:\Windows\Fonts\arial.ttf",
-    r"C:\Windows\Fonts\Arial.ttf",
-    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-    "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
-    "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
-]
-PDF_FONT_NAME = None
+PDF_FONT_CANDIDATES = {
+    "regular": [
+        os.path.join(os.path.dirname(__file__), "template", "fonts", "NotoSansHebrew-Regular.ttf"),
+        os.path.join(os.path.dirname(__file__), "template", "fonts", "DejaVuSans.ttf"),
+        r"C:\Windows\Fonts\arial.ttf",
+        r"C:\Windows\Fonts\Arial.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+    ],
+    "bold": [
+        os.path.join(os.path.dirname(__file__), "template", "fonts", "NotoSansHebrew-Bold.ttf"),
+        os.path.join(os.path.dirname(__file__), "template", "fonts", "NotoSansHebrew-Regular.ttf"),
+        r"C:\Windows\Fonts\arialbd.ttf",
+        r"C:\Windows\Fonts\Arialbd.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf",
+        "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
+    ],
+    "extra_bold": [
+        os.path.join(os.path.dirname(__file__), "template", "fonts", "NotoSansHebrew-ExtraBold.ttf"),
+        os.path.join(os.path.dirname(__file__), "template", "fonts", "NotoSansHebrew-Bold.ttf"),
+        os.path.join(os.path.dirname(__file__), "template", "fonts", "NotoSansHebrew-Regular.ttf"),
+        r"C:\Windows\Fonts\arialbd.ttf",
+        r"C:\Windows\Fonts\Arialbd.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf",
+        "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
+    ],
+}
+PDF_FONT_NAMES = {}
 HEBREW_TEXT_RE = re.compile(r"[\u0590-\u05FF]")
 
 # Column mapping (1-based for gspread)
@@ -2402,23 +2423,34 @@ def lookup_feature_status_by_customer_id(customer_id):
     }
 
 
-def get_pdf_font_name():
-    global PDF_FONT_NAME
-    if PDF_FONT_NAME:
-        return PDF_FONT_NAME
+def get_pdf_font_name(weight="regular"):
+    cached_name = PDF_FONT_NAMES.get(weight)
+    if cached_name:
+        return cached_name
 
-    for font_path in PDF_FONT_CANDIDATES:
+    font_alias = {
+        "regular": "AppPdfFontRegular",
+        "bold": "AppPdfFontBold",
+        "extra_bold": "AppPdfFontExtraBold",
+    }.get(weight, "AppPdfFontRegular")
+
+    for font_path in PDF_FONT_CANDIDATES.get(weight, PDF_FONT_CANDIDATES["regular"]):
         if not font_path or not os.path.exists(font_path):
             continue
         try:
-            pdfmetrics.registerFont(TTFont("AppPdfFont", font_path))
-            PDF_FONT_NAME = "AppPdfFont"
-            return PDF_FONT_NAME
+            pdfmetrics.registerFont(TTFont(font_alias, font_path))
+            PDF_FONT_NAMES[weight] = font_alias
+            return font_alias
         except Exception:
             continue
 
-    PDF_FONT_NAME = "Helvetica"
-    return PDF_FONT_NAME
+    fallback = {
+        "regular": "Helvetica",
+        "bold": "Helvetica-Bold",
+        "extra_bold": "Helvetica-Bold",
+    }.get(weight, "Helvetica")
+    PDF_FONT_NAMES[weight] = fallback
+    return fallback
 
 
 def format_rtl_pdf_text(value):
@@ -2436,56 +2468,75 @@ def pdf_paragraph(value, style, rtl=False):
     return Paragraph(xml_escape(text).replace("\n", "<br/>"), style)
 
 
-def build_pdf_buffer(title, metadata_rows, headers, rows, rtl_columns=None):
+def build_pdf_buffer(title, metadata_rows, headers, rows, rtl_columns=None, emphasis_columns=None, emphasis_meta_labels=None):
     rtl_columns = set(rtl_columns or [])
+    emphasis_columns = set(emphasis_columns or [])
+    emphasis_meta_labels = {str(label) for label in (emphasis_meta_labels or [])}
     buffer = io.BytesIO()
-    font_name = get_pdf_font_name()
+    bold_font = get_pdf_font_name("bold")
+    extra_bold_font = get_pdf_font_name("extra_bold")
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle(
         "PdfTitle",
         parent=styles["Heading1"],
-        fontName=font_name,
-        fontSize=18,
-        leading=22,
+        fontName=extra_bold_font,
+        fontSize=19,
+        leading=23,
         alignment=TA_RIGHT,
-        textColor=colors.HexColor("#16365d"),
-        spaceAfter=8,
+        textColor=colors.HexColor("#0f2f57"),
+        spaceAfter=10,
     )
     meta_label_style = ParagraphStyle(
         "PdfMetaLabel",
         parent=styles["BodyText"],
-        fontName=font_name,
-        fontSize=10,
-        leading=13,
+        fontName=bold_font,
+        fontSize=11,
+        leading=14,
         alignment=TA_LEFT,
-        textColor=colors.HexColor("#4b5563"),
+        textColor=colors.HexColor("#233f65"),
     )
     meta_value_style = ParagraphStyle(
         "PdfMetaValue",
         parent=styles["BodyText"],
-        fontName=font_name,
-        fontSize=10,
-        leading=13,
+        fontName=bold_font,
+        fontSize=11,
+        leading=14,
         alignment=TA_RIGHT,
-        textColor=colors.HexColor("#111827"),
+        textColor=colors.HexColor("#0f172a"),
+    )
+    meta_value_emphasis_style = ParagraphStyle(
+        "PdfMetaValueEmphasis",
+        parent=meta_value_style,
+        fontName=extra_bold_font,
+        fontSize=12,
+        leading=15,
+        textColor=colors.HexColor("#0b1f3a"),
     )
     header_style = ParagraphStyle(
         "PdfHeader",
         parent=styles["BodyText"],
-        fontName=font_name,
-        fontSize=10,
-        leading=12,
+        fontName=extra_bold_font,
+        fontSize=11,
+        leading=13,
         alignment=TA_CENTER,
         textColor=colors.white,
     )
     cell_style = ParagraphStyle(
         "PdfCell",
         parent=styles["BodyText"],
-        fontName=font_name,
-        fontSize=9,
-        leading=11,
+        fontName=bold_font,
+        fontSize=10,
+        leading=12,
         alignment=TA_RIGHT,
         textColor=colors.HexColor("#111827"),
+    )
+    emphasis_cell_style = ParagraphStyle(
+        "PdfCellEmphasis",
+        parent=cell_style,
+        fontName=extra_bold_font,
+        fontSize=11,
+        leading=13,
+        textColor=colors.HexColor("#0b1f3a"),
     )
 
     doc = SimpleDocTemplate(
@@ -2499,26 +2550,27 @@ def build_pdf_buffer(title, metadata_rows, headers, rows, rtl_columns=None):
 
     story = [pdf_paragraph(title, title_style, rtl=True)]
     for label, value in metadata_rows:
+        value_style = meta_value_emphasis_style if str(label) in emphasis_meta_labels else meta_value_style
         story.append(
             Table(
                 [[
                     pdf_paragraph(label, meta_label_style),
-                    pdf_paragraph(value, meta_value_style, rtl=True),
+                    pdf_paragraph(value, value_style, rtl=True),
                 ]],
                 colWidths=[40 * mm, 130 * mm],
                 hAlign="RIGHT",
                 style=TableStyle([
                     ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
                 ]),
             )
         )
-    story.append(Spacer(1, 8))
+    story.append(Spacer(1, 10))
 
     table_data = [[pdf_paragraph(header, header_style) for header in headers]]
     for row in rows:
         table_data.append([
-            pdf_paragraph(value, cell_style, rtl=index in rtl_columns)
+            pdf_paragraph(value, emphasis_cell_style if index in emphasis_columns else cell_style, rtl=index in rtl_columns)
             for index, value in enumerate(row)
         ])
 
@@ -2526,7 +2578,7 @@ def build_pdf_buffer(title, metadata_rows, headers, rows, rtl_columns=None):
     table.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1d4f91")),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#d7deea")),
+        ("GRID", (0, 0), (-1, -1), 0.65, colors.HexColor("#c7d4e6")),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("ALIGN", (0, 0), (-1, -1), "RIGHT"),
         ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f8fbff")]),
@@ -2773,6 +2825,8 @@ def features_report_export():
         headers=["Service", "Month", "Completed Count"],
         rows=rows,
         rtl_columns={0},
+        emphasis_columns={1, 2},
+        emphasis_meta_labels={"Month", "Total"},
     )
     return send_file(
         pdf_buffer,
@@ -3112,6 +3166,8 @@ def pais_tickets_report_export():
             headers=["#", "Terminal Number", "Address"],
             rows=[[row["counter"], row["terminal_number"], row["address"]] for row in rows] or [["-", "-", "No rows found for this report."]],
             rtl_columns={2},
+            emphasis_columns={0},
+            emphasis_meta_labels={"Dates", "Rows"},
         )
         return send_file(
             pdf_buffer,
