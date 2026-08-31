@@ -805,6 +805,7 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.app_module.TOKEN_INFORU = ""
         self.app_module.inforu_log_dir = lambda: self.tempdir.name
         self.app_module.inforu_log_path = lambda: os.path.join(self.tempdir.name, self.app_module.INFORU_LOG_FILENAME)
+        self.login("admin@nimbusip.com")
 
         response = self.client.post("/send-inforu-mail", json={"dids": ["031234568"]})
 
@@ -817,6 +818,7 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.app_module.TOKEN_INFORU = "https://hook.example"
         self.app_module.inforu_log_dir = lambda: self.tempdir.name
         self.app_module.inforu_log_path = lambda: os.path.join(self.tempdir.name, self.app_module.INFORU_LOG_FILENAME)
+        self.login("admin@nimbusip.com")
 
         def failing_post(*args, **kwargs):
             raise RuntimeError("boom")
@@ -827,7 +829,7 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 502)
         payload = response.get_json()
         self.assertFalse(payload["ok"])
-        self.assertIn("Failed to send Inforu email", payload["message"])
+        self.assertEqual(payload["message"], "boom")
 
     def test_inforu_log_path_uses_temp_directory_on_vercel(self):
         os.environ["VERCEL"] = "1"

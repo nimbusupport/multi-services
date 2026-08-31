@@ -28,13 +28,23 @@ function showAppNotice(message, type = "info", timeout = 30000){
     error: "Error",
     info: "Notice"
   };
+  const endSymbolByType = {
+    success: "&#10003;",
+    error: "&times;",
+    info: "&times;"
+  };
+  const endLabelByType = {
+    success: "Success",
+    error: "Error",
+    info: "Close"
+  };
 
   notice.innerHTML = `
     <div class="app-notice-body">
       <p class="app-notice-title">${titleByType[type] || titleByType.info}</p>
       <p class="app-notice-message">${escapeHtml(String(message ?? ""))}</p>
     </div>
-    <button class="app-notice-close" type="button" aria-label="Close">×</button>
+    <button class="app-notice-close app-notice-endmark" type="button" aria-label="${endLabelByType[type] || endLabelByType.info}">${endSymbolByType[type] || endSymbolByType.info}</button>
   `;
 
   const close = () => {
@@ -637,7 +647,7 @@ async function sendInforuMail(){
       const json = await readJsonResponse(res);
   
       if(!json.ok){
-        alert(json.message);
+        showAppNotice(json.message || "Failed to send Inforu mail.", "error");
         return;
       }
 
@@ -652,15 +662,10 @@ async function sendInforuMail(){
         await openInforuLog(true);
       }
 
-      if(json.warning){
-        alert("אימות Inforu נשלח, אך שמירת הלוג ב-Supabase נכשלה: " + json.warning);
-        return;
-      }
-
-      showAppSuccess("נשלח אימות Inforu️✅");
+      showAppSuccess("Mail sent to inforu");
   
     }catch(e){
-      alert("שגיאה בשליחה: " + formatErrorMessage(e));
+      showAppNotice(formatErrorMessage(e), "error");
     }
   
   }

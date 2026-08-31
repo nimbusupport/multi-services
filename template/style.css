@@ -97,6 +97,22 @@ font-size:18px;
 font-weight:700;
 }
 
+.app-notice-endmark{
+line-height:1;
+}
+
+.app-notice.is-success .app-notice-endmark{
+color:#8ef0ae;
+border-color:rgba(101, 222, 156, .42);
+background:rgba(42, 143, 96, .18);
+}
+
+.app-notice.is-error .app-notice-endmark{
+color:#ff9f9f;
+border-color:rgba(255, 132, 132, .4);
+background:rgba(199, 62, 62, .2);
+}
+
 .app-notice-close:hover{
 background:rgba(255,255,255,.16);
 }

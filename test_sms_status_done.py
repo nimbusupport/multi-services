@@ -153,6 +153,32 @@ class FakeWebhookResponse:
         return None
 
 
+class FailingWebhookResponse:
+    def __init__(self, status_code=400, text="Webhook rejected DID", payload=None):
+        self.status_code = status_code
+        self.text = text
+        self._payload = payload
+
+    def json(self):
+        if self._payload is None:
+            raise ValueError("No JSON payload")
+        return self._payload
+
+    def raise_for_status(self):
+        raise self._build_error()
+
+    def _build_error(self):
+        error = self._requests_http_error(f"{self.status_code} Error")
+        error.response = self
+        return error
+
+    @staticmethod
+    def _requests_http_error(message):
+        import requests
+
+        return requests.HTTPError(message)
+
+
 class SmsStatusDoneTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -353,6 +379,19 @@ class SmsStatusDoneTests(unittest.TestCase):
         self.assertEqual(payload["numbers"], ["031234567"])
         self.assertEqual(inserted_rows[0]["did"], "031234567")
         self.assertIn("T", inserted_rows[0]["sent_at"])
+
+    def test_send_inforu_mail_returns_webhook_response_message_when_request_fails(self):
+        self.app_module.TOKEN_INFORU = "https://hook.example"
+        self.app_module.parse_local_inforu_log_entries = lambda: []
+        self.app_module.requests.post = lambda *args, **kwargs: FailingWebhookResponse(text="Webhook rejected DID")
+
+        self.login()
+        response = self.client.post("/send-inforu-mail", json={"dids": ["03-1234568"]})
+
+        self.assertEqual(response.status_code, 502)
+        payload = response.get_json()
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["message"], "Webhook rejected DID")
 
 
 if __name__ == "__main__":

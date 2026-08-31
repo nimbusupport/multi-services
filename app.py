@@ -4118,6 +4118,41 @@ def send_inforu_mail():
             "message": "Inforu Make webhook is not configured. Set TOKEN_INFORU or INFORU_MAKE_WEBHOOK_URL.",
         }), 500
 
+    def build_inforu_webhook_error_message(exc, response=None):
+        details = ""
+        webhook_response = response or getattr(exc, "response", None)
+        if webhook_response is not None:
+            try:
+                payload = webhook_response.json()
+            except ValueError:
+                payload = None
+
+            if isinstance(payload, dict):
+                for key in ("message", "error", "detail"):
+                    value = payload.get(key)
+                    if isinstance(value, str) and value.strip():
+                        details = value.strip()
+                        break
+                if not details and payload:
+                    details = json.dumps(payload, ensure_ascii=False)
+            elif payload not in (None, ""):
+                details = json.dumps(payload, ensure_ascii=False)
+
+            if not details:
+                response_text = (getattr(webhook_response, "text", "") or "").strip()
+                if response_text:
+                    details = response_text
+
+            if not details:
+                status_code = getattr(webhook_response, "status_code", None)
+                if status_code:
+                    details = f"Webhook request failed with status {status_code}."
+
+        if not details:
+            details = str(exc).strip()
+
+        return details or "Failed to send Inforu email via Make webhook."
+
     try:
         response = requests.post(
             TOKEN_INFORU,
@@ -4130,10 +4165,11 @@ def send_inforu_mail():
         )
         response.raise_for_status()
     except Exception as e:
-        print("Make webhook error:", e)
+        error_message = build_inforu_webhook_error_message(e, response if "response" in locals() else None)
+        print("Make webhook error:", error_message)
         return jsonify({
             "ok": False,
-            "message": "Failed to send Inforu email via Make webhook.",
+            "message": error_message,
         }), 502
 
     sent_at = datetime.now(ZoneInfo("Asia/Jerusalem")).isoformat()
