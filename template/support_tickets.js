@@ -6,6 +6,7 @@ let ticketsLoading = false;
 let paisReportLoading = false;
 let autoRefreshTimer = null;
 let leaderboardWorkersVisible = false;
+let imagePreviewScale = 1;
 
 const AUTO_REFRESH_INTERVAL_MS = 10000;
 const NASTYA_EDITABLE_STATUSES = ["ממתין לתאום", "תואם", "בוצע", "נכשל"];
@@ -778,10 +779,42 @@ function closeTicketDetail() {
   modal.setAttribute("aria-hidden", "true");
 }
 
+function clampImageScale(scale) {
+  return Math.min(Math.max(scale, 1), 4);
+}
+
+function applyImagePreviewScale(scale) {
+  const preview = document.getElementById("image-preview");
+  if (!preview) return;
+  imagePreviewScale = clampImageScale(scale);
+  preview.style.transform = `scale(${imagePreviewScale})`;
+  preview.style.cursor = imagePreviewScale > 1 ? "grab" : "zoom-in";
+}
+
+function adjustImagePreviewScale(delta) {
+  applyImagePreviewScale(imagePreviewScale + delta);
+}
+
+function resetImagePreviewScale() {
+  applyImagePreviewScale(1);
+  const stage = document.getElementById("image-stage");
+  if (stage) {
+    stage.scrollTop = 0;
+    stage.scrollLeft = 0;
+    stage.classList.remove("is-panning");
+  }
+  document.getElementById("image-preview")?.classList.remove("is-panning");
+}
+
 function openImagePreview(url) {
   if (!url) return;
   const modal = document.getElementById("image-modal");
-  document.getElementById("image-preview").src = url;
+  const preview = document.getElementById("image-preview");
+  const downloadLink = document.getElementById("download-image-preview");
+  preview.src = url;
+  downloadLink.href = url;
+  downloadLink.setAttribute("download", decodeURIComponent(url.split("/").pop() || "attachment"));
+  resetImagePreviewScale();
   modal.classList.add("open");
   modal.setAttribute("aria-hidden", "false");
 }
@@ -790,7 +823,14 @@ function closeImagePreview() {
   const modal = document.getElementById("image-modal");
   modal.classList.remove("open");
   modal.setAttribute("aria-hidden", "true");
-  document.getElementById("image-preview").src = "";
+  const preview = document.getElementById("image-preview");
+  preview.src = "";
+  preview.style.transform = "";
+  preview.classList.remove("is-panning");
+  document.getElementById("download-image-preview")?.setAttribute("href", "#");
+  document.getElementById("download-image-preview")?.removeAttribute("download");
+  document.getElementById("image-stage")?.classList.remove("is-panning");
+  imagePreviewScale = 1;
 }
 
 async function loadTickets() {
@@ -1339,6 +1379,21 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("image-modal").addEventListener("click", (event) => {
     if (event.target.id === "image-modal") closeImagePreview();
   });
+  document.getElementById("zoom-in-image")?.addEventListener("click", () => adjustImagePreviewScale(0.25));
+  document.getElementById("zoom-out-image")?.addEventListener("click", () => adjustImagePreviewScale(-0.25));
+  document.getElementById("zoom-reset-image")?.addEventListener("click", resetImagePreviewScale);
+  document.getElementById("image-preview")?.addEventListener("dblclick", () => {
+    if (imagePreviewScale > 1) {
+      resetImagePreviewScale();
+      return;
+    }
+    applyImagePreviewScale(2);
+  });
+  document.getElementById("image-stage")?.addEventListener("wheel", (event) => {
+    if (!document.getElementById("image-modal")?.classList.contains("open")) return;
+    event.preventDefault();
+    adjustImagePreviewScale(event.deltaY < 0 ? 0.2 : -0.2);
+  }, { passive: false });
 
   const serviceTypeInput = document.getElementById("service-type");
   if (serviceTypeInput) {
@@ -1357,6 +1412,27 @@ document.addEventListener("DOMContentLoaded", () => {
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) {
       runAutoRefresh();
+    }
+  });
+  document.addEventListener("keydown", (event) => {
+    if (!document.getElementById("image-modal")?.classList.contains("open")) return;
+    if (event.key === "Escape") {
+      closeImagePreview();
+      return;
+    }
+    if (event.key === "+" || event.key === "=") {
+      event.preventDefault();
+      adjustImagePreviewScale(0.25);
+      return;
+    }
+    if (event.key === "-" || event.key === "_") {
+      event.preventDefault();
+      adjustImagePreviewScale(-0.25);
+      return;
+    }
+    if (event.key === "0") {
+      event.preventDefault();
+      resetImagePreviewScale();
     }
   });
 

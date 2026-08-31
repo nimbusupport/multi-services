@@ -484,8 +484,22 @@
 
   <div class="ticket-modal image-modal" id="image-modal" aria-hidden="true">
     <section class="image-card">
-      <button class="icon-btn image-close" id="close-image-modal" type="button" title="Close"><i class="fa-solid fa-xmark"></i></button>
-      <img id="image-preview" src="" alt="Ticket attachment">
+      <div class="image-toolbar">
+        <div class="image-toolbar-group">
+          <button class="icon-btn image-action-btn" id="zoom-out-image" type="button" title="Zoom out"><i class="fa-solid fa-magnifying-glass-minus"></i></button>
+          <button class="icon-btn image-action-btn" id="zoom-reset-image" type="button" title="Reset zoom"><i class="fa-solid fa-arrows-rotate"></i></button>
+          <button class="icon-btn image-action-btn" id="zoom-in-image" type="button" title="Zoom in"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
+        </div>
+        <div class="image-toolbar-group">
+          <a class="icon-btn image-action-btn image-download-btn" id="download-image-preview" href="#" download title="Download image">
+            <i class="fa-solid fa-download"></i>
+          </a>
+          <button class="icon-btn image-close" id="close-image-modal" type="button" title="Close"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+      </div>
+      <div class="image-stage" id="image-stage">
+        <img id="image-preview" src="" alt="Ticket attachment">
+      </div>
     </section>
   </div>
 
