@@ -21,31 +21,53 @@
       </button>
 
       <div class="nav-links">
-        <a class="nav-link{% if active_nav == 'portals' %} active{% endif %}" {% if active_nav == 'portals' %}aria-current="page"{% endif %} href="/portals"><span class="nav-label">פורטלים</span><span class="nav-icon"><i class="fa-solid fa-cloud"></i></span></a>
-        <a class="nav-link{% if active_nav == 'tickets' %} active{% endif %}" {% if active_nav == 'tickets' %}aria-current="page"{% endif %} href="/support-tickets"><span class="nav-label">קריאות</span><span class="nav-icon"><i class="fa-solid fa-ticket"></i></span></a>
-        <a class="nav-link{% if active_nav == 'report' %} active{% endif %}" {% if active_nav == 'report' %}aria-current="page"{% endif %} href="/features-report"><span class="nav-label">דוחות</span><span class="nav-icon"><i class="fa-solid fa-chart-simple"></i></span></a>
-        <a class="nav-link{% if active_nav == 'recordings' %} active{% endif %}" {% if active_nav == 'recordings' %}aria-current="page"{% endif %} href="/record"><span class="nav-label">הקלטות פתיח</span><span class="nav-icon"><i class="fa-solid fa-record-vinyl"></i></span></a>
-        <a class="nav-link{% if active_nav == 'human_service' %} active{% endif %}" {% if active_nav == 'human_service' %}aria-current="page"{% endif %} href="/human-service"><span class="nav-label">מוקד אנושי</span><span class="nav-icon"><i class="fa-solid fa-headset"></i></span></a>
-        <a class="nav-link{% if active_nav == 'recording_storage' %} active{% endif %}" {% if active_nav == 'recording_storage' %}aria-current="page"{% endif %} href="/recording-storage"><span class="nav-label">אחסון הקלטות</span><span class="nav-icon"><i class="fa-solid fa-database"></i></span></a>
-        <a class="nav-link{% if active_nav == 'f2m' %} active{% endif %}" {% if active_nav == 'f2m' %}aria-current="page"{% endif %} href="/f2m"><span class="nav-label">F2M</span><span class="nav-icon"><i class="fa-solid fa-envelope-open-text"></i></span></a>
-        <a class="nav-link{% if active_nav == 'bot' %} active{% endif %}" {% if active_nav == 'bot' %}aria-current="page"{% endif %} href="/bot"><span class="nav-label">מוקד בוט</span><span class="nav-icon"><i class="fa-solid fa-robot"></i></span></a>
-        <a class="nav-link{% if active_nav == 'sms' %} active{% endif %}" {% if active_nav == 'sms' %}aria-current="page"{% endif %} href="/sms"><span class="nav-label">SMS</span><span class="nav-icon"><i class="fa-solid fa-comment-sms"></i></span></a>
-        <a class="nav-link{% if active_nav == 'dashboard' %} active{% endif %}" {% if active_nav == 'dashboard' %}aria-current="page"{% endif %} href="/home"><span class="nav-label">דשבורד</span><span class="nav-icon"><i class="fa-solid fa-chart-column"></i></span></a>
+        <a class="nav-link{% if active_nav == 'portals' %} active{% endif %}" {% if active_nav == 'portals' %}aria-current="page"{% endif %} href="/portals">
+          <span class="nav-label">פורטלים</span>
+          <span class="nav-icon"><i class="fa-solid fa-cloud"></i></span>
+        </a>
+        <a class="nav-link{% if active_nav == 'tickets' %} active{% endif %}" {% if active_nav == 'tickets' %}aria-current="page"{% endif %} href="/support-tickets">
+          <span class="nav-label">קריאות</span>
+          <span class="nav-icon"><i class="fa-solid fa-ticket"></i></span>
+        </a>
+        <a class="nav-link{% if active_nav == 'report' %} active{% endif %}" {% if active_nav == 'report' %}aria-current="page"{% endif %} href="/features-report">
+          <span class="nav-label">דוחות</span>
+          <span class="nav-icon"><i class="fa-solid fa-chart-simple"></i></span>
+        </a>
+        <a class="nav-link{% if active_nav == 'recordings' %} active{% endif %}" {% if active_nav == 'recordings' %}aria-current="page"{% endif %} href="/record">
+          <span class="nav-label">הקלטות פתיח</span>
+          <span class="nav-icon"><i class="fa-solid fa-record-vinyl"></i></span>
+        </a>
+        <a class="nav-link{% if active_nav == 'human_service' %} active{% endif %}" {% if active_nav == 'human_service' %}aria-current="page"{% endif %} href="/human-service">
+          <span class="nav-label">מוקד אנושי</span>
+          <span class="nav-icon"><i class="fa-solid fa-headset"></i></span>
+        </a>
+        <a class="nav-link{% if active_nav == 'recording_storage' %} active{% endif %}" {% if active_nav == 'recording_storage' %}aria-current="page"{% endif %} href="/recording-storage">
+          <span class="nav-label">אחסון הקלטות</span>
+          <span class="nav-icon"><i class="fa-solid fa-database"></i></span>
+        </a>
+        <a class="nav-link{% if active_nav == 'f2m' %} active{% endif %}" {% if active_nav == 'f2m' %}aria-current="page"{% endif %} href="/f2m">
+          <span class="nav-label">F2M</span>
+          <span class="nav-icon"><i class="fa-solid fa-envelope-open-text"></i></span>
+        </a>
+        <a class="nav-link{% if active_nav == 'bot' %} active{% endif %}" {% if active_nav == 'bot' %}aria-current="page"{% endif %} href="/bot">
+          <span class="nav-label">מוקד בוט</span>
+          <span class="nav-icon"><i class="fa-solid fa-robot"></i></span>
+        </a>
+        <a class="nav-link{% if active_nav == 'sms' %} active{% endif %}" {% if active_nav == 'sms' %}aria-current="page"{% endif %} href="/sms">
+          <span class="nav-label">SMS</span>
+          <span class="nav-icon"><i class="fa-solid fa-comment-sms"></i></span>
+        </a>
+        <a class="nav-link{% if active_nav == 'dashboard' %} active{% endif %}" {% if active_nav == 'dashboard' %}aria-current="page"{% endif %} href="/home">
+          <span class="nav-label">דשבורד</span>
+          <span class="nav-icon"><i class="fa-solid fa-chart-column"></i></span>
+        </a>
       </div>
     </div>
 
     <div class="nav-right">
       <a class="brand" href="/home" aria-label="Nimbus dashboard">
         <span class="brand-mark" aria-hidden="true">
-          <svg viewBox="0 0 100 100" focusable="false">
-            <defs>
-              <linearGradient id="dashboardBrandStrokeShared" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#60a5fa" />
-                <stop offset="100%" stop-color="#2563eb" />
-              </linearGradient>
-            </defs>
-            <path d="M50,10 A40,40 0 1,1 15,35" fill="none" stroke="url(#dashboardBrandStrokeShared)" stroke-width="6" stroke-linecap="round" />
-          </svg>
+          <img src="https://sms-manager-staging-618959575356.europe-west1.run.app/logo/nimbus-logo-primary.svg" alt="Nimbus">
         </span>
         <span class="brand-word">Nimbus</span>
       </a>
