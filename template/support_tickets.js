@@ -1305,8 +1305,11 @@ async function submitTicket(event) {
 document.addEventListener("DOMContentLoaded", () => {
   const portalToggle = document.querySelector(".portal-toggle");
   if (portalToggle) {
+    const portalMenu = portalToggle.closest(".portal-menu");
+    portalToggle.setAttribute("aria-expanded", portalMenu?.classList.contains("collapsed") ? "false" : "true");
     portalToggle.addEventListener("click", () => {
-      portalToggle.closest(".portal-menu")?.classList.toggle("collapsed");
+      portalMenu?.classList.toggle("collapsed");
+      portalToggle.setAttribute("aria-expanded", portalMenu?.classList.contains("collapsed") ? "false" : "true");
     });
   }
 
