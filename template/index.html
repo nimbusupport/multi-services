@@ -3,17 +3,19 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>SMS Export Tool</title>
+<title>שירות SMS</title>
 <link rel="icon" type="image/jpeg" href="/favicon/favicon.jpg">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/nav.css">
+<link rel="stylesheet" href="/home.css">
 <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body class="dashboard-page">
 
 <div id="appNoticeRegion" class="app-notice-region" aria-live="polite" aria-atomic="false"></div>
 
-<nav class="site-nav">
+{% set active_nav = "sms" %}
+{% include "_dashboard_top_nav.html" %}
+<nav class="site-nav" hidden>
 <div class="site-nav-inner">
 <a class="brand" href="/home"><span class="brand-kicker">Support Suite</span><span class="brand-main">Services</span></a>
 <button class="nav-toggle" type="button">Menu</button>

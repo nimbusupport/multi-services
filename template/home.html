@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="he" dir="rtl">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Services Dashboard</title>
+  <title>לוח שירותים</title>
   <link rel="icon" type="image/jpeg" href="/favicon/favicon.jpg">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -12,64 +12,14 @@
   <link rel="stylesheet" href="/home.css">
 </head>
 <body class="dashboard-page">
-  <nav class="site-nav">
-    <div class="site-nav-inner">
-      <div class="nav-left">
-        <div class="nav-actions">
-          <a class="nav-icon-btn" href="/logout" aria-label="Logout">
-            <i class="fa-solid fa-arrow-right-to-bracket"></i>
-          </a>
-          <div class="nav-user-inline">
-            <span class="nav-user-name">{{ (current_user or "user").split("@")[0] }}</span>
-            <i class="fa-solid fa-circle-user" aria-hidden="true"></i>
-          </div>
-          <a class="nav-icon-btn" href="/configuration" aria-label="Open configuration">
-            <i class="fa-solid fa-gear"></i>
-          </a>
-        </div>
-      </div>
-
-      <div class="nav-center">
-        <button class="nav-toggle" type="button" aria-label="Open menu">
-          <i class="fa-solid fa-bars"></i>
-        </button>
-
-        <div class="nav-links">
-          <a class="nav-link" href="/support-tickets"><span class="nav-label">Tickets</span><span class="nav-icon"><i class="fa-solid fa-ticket"></i></span></a>
-          <a class="nav-link" href="/features-report"><span class="nav-label">Report</span><span class="nav-icon"><i class="fa-solid fa-chart-simple"></i></span></a>
-          <a class="nav-link" href="/record"><span class="nav-label">Recordings</span><span class="nav-icon"><i class="fa-solid fa-record-vinyl"></i></span></a>
-          <a class="nav-link" href="/human-service"><span class="nav-label">מוקד</span><span class="nav-icon"><i class="fa-solid fa-headset"></i></span></a>
-          <a class="nav-link" href="/recording-storage"><span class="nav-label">אחסון</span><span class="nav-icon"><i class="fa-solid fa-database"></i></span></a>
-          <a class="nav-link" href="/f2m"><span class="nav-label">F2M</span><span class="nav-icon"><i class="fa-solid fa-envelope-open-text"></i></span></a>
-          <a class="nav-link" href="/bot"><span class="nav-label">Bot</span><span class="nav-icon"><i class="fa-solid fa-robot"></i></span></a>
-          <a class="nav-link" href="/sms"><span class="nav-label">SMS</span><span class="nav-icon"><i class="fa-solid fa-comment-sms"></i></span></a>
-        </div>
-      </div>
-
-      <div class="nav-right">
-        <a class="brand" href="/home" aria-label="Nimbus dashboard">
-          <span class="brand-mark" aria-hidden="true">
-            <svg viewBox="0 0 100 100" focusable="false">
-              <defs>
-                <linearGradient id="dashboardBrandStroke" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stop-color="#60a5fa" />
-                  <stop offset="100%" stop-color="#2563eb" />
-                </linearGradient>
-              </defs>
-              <path d="M50,10 A40,40 0 1,1 15,35" fill="none" stroke="url(#dashboardBrandStroke)" stroke-width="6" stroke-linecap="round" />
-            </svg>
-          </span>
-          <span class="brand-word">Nimbus</span>
-        </a>
-      </div>
-    </div>
-  </nav>
+  {% set active_nav = "dashboard" %}
+  {% include "_dashboard_top_nav.html" %}
 
   <main class="dashboard-wrap">
     <section class="dashboard-hero">
       <div class="hero-copy">
-        <p class="welcome">Welcome back, <strong>{{ (current_user or "user").split("@")[0] }}</strong></p>
-        <h1>Services</h1>
+        <p class="welcome">ברוך שובך, <strong>{{ (current_user or "user").split("@")[0] }}</strong></p>
+        <h1>שירותים</h1>
       </div>
     </section>
 
@@ -80,13 +30,13 @@
         </div>
         <div class="card-body">
           <div class="card-topline">
-            <span class="badge rec">Recordings</span>
+            <span class="badge rec">הקלטות</span>
           </div>
-          <h2>Recording Service</h2>
-          <a class="connect-btn" href="/record">Open Service</a>
+          <h2>הקלטות פתיח</h2>
+          <a class="connect-btn" href="/record">פתח שירות</a>
           <div class="active-users" id="recordings-users"></div>
           <div class="meter-row">
-            <span>Waiting</span>
+            <span>ממתינים</span>
             <span id="recordings-waiting-count">0</span>
           </div>
           <div class="meter"><div id="recordings-waiting-bar"></div></div>
@@ -99,13 +49,13 @@
         </div>
         <div class="card-body">
           <div class="card-topline">
-            <span class="badge f2m">F2M</span>
+            <span class="badge f2m">פקס</span>
           </div>
-          <h2>F2M Service</h2>
-          <a class="connect-btn" href="/f2m">Open Service</a>
+          <h2>שליחת פקס למייל F2M</h2>
+          <a class="connect-btn" href="/f2m">פתח שירות</a>
           <div class="active-users" id="f2m-users"></div>
           <div class="meter-row">
-            <span>Waiting</span>
+            <span>ממתינים</span>
             <span id="f2m-waiting-count">0</span>
           </div>
           <div class="meter"><div id="f2m-waiting-bar"></div></div>
@@ -118,13 +68,13 @@
         </div>
         <div class="card-body">
           <div class="card-topline">
-            <span class="badge bot">Bot</span>
+            <span class="badge bot">בוט</span>
           </div>
-          <h2>Bot Service</h2>
-          <a class="connect-btn" href="/bot">Open Service</a>
+          <h2>מוקד בוט</h2>
+          <a class="connect-btn" href="/bot">פתח שירות</a>
           <div class="active-users" id="bot-users"></div>
           <div class="meter-row">
-            <span>Waiting</span>
+            <span>ממתינים</span>
             <span id="bot-waiting-count">0</span>
           </div>
           <div class="meter"><div id="bot-waiting-bar"></div></div>
@@ -139,11 +89,11 @@
           <div class="card-topline">
             <span class="badge sms">SMS</span>
           </div>
-          <h2>SMS Service</h2>
-          <a class="connect-btn" href="/sms">Open Service</a>
+          <h2>שירות SMS</h2>
+          <a class="connect-btn" href="/sms">פתח שירות</a>
           <div class="active-users" id="sms-users"></div>
           <div class="meter-row">
-            <span>Waiting</span>
+            <span>ממתינים</span>
             <span id="sms-waiting-count">0</span>
           </div>
           <div class="meter"><div id="sms-waiting-bar"></div></div>
@@ -156,13 +106,13 @@
         </div>
         <div class="card-body">
           <div class="card-topline">
-            <span class="badge tickets">Tickets</span>
+            <span class="badge tickets">קריאות</span>
           </div>
-          <h2>Support Tickets</h2>
-          <a class="connect-btn" href="/support-tickets">Open Tickets</a>
+          <h2>קריאות שירות</h2>
+          <a class="connect-btn" href="/support-tickets">פתח קריאות</a>
           <div class="active-users" id="support_tickets-users"></div>
           <div class="meter-row">
-            <span>Waiting</span>
+            <span>ממתינים</span>
             <span id="support_tickets-waiting-count">0</span>
           </div>
           <div class="meter"><div id="support_tickets-waiting-bar"></div></div>
@@ -175,17 +125,17 @@
         </div>
         <div class="card-body">
           <div class="card-topline">
-            <span class="badge portals">Portals</span>
+            <span class="badge portals">פורטלים</span>
           </div>
-          <h2>Cloud Portals</h2>
-          <a class="connect-btn" href="/portals">Open Portals</a>
+          <h2>פורטל שירותי ענן</h2>
+          <a class="connect-btn" href="/portals">פתח פורטלים</a>
           <div class="portal-preview">
             <span class="portal-pill">Cloud Centrix</span>
             <span class="portal-pill">Provision Cloud</span>
             <span class="portal-pill">Cloud Network</span>
           </div>
           <div class="meter-row">
-            <span>Portal groups</span>
+            <span>קבוצות פורטלים</span>
             <span>3</span>
           </div>
           <div class="meter"><div style="width: 100%"></div></div>
@@ -198,16 +148,16 @@
         </div>
         <div class="card-body">
           <div class="card-topline">
-            <span class="badge report">Report</span>
+            <span class="badge report">דוחות</span>
           </div>
-          <h2>דו"ח פיצ'רים</h2>
-          <a class="connect-btn" href="/features-report">Open Report</a>
+          <h2>דוח פיצ'רים</h2>
+          <a class="connect-btn" href="/features-report">פתח דוח</a>
           <div class="active-users">
-            <span class="active-user-empty">Monthly counters and export options</span>
+            <span class="active-user-empty">מונה חודשי ואפשרויות ייצוא</span>
           </div>
           <div class="meter-row">
             <span>CSV / PDF</span>
-            <span>All services</span>
+            <span>כל השירותים</span>
           </div>
           <div class="meter"><div style="width: 100%"></div></div>
         </div>
@@ -219,13 +169,13 @@
         </div>
         <div class="card-body">
           <div class="card-topline">
-            <span class="badge human">מוקד</span>
+            <span class="badge human">אנושי</span>
           </div>
-          <h2>מוקד - אנושי</h2>
-          <a class="connect-btn" href="/human-service">Open Service</a>
+          <h2>מוקד אנושי</h2>
+          <a class="connect-btn" href="/human-service">פתח שירות</a>
           <div class="active-users" id="human_service-users"></div>
           <div class="meter-row">
-            <span>Waiting</span>
+            <span>ממתינים</span>
             <span id="human_service-waiting-count">0</span>
           </div>
           <div class="meter"><div id="human_service-waiting-bar"></div></div>
@@ -241,10 +191,10 @@
             <span class="badge storage">אחסון</span>
           </div>
           <h2>אחסון הקלטות</h2>
-          <a class="connect-btn" href="/recording-storage">Open Service</a>
+          <a class="connect-btn" href="/recording-storage">פתח שירות</a>
           <div class="active-users" id="recording_storage-users"></div>
           <div class="meter-row">
-            <span>Waiting</span>
+            <span>ממתינים</span>
             <span id="recording_storage-waiting-count">0</span>
           </div>
           <div class="meter"><div id="recording_storage-waiting-bar"></div></div>
@@ -262,10 +212,10 @@
             <span class="badge tickets">Pais</span>
           </div>
           <h2>מפעל הפיס</h2>
-          <a class="connect-btn" href="/pais-tickets">Open Queue</a>
+          <a class="connect-btn" href="/pais-tickets">פתח תור</a>
           <div class="active-users" id="pais_tickets-users"></div>
           <div class="meter-row">
-            <span>Waiting</span>
+            <span>ממתינים</span>
             <span id="pais_tickets-waiting-count">0</span>
           </div>
           <div class="meter"><div id="pais_tickets-waiting-bar"></div></div>
@@ -278,16 +228,16 @@
         </div>
         <div class="card-body">
           <div class="card-topline">
-            <span class="badge report">Lookup</span>
+            <span class="badge report">חיפוש</span>
           </div>
           <h2>סטטוס פיצ'רים</h2>
-          <a class="connect-btn" href="/features-status">Open Lookup</a>
+          <a class="connect-btn" href="/features-status">פתח חיפוש</a>
           <div class="active-users">
-            <span class="active-user-empty">Quick customer search across all sheets</span>
+            <span class="active-user-empty">חיפוש לקוח מהיר בכל הגיליונות</span>
           </div>
           <div class="meter-row">
-            <span>Direct page</span>
-            <span>All sheets</span>
+            <span>עמוד ישיר</span>
+            <span>כל הגיליונות</span>
           </div>
           <div class="meter"><div style="width: 100%"></div></div>
         </div>
@@ -299,13 +249,13 @@
         </div>
         <div class="card-body">
           <div class="card-topline">
-            <span class="badge tickets">Coord</span>
+            <span class="badge tickets">תיאום</span>
           </div>
-          <h2>נסטיה - תאום</h2>
-          <a class="connect-btn" href="/nastia-tickets">Open Queue</a>
+          <h2>נסטיה - תיאום</h2>
+          <a class="connect-btn" href="/nastia-tickets">פתח תור</a>
           <div class="active-users" id="nastia_tickets-users"></div>
           <div class="meter-row">
-            <span>ממתין לתאום</span>
+            <span>ממתין לתיאום</span>
             <span id="nastia_tickets-waiting-count">0</span>
           </div>
           <div class="meter"><div id="nastia_tickets-waiting-bar"></div></div>

@@ -5,11 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>דו"ח פיצ'רים שבוצעו</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-  <link rel="stylesheet" href="/nav.css">
+  <link rel="stylesheet" href="/home.css">
   <link rel="stylesheet" href="/features_report.css">
 </head>
-<body>
-  <nav class="site-nav">
+<body class="dashboard-page">
+  {% set active_nav = "report" %}
+  {% include "_dashboard_top_nav.html" %}
+  <nav class="site-nav" hidden>
     <div class="site-nav-inner">
       <a class="brand" href="/home"><span class="brand-kicker">Support Suite</span><span class="brand-main">Services</span></a>
       <button class="nav-toggle" type="button">Menu</button>

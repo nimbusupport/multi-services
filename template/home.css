@@ -3,6 +3,12 @@
   --dashboard-nav-z: 1200;
 }
 
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 body.dashboard-page {
   margin: 0;
   font-family: "Manrope", "Segoe UI", sans-serif;
@@ -37,14 +43,13 @@ body.dashboard-page .site-nav {
 
 body.dashboard-page .site-nav-inner {
   width: 100%;
-  margin: 0;
-  padding: 0 28px;
+  max-width: 1480px;
+  margin: 0 auto;
+  padding: 0 22px;
   height: 100%;
-  display: grid;
-  grid-template-columns: auto 1fr auto;
+  display: flex;
   align-items: center;
   gap: 16px;
-  box-sizing: border-box;
   color: #24476f;
   font: 700 14px/1.2 "Manrope", sans-serif;
 }
@@ -66,6 +71,7 @@ body.dashboard-page .nav-right {
 body.dashboard-page .nav-center {
   min-width: 0;
   display: flex;
+  flex: 1 1 auto;
   justify-content: center;
   align-items: center;
 }
@@ -130,7 +136,7 @@ body.dashboard-page .nav-links {
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 18px;
+  gap: 14px;
   width: 100%;
   min-width: 0;
   min-height: auto;
@@ -146,18 +152,27 @@ body.dashboard-page .nav-link {
   gap: 5px;
   color: #46698f;
   text-decoration: none;
-  padding: 6px 0;
+  padding: 7px 10px;
   border-radius: 999px;
   border: 1px solid transparent;
   background: transparent;
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 800;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background 0.18s ease, color 0.18s ease;
 }
 
 body.dashboard-page .nav-link:hover {
   color: #173c67;
   background: transparent;
   border-color: transparent;
+}
+
+body.dashboard-page .nav-link.active,
+body.dashboard-page .nav-link[aria-current="page"] {
+  color: #173c67;
+  border-color: rgba(56, 118, 212, 0.22);
+  background: linear-gradient(180deg, #ffffff 0%, #eef5ff 100%);
+  box-shadow: 0 8px 18px rgba(59, 98, 143, 0.1);
 }
 
 body.dashboard-page .nav-icon {
@@ -171,10 +186,6 @@ body.dashboard-page .nav-icon {
 
 body.dashboard-page .nav-label {
   line-height: 1;
-}
-
-body.dashboard-page .nav-branding {
-  display: contents;
 }
 
 body.dashboard-page .brand {
@@ -203,16 +214,16 @@ body.dashboard-page .brand-word {
 }
 
 .dashboard-wrap {
-  max-width: 1500px;
+  max-width: 1400px;
   margin: 0 auto;
-  padding: 22px 24px 40px;
+  padding: 18px 20px 34px;
 }
 
 .dashboard-hero {
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  padding: 6px 10px 26px;
+  padding: 8px 8px 22px;
 }
 
 .hero-copy {
@@ -232,7 +243,7 @@ body.dashboard-page .brand-word {
 .dashboard-hero h1 {
   margin: 0;
   color: #0e315d;
-  font-size: clamp(2.2rem, 4vw, 3.6rem);
+  font-size: clamp(2rem, 4vw, 3.25rem);
   line-height: 0.95;
   letter-spacing: -0.05em;
 }
@@ -240,22 +251,22 @@ body.dashboard-page .brand-word {
 .card-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 20px;
+  gap: 16px;
 }
 
 .service-card {
   position: relative;
   background: rgba(255, 255, 255, 0.92);
-  border-radius: 22px;
+  border-radius: 20px;
   overflow: hidden;
   border: 1px solid rgba(116, 150, 194, 0.2);
-  box-shadow: 0 12px 28px rgba(37, 77, 128, 0.09);
+  box-shadow: 0 10px 24px rgba(37, 77, 128, 0.09);
   transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
 }
 
 .service-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 18px 34px rgba(33, 76, 130, 0.14);
+  box-shadow: 0 16px 30px rgba(33, 76, 130, 0.14);
   border-color: rgba(52, 116, 206, 0.3);
 }
 
@@ -272,34 +283,34 @@ body.dashboard-page .brand-word {
 }
 
 .card-hero {
-  height: 150px;
+  height: 136px;
   display: grid;
   place-items: center;
 }
 
 .card-icon {
-  width: 72px;
-  height: 72px;
+  width: 66px;
+  height: 66px;
   display: grid;
   place-items: center;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.92);
   color: #f07d00;
-  box-shadow: 0 14px 28px rgba(13, 49, 93, 0.18);
-  font-size: 36px;
+  box-shadow: 0 12px 24px rgba(13, 49, 93, 0.18);
+  font-size: 32px;
   position: relative;
   z-index: 1;
 }
 
 .card-icon-image img {
-  width: 44px;
-  height: 44px;
+  width: 42px;
+  height: 42px;
   object-fit: contain;
 }
 
 .card-body {
   position: relative;
-  padding: 14px 18px 16px;
+  padding: 12px 16px 14px;
 }
 
 .card-topline {
@@ -315,7 +326,7 @@ body.dashboard-page .brand-word {
   padding: 5px 10px;
   border-radius: 999px;
   color: #fff;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.01em;
 }
@@ -331,11 +342,10 @@ body.dashboard-page .brand-word {
 .badge.portals { background: #155e75; }
 
 .service-card h2 {
-  margin: 10px 0 14px;
+  margin: 10px 0 12px;
   color: #0d2f58;
-  font-size: 1.9rem;
-  font-size: clamp(1.45rem, 2vw, 2rem);
-  line-height: 1.1;
+  font-size: clamp(1.28rem, 1.75vw, 1.7rem);
+  line-height: 1.18;
   text-align: center;
   letter-spacing: -0.04em;
 }
@@ -345,14 +355,14 @@ body.dashboard-page .brand-word {
   align-items: center;
   justify-content: center;
   width: 100%;
-  min-height: 44px;
-  margin-bottom: 14px;
+  min-height: 42px;
+  margin-bottom: 12px;
   border-radius: 14px;
   background: linear-gradient(135deg, #f8fbff 0%, #eef4ff 100%);
   border: 1px solid rgba(112, 156, 220, 0.22);
   color: #194777;
   text-decoration: none;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 800;
   box-sizing: border-box;
   transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
@@ -372,7 +382,8 @@ body.dashboard-page .brand-word {
 }
 
 .active-user-chip,
-.active-user-empty {
+.active-user-empty,
+.portal-pill {
   display: inline-flex;
   align-items: center;
   min-height: 30px;
@@ -384,13 +395,20 @@ body.dashboard-page .brand-word {
   font-weight: 700;
 }
 
+.portal-preview {
+  min-height: 30px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .meter-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-top: 14px;
   color: #4f6f95;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
 }
 
@@ -407,25 +425,6 @@ body.dashboard-page .brand-word {
   width: 0%;
   border-radius: 999px;
   background: linear-gradient(90deg, #143a69 0%, #315f9d 100%);
-}
-
-.portal-preview {
-  min-height: 30px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.portal-pill {
-  display: inline-flex;
-  align-items: center;
-  min-height: 30px;
-  padding: 0 12px;
-  border-radius: 999px;
-  background: #f1f6fd;
-  color: #4f7095;
-  font-size: 12px;
-  font-weight: 700;
 }
 
 .theme-recordings .card-hero { background: linear-gradient(135deg, #8d3b0f 0%, #d65b1b 60%, #ed7c27 100%); }
@@ -459,14 +458,14 @@ body.dashboard-page .brand-word {
   }
 }
 
-@media (max-width: 1120px) {
-  body.dashboard-page .nav-link {
-    font-size: 13px;
-    padding: 6px 0;
+@media (max-width: 1160px) {
+  body.dashboard-page .nav-links {
+    gap: 10px;
   }
 
-  body.dashboard-page .nav-links {
-    gap: 12px;
+  body.dashboard-page .nav-link {
+    padding: 7px 8px;
+    font-size: 11px;
   }
 
   .card-grid {
@@ -531,19 +530,19 @@ body.dashboard-page .brand-word {
   }
 
   .dashboard-wrap {
-    padding: 18px 14px 32px;
+    padding: 16px 14px 28px;
   }
 
   .dashboard-hero {
-    padding: 6px 4px 20px;
+    padding: 6px 4px 18px;
   }
 
   .card-grid {
     grid-template-columns: 1fr;
-    gap: 16px;
+    gap: 14px;
   }
 
   .card-hero {
-    height: 140px;
+    height: 130px;
   }
 }

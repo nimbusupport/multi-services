@@ -2,38 +2,20 @@
 <html lang="he" dir="rtl">
 <head>
   <meta charset="UTF-8">
-  <title>F2M Queue</title>
+  <title>שליחת פקס למייל F2M</title>
   <link rel="icon" type="image/jpeg" href="/favicon/favicon.jpg">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-  <link rel="stylesheet" href="/nav.css">
+  <link rel="stylesheet" href="/home.css">
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="bot.css">
   <link rel="stylesheet" href="f2m.css">
 </head>
-<body>
-  <nav class="site-nav">
-    <div class="site-nav-inner">
-      <a class="brand" href="/home"><span class="brand-kicker">Support Suite</span><span class="brand-main">Services</span></a>
-      <button class="nav-toggle" type="button">Menu</button>
-      <div class="nav-links">
-        <a class="nav-link" href="/sms"><span class="nav-icon"><i class="fa-solid fa-comment-sms"></i></span><span class="nav-label">SMS</span></a>
-        <a class="nav-link" href="/bot"><span class="nav-icon"><i class="fa-solid fa-robot"></i></span><span class="nav-label">Bot</span></a>
-        <a class="nav-link active" href="/f2m"><span class="nav-icon"><i class="fa-solid fa-envelope-open-text"></i></span><span class="nav-label">F2M</span></a>
-        <a class="nav-link" href="/recording-storage"><span class="nav-icon"><i class="fa-solid fa-database"></i></span><span class="nav-label">אחסון</span></a>
-        <a class="nav-link" href="/human-service"><span class="nav-icon"><i class="fa-solid fa-headset"></i></span><span class="nav-label">מוקד</span></a>
-        <a class="nav-link" href="/record"><span class="nav-icon"><i class="fa-solid fa-record-vinyl"></i></span><span class="nav-label">Recordings</span></a>
-        <a class="nav-link" href="/features-report"><span class="nav-icon"><i class="fa-solid fa-chart-simple"></i></span><span class="nav-label">Features Report</span></a>
-        <a class="nav-link" href="/home"><span class="nav-icon"><i class="fa-solid fa-chart-column"></i></span><span class="nav-label">Dashboard</span></a>
-      </div>
-      <div class="nav-footer">
-        <div class="nav-user">{{ (current_user or "").split("@")[0] }}</div>
-        <a class="nav-logout" href="/logout"><i class="fa-solid fa-right-from-bracket"></i> Logout</a>
-      </div>
-    </div>
-  </nav>
+<body class="dashboard-page">
+  {% set active_nav = "f2m" %}
+  {% include "_dashboard_top_nav.html" %}
 
   <div class="page">
-    <h2 class="title">F2M</h2>
+    <h2 class="title">שליחת פקס למייל F2M</h2>
     <div class="tool-link"><a href="https://login.interfax.net/login?returnUrl=%2Fproduct%2Fsettings%2FInterFAX%2FInterFAX-Upland.Bamba.InterFAX.Administration.FaxUsers.Folder&locale=en-US" target="_blank" rel="noopener">InterFAX</a></div>
     <section class="instructions">
       <h3>הוספת הרשאה לשליחת פקס ממייל</h3>

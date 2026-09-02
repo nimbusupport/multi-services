@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="he" dir="rtl">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cloud Portals</title>
+  <title>פורטל שירותי ענן</title>
   <link rel="icon" type="image/jpeg" href="/favicon/favicon.jpg">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -13,67 +13,15 @@
   <link rel="stylesheet" href="/portals.css">
 </head>
 <body class="dashboard-page portals-page">
-  <nav class="site-nav">
-    <div class="site-nav-inner">
-      <div class="nav-left">
-        <div class="nav-actions">
-          <a class="nav-icon-btn" href="/logout" aria-label="Logout">
-            <i class="fa-solid fa-arrow-right-to-bracket"></i>
-          </a>
-          <div class="nav-user-inline">
-            <span class="nav-user-name">{{ (current_user or "user").split("@")[0] }}</span>
-            <i class="fa-solid fa-circle-user" aria-hidden="true"></i>
-          </div>
-          <a class="nav-icon-btn" href="/configuration" aria-label="Open configuration">
-            <i class="fa-solid fa-gear"></i>
-          </a>
-        </div>
-      </div>
-
-      <div class="nav-center">
-        <button class="nav-toggle" type="button" aria-label="Open menu">
-          <i class="fa-solid fa-bars"></i>
-        </button>
-
-        <div class="nav-links">
-          <a class="nav-link portal-nav-link" href="/portals" aria-current="page"><span class="nav-label">Portals</span><span class="nav-icon"><i class="fa-solid fa-cloud"></i></span></a>
-          <a class="nav-link" href="/support-tickets"><span class="nav-label">Tickets</span><span class="nav-icon"><i class="fa-solid fa-ticket"></i></span></a>
-          <a class="nav-link" href="/features-report"><span class="nav-label">Report</span><span class="nav-icon"><i class="fa-solid fa-chart-simple"></i></span></a>
-          <a class="nav-link" href="/record"><span class="nav-label">Recordings</span><span class="nav-icon"><i class="fa-solid fa-record-vinyl"></i></span></a>
-          <a class="nav-link" href="/human-service"><span class="nav-label">׳׳•׳§׳“</span><span class="nav-icon"><i class="fa-solid fa-headset"></i></span></a>
-          <a class="nav-link" href="/recording-storage"><span class="nav-label">׳׳—׳¡׳•׳</span><span class="nav-icon"><i class="fa-solid fa-database"></i></span></a>
-          <a class="nav-link" href="/f2m"><span class="nav-label">F2M</span><span class="nav-icon"><i class="fa-solid fa-envelope-open-text"></i></span></a>
-          <a class="nav-link" href="/bot"><span class="nav-label">Bot</span><span class="nav-icon"><i class="fa-solid fa-robot"></i></span></a>
-          <a class="nav-link" href="/sms"><span class="nav-label">SMS</span><span class="nav-icon"><i class="fa-solid fa-comment-sms"></i></span></a>
-          <a class="nav-link" href="/home"><span class="nav-label">Dashboard</span><span class="nav-icon"><i class="fa-solid fa-chart-column"></i></span></a>
-        </div>
-      </div>
-
-      <div class="nav-right">
-        <a class="brand" href="/home" aria-label="Nimbus dashboard">
-          <span class="brand-mark" aria-hidden="true">
-            <svg viewBox="0 0 100 100" focusable="false">
-              <defs>
-                <linearGradient id="portalBrandStroke" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stop-color="#60a5fa" />
-                  <stop offset="100%" stop-color="#2563eb" />
-                </linearGradient>
-              </defs>
-              <path d="M50,10 A40,40 0 1,1 15,35" fill="none" stroke="url(#portalBrandStroke)" stroke-width="6" stroke-linecap="round" />
-            </svg>
-          </span>
-          <span class="brand-word">Nimbus</span>
-        </a>
-      </div>
-    </div>
-  </nav>
+  {% set active_nav = "portals" %}
+  {% include "_dashboard_top_nav.html" %}
 
   <main class="dashboard-wrap">
     <section class="dashboard-hero portal-hero">
       <div class="hero-copy">
-        <p class="welcome">Portal directory for <strong>{{ (current_user or "user").split("@")[0] }}</strong></p>
-        <h1>Cloud Portals</h1>
-        <p class="portal-hero-copy">Open PBX, provisioning, and network portals from one page.</p>
+        <p class="welcome">ספריית פורטלים עבור <strong>{{ (current_user or "user").split("@")[0] }}</strong></p>
+        <h1>פורטל שירותי ענן</h1>
+        <p class="portal-hero-copy">גישה מהירה לפורטלי מרכזיה, פרוביז'ן ורשת ממקום אחד.</p>
       </div>
     </section>
 
@@ -82,7 +30,7 @@
         <div class="portal-group-header">
           <div>
             <span class="portal-group-kicker">Cloud Centrix</span>
-            <h2>Centrix Services</h2>
+            <h2>שירותי Centrix</h2>
           </div>
           <span class="portal-group-icon"><i class="fa-solid fa-building"></i></span>
         </div>
@@ -114,7 +62,7 @@
         <div class="portal-group-header">
           <div>
             <span class="portal-group-kicker">Provision Cloud</span>
-            <h2>Device Provisioning</h2>
+            <h2>ניהול פרוביז'ן</h2>
           </div>
           <span class="portal-group-icon"><i class="fa-solid fa-satellite-dish"></i></span>
         </div>
@@ -141,7 +89,7 @@
         <div class="portal-group-header">
           <div>
             <span class="portal-group-kicker">Cloud Network</span>
-            <h2>Network Platforms</h2>
+            <h2>פלטפורמות רשת</h2>
           </div>
           <span class="portal-group-icon"><i class="fa-solid fa-network-wired"></i></span>
         </div>

@@ -3,37 +3,19 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Recordings</title>
+<title>הקלטות פתיח</title>
 <link rel="icon" type="image/jpeg" href="/favicon/favicon.jpg">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/nav.css">
+<link rel="stylesheet" href="/home.css">
 <link rel="stylesheet" href="/record.css">
 </head>
-<body class="has-side-nav">
+<body class="dashboard-page">
 
-<nav class="site-nav">
-  <div class="site-nav-inner">
-    <a class="brand" href="/home"><span class="brand-kicker">Support Suite</span><span class="brand-main">Services</span></a>
-    <button class="nav-toggle" type="button">Menu</button>
-    <div class="nav-links">
-      <a class="nav-link" href="/sms"><span class="nav-icon"><i class="fa-solid fa-comment-sms"></i></span><span class="nav-label">SMS</span></a>
-      <a class="nav-link" href="/bot"><span class="nav-icon"><i class="fa-solid fa-robot"></i></span><span class="nav-label">Bot</span></a>
-      <a class="nav-link" href="/f2m"><span class="nav-icon"><i class="fa-solid fa-envelope-open-text"></i></span><span class="nav-label">F2M</span></a>
-      <a class="nav-link" href="/recording-storage"><span class="nav-icon"><i class="fa-solid fa-database"></i></span><span class="nav-label">אחסון</span></a>
-      <a class="nav-link" href="/human-service"><span class="nav-icon"><i class="fa-solid fa-headset"></i></span><span class="nav-label">מוקד</span></a>
-      <a class="nav-link active" href="/record"><span class="nav-icon"><i class="fa-solid fa-record-vinyl"></i></span><span class="nav-label">Recordings</span></a>
-      <a class="nav-link" href="/features-report"><span class="nav-icon"><i class="fa-solid fa-chart-simple"></i></span><span class="nav-label">Features Report</span></a>
-      <a class="nav-link" href="/home"><span class="nav-icon"><i class="fa-solid fa-chart-column"></i></span><span class="nav-label">Dashboard</span></a>
-    </div>
-    <div class="nav-footer">
-      <div class="nav-user">{{ (current_user or "").split("@")[0] }}</div>
-      <a class="nav-logout" href="/logout"><i class="fa-solid fa-right-from-bracket"></i> Logout</a>
-    </div>
-  </div>
-</nav>
+{% set active_nav = "recordings" %}
+{% include "_dashboard_top_nav.html" %}
 
 <div class="record-wrap">
-  <h2>Recordings</h2>
+  <h2>הקלטות פתיח</h2>
   <button class="load-btn" onclick="loadData()">Load Recordings</button>
 
   <div class="counter">לקוחות בהמתנה: <span id="waiting-count">0</span></div>
