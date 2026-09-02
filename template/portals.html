@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cloud Portals</title>
+  <link rel="icon" type="image/jpeg" href="/favicon/favicon.jpg">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&display=swap">
+  <link rel="stylesheet" href="/home.css">
+  <link rel="stylesheet" href="/portals.css">
+</head>
+<body class="dashboard-page portals-page">
+  <nav class="site-nav">
+    <div class="site-nav-inner">
+      <div class="nav-left">
+        <div class="nav-actions">
+          <a class="nav-icon-btn" href="/logout" aria-label="Logout">
+            <i class="fa-solid fa-arrow-right-to-bracket"></i>
+          </a>
+          <div class="nav-user-inline">
+            <span class="nav-user-name">{{ (current_user or "user").split("@")[0] }}</span>
+            <i class="fa-solid fa-circle-user" aria-hidden="true"></i>
+          </div>
+          <a class="nav-icon-btn" href="/configuration" aria-label="Open configuration">
+            <i class="fa-solid fa-gear"></i>
+          </a>
+        </div>
+      </div>
+
+      <div class="nav-center">
+        <button class="nav-toggle" type="button" aria-label="Open menu">
+          <i class="fa-solid fa-bars"></i>
+        </button>
+
+        <div class="nav-links">
+          <a class="nav-link portal-nav-link" href="/portals" aria-current="page"><span class="nav-label">Portals</span><span class="nav-icon"><i class="fa-solid fa-cloud"></i></span></a>
+          <a class="nav-link" href="/support-tickets"><span class="nav-label">Tickets</span><span class="nav-icon"><i class="fa-solid fa-ticket"></i></span></a>
+          <a class="nav-link" href="/features-report"><span class="nav-label">Report</span><span class="nav-icon"><i class="fa-solid fa-chart-simple"></i></span></a>
+          <a class="nav-link" href="/record"><span class="nav-label">Recordings</span><span class="nav-icon"><i class="fa-solid fa-record-vinyl"></i></span></a>
+          <a class="nav-link" href="/human-service"><span class="nav-label">׳׳•׳§׳“</span><span class="nav-icon"><i class="fa-solid fa-headset"></i></span></a>
+          <a class="nav-link" href="/recording-storage"><span class="nav-label">׳׳—׳¡׳•׳</span><span class="nav-icon"><i class="fa-solid fa-database"></i></span></a>
+          <a class="nav-link" href="/f2m"><span class="nav-label">F2M</span><span class="nav-icon"><i class="fa-solid fa-envelope-open-text"></i></span></a>
+          <a class="nav-link" href="/bot"><span class="nav-label">Bot</span><span class="nav-icon"><i class="fa-solid fa-robot"></i></span></a>
+          <a class="nav-link" href="/sms"><span class="nav-label">SMS</span><span class="nav-icon"><i class="fa-solid fa-comment-sms"></i></span></a>
+          <a class="nav-link" href="/home"><span class="nav-label">Dashboard</span><span class="nav-icon"><i class="fa-solid fa-chart-column"></i></span></a>
+        </div>
+      </div>
+
+      <div class="nav-right">
+        <a class="brand" href="/home" aria-label="Nimbus dashboard">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 100 100" focusable="false">
+              <defs>
+                <linearGradient id="portalBrandStroke" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#60a5fa" />
+                  <stop offset="100%" stop-color="#2563eb" />
+                </linearGradient>
+              </defs>
+              <path d="M50,10 A40,40 0 1,1 15,35" fill="none" stroke="url(#portalBrandStroke)" stroke-width="6" stroke-linecap="round" />
+            </svg>
+          </span>
+          <span class="brand-word">Nimbus</span>
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <main class="dashboard-wrap">
+    <section class="dashboard-hero portal-hero">
+      <div class="hero-copy">
+        <p class="welcome">Portal directory for <strong>{{ (current_user or "user").split("@")[0] }}</strong></p>
+        <h1>Cloud Portals</h1>
+        <p class="portal-hero-copy">Open PBX, provisioning, and network portals from one page.</p>
+      </div>
+    </section>
+
+    <section class="portal-directory" aria-label="Portal groups">
+      <article class="portal-group-card">
+        <div class="portal-group-header">
+          <div>
+            <span class="portal-group-kicker">Cloud Centrix</span>
+            <h2>Centrix Services</h2>
+          </div>
+          <span class="portal-group-icon"><i class="fa-solid fa-building"></i></span>
+        </div>
+        <div class="portal-links-grid">
+          <a class="portal-link-card" href="https://hot.nimbusip.com/" target="_blank" rel="noreferrer">
+            <img src="https://hot.nimbusip.com/themes/default/images/logo.png" alt="HOT PBX">
+            <span>HOT PBX</span>
+            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+          </a>
+          <a class="portal-link-card" href="https://tel1.nimbusip.com/" target="_blank" rel="noreferrer">
+            <img src="https://tel1.nimbusip.com/themes/default/images/logo.png" alt="Nimbus PBX">
+            <span>Nimbus PBX</span>
+            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+          </a>
+          <a class="portal-link-card" href="https://hotcc1.nimbusip.com/pbx/login.php" target="_blank" rel="noreferrer">
+            <img src="https://hotcc.nimbusip.com/pbx/images/worldvoip.jpg" alt="Callcenter HOT">
+            <span>Callcenter HOT</span>
+            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+          </a>
+          <a class="portal-link-card" href="https://cc1.nimbusip.com/pbx/login.php" target="_blank" rel="noreferrer">
+            <img src="https://hotcc.nimbusip.com/pbx/images/worldvoip.jpg" alt="Callcenter Nimbus">
+            <span>Callcenter Nimbus</span>
+            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+          </a>
+        </div>
+      </article>
+
+      <article class="portal-group-card">
+        <div class="portal-group-header">
+          <div>
+            <span class="portal-group-kicker">Provision Cloud</span>
+            <h2>Device Provisioning</h2>
+          </div>
+          <span class="portal-group-icon"><i class="fa-solid fa-satellite-dish"></i></span>
+        </div>
+        <div class="portal-links-grid">
+          <a class="portal-link-card" href="https://eu.ymcs.yealink.com/manager/login" target="_blank" rel="noreferrer">
+            <img src="https://www.netsapiens.com/wp-content/uploads/2020/11/yealink-1024x683.png" alt="YMCS">
+            <span>YMCS</span>
+            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+          </a>
+          <a class="portal-link-card" href="https://my-ymcs.vercel.app/" target="_blank" rel="noreferrer">
+            <img src="https://www.netsapiens.com/wp-content/uploads/2020/11/yealink-1024x683.png" alt="My-YMCS">
+            <span>My-YMCS</span>
+            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+          </a>
+          <a class="portal-link-card" href="https://fdmcs.fanvil.com.cn/login" target="_blank" rel="noreferrer">
+            <img src="/picture/fanvil.png" alt="Fanvil Cloud">
+            <span>Fanvil Cloud</span>
+            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+          </a>
+        </div>
+      </article>
+
+      <article class="portal-group-card">
+        <div class="portal-group-header">
+          <div>
+            <span class="portal-group-kicker">Cloud Network</span>
+            <h2>Network Platforms</h2>
+          </div>
+          <span class="portal-group-icon"><i class="fa-solid fa-network-wired"></i></span>
+        </div>
+        <div class="portal-links-grid">
+          <a class="portal-link-card" href="https://eu.gdms.cloud/login" target="_blank" rel="noreferrer">
+            <img src="https://www.grandstream.com/hubfs/Product%20Images/GDMS/gdms-new-logo.png" alt="GDMS">
+            <span>GDMS</span>
+            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+          </a>
+          <a class="portal-link-card" href="https://portal.instant-on.hpe.com/#/login" target="_blank" rel="noreferrer">
+            <img src="https://mms.businesswire.com/media/20200527005081/en/726872/4/aruba-instant-on-rgb-primary_full.jpg" alt="Aruba Instant-On">
+            <span>Aruba Instant-On</span>
+            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+          </a>
+          <a class="portal-link-card" href="https://cloud-eu.ruijienetworks.com/sso/login?service=https%3A%2F%2Fcloud-eu.ruijienetworks.com%2Fwebproxy%2Fsso%2Fback%3Frewrite%3Doff%26back%3Dhttps%253A%252F%252Fcloud-eu.ruijienetworks.com%252Fmacc5%252FadminIntl%252F%2523%252Fmonitor_overview_global_menu" target="_blank" rel="noreferrer">
+            <img src="https://www.aikomtech.com/wp-content/uploads/2024/04/logo-ruijie.png" alt="Ruijie Cloud">
+            <span>Ruijie Cloud</span>
+            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+          </a>
+          <a class="portal-link-card" href="https://185.145.252.135:8443/wsg/#m/dashboard" target="_blank" rel="noreferrer">
+            <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ9v_pstfK6ps9OCaBum2PQP1Kgr3BY3Ef-Ug&s" alt="Ruckus Cloud">
+            <span>Ruckus Cloud</span>
+            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+          </a>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <script src="/nav.js"></script>
+</body>
+</html>

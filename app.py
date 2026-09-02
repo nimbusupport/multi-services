@@ -3009,6 +3009,18 @@ def home():
     return render_template("home.html", current_user=session.get("username", ""))
 
 
+@app.route("/portals")
+def portals_page():
+
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+    if not user_can_access_page("home"):
+        return redirect(first_allowed_route())
+
+    register_service_activity("dashboard")
+    return render_template("portals.html", current_user=session.get("username", ""))
+
+
 @app.route("/configuration")
 def configuration_page():
 
