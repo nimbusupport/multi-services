@@ -8,6 +8,9 @@ let manualNumberCgrState = {
   marked: false,
   row: null
 };
+let manualPanelState = {
+  open: false
+};
 
 const FIREBERRY_LOGO_URL = "https://app.fireberry.com/app/static/img/fireberry-logo-CIplsT_n.svg";
 const SMS_GUIDE_STEPS = {
@@ -529,6 +532,28 @@ function renderManualNumberCgr(){
   dot.classList.toggle("dot-green", !!manualNumberCgrState.marked);
   dot.classList.toggle("dot-amber", !manualNumberCgrState.marked);
   value.textContent = manualNumberCgrState.number;
+}
+
+function setManualPanelOpen(isOpen){
+  manualPanelState.open = Boolean(isOpen);
+
+  const card = document.getElementById("sms-manual-card");
+  const toggle = document.getElementById("manual-panel-toggle");
+  if(card){
+    card.hidden = !manualPanelState.open;
+  }
+  if(toggle){
+    toggle.setAttribute("aria-expanded", manualPanelState.open ? "true" : "false");
+  }
+}
+
+async function toggleManualCreatePanel(){
+  const nextOpen = !manualPanelState.open;
+  setManualPanelOpen(nextOpen);
+
+  if(nextOpen){
+    await loadManualNumberCgr(false);
+  }
 }
 
 async function loadManualNumberCgr(showNotice = false){
@@ -1523,5 +1548,5 @@ async function startManualCreateFlow(){
 document.addEventListener("DOMContentLoaded", () => {
   window.alert = (message) => showAppNotice(message, inferNoticeType(message));
   loadData();
-  loadManualNumberCgr();
+  setManualPanelOpen(false);
 });

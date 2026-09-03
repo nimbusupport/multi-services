@@ -127,7 +127,29 @@ Search
 <div id="smsDomainLookupResult" class="lookup-result"></div>
 </div>
 
-<div class="sms-manual card">
+<div class="sms-manual-launch card">
+<button
+  id="manual-panel-toggle"
+  class="manual-panel-toggle"
+  type="button"
+  aria-expanded="false"
+  aria-controls="sms-manual-card"
+  onclick="toggleManualCreatePanel()"
+>
+  <span class="manual-panel-toggle-copy">
+    <span class="manual-panel-toggle-title">Manual SMS Create</span>
+    <span class="manual-panel-toggle-subtitle">Open manual mode only when you need it</span>
+  </span>
+  <span class="manual-panel-toggle-icon" aria-hidden="true">
+    <i class="fa-solid fa-wand-magic-sparkles"></i>
+  </span>
+  <span class="manual-panel-toggle-chevron" aria-hidden="true">
+    <i class="fa-solid fa-chevron-down"></i>
+  </span>
+</button>
+</div>
+
+<div id="sms-manual-card" class="sms-manual card" hidden>
 <div class="guide-head">
 <div>
 <h2>יצירה ידנית של שירות SMS</h2>

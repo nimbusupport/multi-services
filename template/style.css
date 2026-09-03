@@ -464,6 +464,7 @@ background:#e8f7ff;
 
 .sms-guide,
 .sms-lookup,
+.sms-manual-launch,
 .sms-manual{
 margin-bottom:14px;
 }
@@ -531,6 +532,64 @@ margin:8px 0 0;
 color:var(--muted);
 line-height:1.6;
 font-size:14px;
+}
+
+.manual-panel-toggle{
+width:100%;
+display:grid;
+grid-template-columns:minmax(0, 1fr) auto auto;
+align-items:center;
+gap:14px;
+padding:2px 0;
+border:0;
+background:transparent;
+cursor:pointer;
+text-align:inherit;
+color:#1f3659;
+}
+
+.manual-panel-toggle-copy{
+display:flex;
+flex-direction:column;
+gap:4px;
+min-width:0;
+}
+
+.manual-panel-toggle-title{
+font-size:17px;
+font-weight:800;
+color:#123865;
+}
+
+.manual-panel-toggle-subtitle{
+font-size:13px;
+line-height:1.5;
+color:#6b7f99;
+}
+
+.manual-panel-toggle-icon,
+.manual-panel-toggle-chevron{
+width:42px;
+height:42px;
+display:inline-flex;
+align-items:center;
+justify-content:center;
+border-radius:50%;
+background:linear-gradient(135deg,#eef6ff 0%, #e2f5ff 100%);
+border:1px solid rgba(118, 149, 195, 0.24);
+color:#1a5a88;
+box-shadow:0 10px 18px rgba(44, 87, 138, 0.08);
+}
+
+.manual-panel-toggle-chevron{
+width:36px;
+height:36px;
+font-size:13px;
+transition:transform .18s ease;
+}
+
+.manual-panel-toggle[aria-expanded="true"] .manual-panel-toggle-chevron{
+transform:rotate(180deg);
 }
 
 .manual-form-grid{
