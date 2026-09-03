@@ -14,6 +14,10 @@ body {
   --tickets-sticky-top: 0px;
 }
 
+body.dashboard-page {
+  --tickets-sticky-top: calc(var(--dashboard-nav-height) + 18px);
+}
+
 .tickets-shell {
   min-height: 100vh;
   display: grid;

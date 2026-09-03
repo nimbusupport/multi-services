@@ -53,16 +53,6 @@ Start Load
 Fireberry Sync
 </button>
 
-<button class="btn-green" onclick="createSMS()">
-<span class="dot dot-green"></span>
-Create SMS
-</button>
-
-<button class="btn-green" onclick="markDoneSelected()">
-<span class="dot dot-green"></span>
-Status Done
-</button>
-
 <button class="btn-amber" onclick="exportSelected()">
 <span class="dot dot-amber"></span>
 CSV Download
@@ -76,9 +66,24 @@ CSV Download
 Open Inforu Log
 </button>
 
+<button class="btn-green" onclick="markDoneSelected()">
+<span class="dot dot-green"></span>
+Status Done
+</button>
+
+<button class="btn-green" onclick="createSMS()">
+<span class="dot dot-green"></span>
+Create SMS
+</button>
+
 <button class="btn-blue" onclick="sendInforuMail()">
 <span class="dot dot-blue"></span>
 Inforu Mail
+</button>
+
+<button class="btn-start-create" onclick="startCreateFlow()">
+<span class="dot dot-green"></span>
+START Create
 </button>
 
 <input
@@ -104,6 +109,9 @@ oninput="setSearch(this.value)"
 </div>
 <div class="guide-panel" id="smsGuideText">
 Fireberry Sync לטעינת לקוחות.
+</div>
+<div class="guide-highlight">
+כפתור START Create מפעיל ברצף את Inforu Mail, אחר כך Create SMS, ורק אם שני השלבים מצליחים הוא ממשיך ל-Status Done ומציג הודעת סיכום אחת מרוכזת.
 </div>
 </div>
 

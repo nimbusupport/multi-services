@@ -20,6 +20,13 @@ function showAppNotice(message, type = "info", timeout = 30000){
     return;
   }
 
+  const normalizedOptions =
+    typeof timeout === "number"
+      ? { timeout }
+      : (timeout && typeof timeout === "object" ? timeout : {});
+  const noticeTimeout = Number.isFinite(normalizedOptions.timeout) ? normalizedOptions.timeout : 30000;
+  const actions = Array.isArray(normalizedOptions.actions) ? normalizedOptions.actions : [];
+
   const notice = document.createElement("section");
   notice.className = `app-notice is-${type}`;
 
@@ -43,6 +50,7 @@ function showAppNotice(message, type = "info", timeout = 30000){
     <div class="app-notice-body">
       <p class="app-notice-title">${titleByType[type] || titleByType.info}</p>
       <p class="app-notice-message">${escapeHtml(String(message ?? ""))}</p>
+      ${actions.length ? '<div class="app-notice-actions"></div>' : ""}
     </div>
     <button class="app-notice-close app-notice-endmark" type="button" aria-label="${endLabelByType[type] || endLabelByType.info}">${endSymbolByType[type] || endSymbolByType.info}</button>
   `;
@@ -52,8 +60,25 @@ function showAppNotice(message, type = "info", timeout = 30000){
   };
 
   notice.querySelector(".app-notice-close")?.addEventListener("click", close);
+  const actionsWrap = notice.querySelector(".app-notice-actions");
+  if(actionsWrap){
+    actions.forEach((action, index) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "app-notice-action";
+      button.textContent = action?.label || `Action ${index + 1}`;
+      button.addEventListener("click", async () => {
+        try{
+          await action?.onClick?.(notice);
+        }catch(error){
+          showAppNotice(formatErrorMessage(error), "error");
+        }
+      });
+      actionsWrap.appendChild(button);
+    });
+  }
   region.appendChild(notice);
-  window.setTimeout(close, timeout);
+  window.setTimeout(close, noticeTimeout);
 }
 
 function showAppSuccess(message){
@@ -359,6 +384,61 @@ function validateSelectedForExport(selected){
     return false;
   }
   return true;
+}
+
+function getSelectedSmsCustomers(){
+  return loadedData.filter(x => x.checked);
+}
+
+function collectSelectedNumberCgrValues(selected){
+  return selected
+    .map(item => (item.numbercgr || "").trim())
+    .filter(Boolean);
+}
+
+function getNumericDidValues(selected){
+  return selected
+    .map(item => normalizeDidValue(item.did))
+    .filter(Boolean);
+}
+
+function buildStartCreateHeader(selected){
+  return selected.map(item => {
+    const domain = (item.domain || "-").trim() || "-";
+    const numberCgr = (item.numbercgr || "-").trim() || "-";
+    return `Create Ring Group 410 in Domain ${domain} Add NumberCGRT ${numberCgr}`;
+  }).join("\n");
+}
+
+async function copyTextToClipboard(text){
+  await navigator.clipboard.writeText(String(text ?? ""));
+}
+
+function showStartCreateNotice(message, type, selected){
+  const numberCgrValues = collectSelectedNumberCgrValues(selected);
+  const actions = [];
+
+  if(numberCgrValues.length){
+    actions.push({
+      label: "Copy NumberCGRT",
+      onClick: async () => {
+        await copyTextToClipboard(numberCgrValues.join("\n"));
+        showAppSuccess("NumberCGRT copied");
+      }
+    });
+  }
+
+  actions.push({
+    label: "Close",
+    onClick: (notice) => {
+      notice?.remove();
+    }
+  });
+
+  showAppNotice(message, type, {
+    timeout: 60000,
+    actions
+  });
 }
 
 /* Duplicate handling (auto-uncheck) */
@@ -859,6 +939,242 @@ async function createSMS(){
     }
   
   }
+
+async function runMarkDoneStep(){
+  const selected = getSelected();
+
+  if(selected.length === 0){
+    return { ok: false, message: "לא נבחרו לקוחות." };
+  }
+
+  const customers = selected.map(x => ({
+    sheet_row: x.sheet_row,
+    name: x.name || "",
+    domain: (x.domain || "").trim(),
+    did: (x.did || "").trim(),
+    cgr_row: x.cgr_row
+  }));
+
+  try{
+    const res = await fetch("/mark-done", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ customers })
+    });
+
+    const json = await readJsonResponse(res);
+
+    if(!res.ok || !json.ok){
+      return {
+        ok: false,
+        message: `שגיאה בעדכון סטטוס: ${json.message || "Unknown"}`
+      };
+    }
+
+    await loadData();
+
+    return {
+      ok: true,
+      message: `עודכן ל"בוצע": ${json.updated} לקוחות`
+    };
+  }catch(e){
+    return {
+      ok: false,
+      message: `שגיאה בעדכון סטטוס: ${formatErrorMessage(e)}`
+    };
+  }
+}
+
+async function runInforuMailStep(){
+  const selected = getSelectedSmsCustomers();
+
+  if(selected.length === 0){
+    return { ok: false, message: "לא נבחרו לקוחות" };
+  }
+
+  let dids = getNumericDidValues(selected);
+
+  if(dids.length === 0){
+    return {
+      ok: true,
+      skipped: true,
+      message: "Inforu Mail skipped: no numeric DID"
+    };
+  }
+
+  dids = [...new Set(dids)];
+  const skippedDidCount = selected.length - dids.length;
+
+  try{
+    const res = await fetch("/send-inforu-mail", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dids })
+    });
+    const json = await readJsonResponse(res);
+
+    if(!res.ok || !json.ok){
+      return {
+        ok: false,
+        message: json.message || "Failed to send Inforu mail."
+      };
+    }
+
+    const sentNumbers = Array.isArray(json.numbers) ? json.numbers : [];
+    sentNumbers.forEach(number => inforuSentNumbers.add(normalizeDidValue(number)));
+    refreshAllInforuSentFlags();
+    inforuLogEntries = [];
+
+    renderTable();
+
+    if(document.getElementById("inforuLogCard")?.style.display !== "none"){
+      await openInforuLog(true);
+    }
+
+    const added = Number(json.added || sentNumbers.length || dids.length);
+    const messageParts = [`Mail sent to Inforu (${added})`];
+    if(skippedDidCount > 0){
+      messageParts.push(`Skipped non-numeric DID: ${skippedDidCount}`);
+    }
+    if(json.warning){
+      messageParts.push(`Warning: ${json.warning}`);
+    }
+    const message = messageParts.join("\n");
+
+    return {
+      ok: true,
+      message,
+      numbers: sentNumbers
+    };
+  }catch(e){
+    return {
+      ok: false,
+      message: formatErrorMessage(e)
+    };
+  }
+}
+
+async function runCreateSmsStep(){
+  const selected = getSelectedSmsCustomers();
+
+  if(selected.length === 0){
+    return { ok: false, message: "לא נבחרו לקוחות", lines: [] };
+  }
+
+  const customers = selected.map(x => ({
+    domain: (x.domain || "").trim(),
+    did: (x.did || "").trim(),
+    numbercgr: (x.numbercgr || "").trim(),
+    text: x.text || ""
+  }));
+
+  try{
+    const res = await fetch("/create-sms", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ customers })
+    });
+
+    const json = await readJsonResponse(res);
+
+    if(!res.ok || !json.ok){
+      return { ok: false, message: json.message || "API Error", lines: [] };
+    }
+
+    const results = Array.isArray(json.results) ? json.results : [];
+    const lines = results.map(formatSmsResultLine).filter(Boolean);
+    const allSuccessful = results.length > 0 && results.every(result => result?.success);
+
+    return {
+      ok: allSuccessful,
+      message: allSuccessful ? "Create SMS completed successfully" : (lines.join("\n") || "Create SMS failed"),
+      lines,
+      results
+    };
+  }catch(e){
+    return {
+      ok: false,
+      message: "Connection error: " + formatErrorMessage(e),
+      lines: []
+    };
+  }
+}
+
+async function markDoneSelected(){
+  const result = await runMarkDoneStep();
+  if(result.ok){
+    showAppSuccess(result.message);
+    return;
+  }
+
+  showAppNotice(result.message, "error");
+}
+
+async function sendInforuMail(){
+  const result = await runInforuMailStep();
+  if(result.ok){
+    showAppSuccess(result.message);
+    return;
+  }
+
+  showAppNotice(result.message, "error");
+}
+
+async function createSMS(){
+  const result = await runCreateSmsStep();
+  if(result.ok){
+    if(result.lines.length){
+      showAppSuccess(result.lines.join("\n"));
+    }
+    return;
+  }
+
+  showAppNotice(result.message, "error");
+}
+
+async function startCreateFlow(){
+  const selected = getSelectedSmsCustomers();
+
+  if(selected.length === 0){
+    showAppNotice("לא נבחרו לקוחות", "error");
+    return;
+  }
+
+  const stepResults = [];
+
+  const inforuResult = await runInforuMailStep();
+  stepResults.push(`1. Inforu Mail\n${inforuResult.message}`);
+  if(!inforuResult.ok){
+    showStartCreateNotice(
+      `${buildStartCreateHeader(selected)}\n\n${stepResults.join("\n\n")}`,
+      "error",
+      selected
+    );
+    return;
+  }
+
+  const createResult = await runCreateSmsStep();
+  stepResults.push(`2. Create SMS\n${createResult.lines.length ? createResult.lines.join("\n") : createResult.message}`);
+  if(!createResult.ok){
+    showStartCreateNotice(
+      `${buildStartCreateHeader(selected)}\n\n${stepResults.join("\n\n")}`,
+      "error",
+      selected
+    );
+    return;
+  }
+
+  const markDoneResult = await runMarkDoneStep();
+  stepResults.push(`3. Status Done\n${markDoneResult.message}`);
+
+  showStartCreateNotice(
+    `${buildStartCreateHeader(selected)}\n\n${stepResults.join("\n\n")}`,
+    markDoneResult.ok ? "success" : "error",
+    selected
+  );
+}
 
 document.addEventListener("DOMContentLoaded", () => {
   window.alert = (message) => showAppNotice(message, inferNoticeType(message));

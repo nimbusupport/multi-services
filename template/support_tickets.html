@@ -7,14 +7,16 @@
   <link rel="icon" type="image/jpeg" href="/favicon/favicon.jpg">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
   <link rel="stylesheet" href="/home.css">
+  {% if not can_access_home %}
   <link rel="stylesheet" href="/nav.css">
+  {% endif %}
   <link rel="stylesheet" href="/support_tickets.css">
 </head>
 <body{% if can_access_home %} class="dashboard-page"{% endif %}>
   {% if can_access_home %}
   {% set active_nav = "tickets" %}
   {% include "_dashboard_top_nav.html" %}
-  {% endif %}
+  {% else %}
   <nav class="site-nav"{% if can_access_home %} hidden{% endif %}>
     <div class="site-nav-inner">
       <a class="brand" href="{{ '/home' if can_access_home else '/support-tickets' }}"><span class="brand-kicker">Support Suite</span><span class="brand-main">Services</span></a>
@@ -48,6 +50,7 @@
       </div>
     </div>
   </nav>
+  {% endif %}
 
   <main class="tickets-shell">
     <aside class="tickets-menu" aria-label="Ticket filters">
@@ -525,6 +528,7 @@
       ticketQueue: {{ ticket_queue|tojson }}
     };
   </script>
+
   <script src="/support_tickets.js"></script>
 </body>
 </html>
