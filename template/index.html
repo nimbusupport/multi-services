@@ -127,6 +127,44 @@ Search
 <div id="smsDomainLookupResult" class="lookup-result"></div>
 </div>
 
+<div class="sms-manual card">
+<div class="guide-head">
+<div>
+<h2>יצירה ידנית של שירות SMS</h2>
+<p class="manual-copy">מלאו Domain, DID ו-SMS Text. NumberCGRT נטען אוטומטית מתוך חיפ_סמס עם אותו סימון צבעוני כמו בתהליך הרגיל. אם ה-DID אינו מספר, שלב Inforu Mail ידולג אוטומטית.</p>
+</div>
+<button class="btn-start-create" type="button" onclick="startManualCreateFlow()">
+<span class="dot dot-green"></span>
+Manual START Create
+</button>
+</div>
+
+<div class="manual-form-grid">
+<label class="manual-field">
+<span>Domain</span>
+<input id="manual-domain" class="input" type="text" placeholder="example" />
+</label>
+<label class="manual-field">
+<span>DID</span>
+<input id="manual-did" class="input" type="text" placeholder="031234567" />
+</label>
+<label class="manual-field">
+<span>NumberCGRT</span>
+<div class="manual-numbercgr-box">
+<span id="manual-numbercgr-pill" class="cgr-pill cgr-missing">
+<span id="manual-numbercgr-dot" class="dot dot-amber"></span>
+<span id="manual-numbercgr-value">Load NumberCGRT</span>
+</span>
+<button class="btn-ghost manual-refresh-btn" type="button" onclick="loadManualNumberCgr(true)">Refresh NumberCGRT</button>
+</div>
+</label>
+<label class="manual-field manual-field-wide">
+<span>SMS Text</span>
+<textarea id="manual-text" class="input manual-textarea" rows="4" placeholder="Type SMS text here"></textarea>
+</label>
+</div>
+</div>
+
 <div class="card">
 <div class="statusline">
 <div class="pill" id="countPill">

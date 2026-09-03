@@ -3,6 +3,11 @@ let searchQuery = "";
 let inforuSentNumbers = new Set();
 let inforuLogEntries = [];
 let inforuLogSearchQuery = "";
+let manualNumberCgrState = {
+  number: "",
+  marked: false,
+  row: null
+};
 
 const FIREBERRY_LOGO_URL = "https://app.fireberry.com/app/static/img/fireberry-logo-CIplsT_n.svg";
 const SMS_GUIDE_STEPS = {
@@ -402,6 +407,29 @@ function getNumericDidValues(selected){
     .filter(Boolean);
 }
 
+function normalizeSmsCustomerInput(customer){
+  return {
+    domain: (customer?.domain || "").trim(),
+    did: String(customer?.did || "").trim(),
+    numbercgr: normalizePhoneWithZero(customer?.numbercgr || ""),
+    text: customer?.text || ""
+  };
+}
+
+function getNumericDidValuesFromCustomers(customers){
+  return customers
+    .map(customer => normalizeDidValue(customer.did))
+    .filter(Boolean);
+}
+
+function normalizePhoneWithZero(value){
+  const digits = String(value ?? "").replace(/\D+/g, "");
+  if(!digits){
+    return "";
+  }
+  return digits.startsWith("0") ? digits : `0${digits}`;
+}
+
 function buildStartCreateHeader(selected){
   return selected.map(item => {
     const domain = (item.domain || "-").trim() || "-";
@@ -439,6 +467,103 @@ function showStartCreateNotice(message, type, selected){
     timeout: 60000,
     actions
   });
+}
+
+function showCustomerFlowNotice(message, type, customers){
+  const numberCgrValues = (Array.isArray(customers) ? customers : [])
+    .map(customer => (customer?.numbercgr || "").trim())
+    .filter(Boolean);
+  const actions = [];
+
+  if(numberCgrValues.length){
+    actions.push({
+      label: "Copy NumberCGRT",
+      onClick: async () => {
+        await copyTextToClipboard(numberCgrValues.join("\n"));
+        showAppSuccess("NumberCGRT copied");
+      }
+    });
+  }
+
+  actions.push({
+    label: "Close",
+    onClick: (notice) => {
+      notice?.remove();
+    }
+  });
+
+  showAppNotice(message, type, {
+    timeout: 60000,
+    actions
+  });
+}
+
+function buildCustomerFlowHeader(customers){
+  return (Array.isArray(customers) ? customers : []).map(customer => {
+    const domain = (customer?.domain || "-").trim() || "-";
+    const numberCgr = (customer?.numbercgr || "-").trim() || "-";
+    return `Create Ring Group 410 in Domain ${domain} Add NumberCGRT ${numberCgr}`;
+  }).join("\n");
+}
+
+function renderManualNumberCgr(){
+  const pill = document.getElementById("manual-numbercgr-pill");
+  const dot = document.getElementById("manual-numbercgr-dot");
+  const value = document.getElementById("manual-numbercgr-value");
+
+  if(!pill || !dot || !value){
+    return;
+  }
+
+  if(!manualNumberCgrState.number){
+    pill.classList.remove("cgr-ok");
+    pill.classList.add("cgr-missing");
+    dot.classList.remove("dot-green");
+    dot.classList.add("dot-amber");
+    value.textContent = "No available NumberCGRT";
+    return;
+  }
+
+  pill.classList.toggle("cgr-ok", !!manualNumberCgrState.marked);
+  pill.classList.toggle("cgr-missing", !manualNumberCgrState.marked);
+  dot.classList.toggle("dot-green", !!manualNumberCgrState.marked);
+  dot.classList.toggle("dot-amber", !manualNumberCgrState.marked);
+  value.textContent = manualNumberCgrState.number;
+}
+
+async function loadManualNumberCgr(showNotice = false){
+  try{
+    const res = await fetch("/available-numbercgr");
+    const json = await readJsonResponse(res);
+
+    if(!res.ok || !json.ok){
+      throw new Error(json.message || "Failed to load NumberCGRT");
+    }
+
+    if(!json.found){
+      manualNumberCgrState = { number: "", marked: false, row: null };
+      renderManualNumberCgr();
+      if(showNotice){
+        showAppNotice("No available NumberCGRT in חיפ_סמס", "info");
+      }
+      return;
+    }
+
+    manualNumberCgrState = {
+      number: normalizePhoneWithZero(json.number),
+      marked: Boolean(json.marked),
+      row: json.row || null
+    };
+    renderManualNumberCgr();
+
+    if(showNotice){
+      showAppSuccess(`Loaded NumberCGRT ${manualNumberCgrState.number}`);
+    }
+  }catch(e){
+    manualNumberCgrState = { number: "", marked: false, row: null };
+    renderManualNumberCgr();
+    showAppNotice(formatErrorMessage(e), "error");
+  }
 }
 
 /* Duplicate handling (auto-uncheck) */
@@ -1054,6 +1179,66 @@ async function runInforuMailStep(){
   }
 }
 
+async function runInforuMailStepForCustomers(customers){
+  const normalizedCustomers = (Array.isArray(customers) ? customers : []).map(normalizeSmsCustomerInput);
+
+  if(normalizedCustomers.length === 0){
+    return { ok: false, message: "לא הוזנו נתונים ליצירה ידנית" };
+  }
+
+  let dids = getNumericDidValuesFromCustomers(normalizedCustomers);
+
+  if(dids.length === 0){
+    return {
+      ok: true,
+      skipped: true,
+      message: "Inforu Mail skipped: no numeric DID"
+    };
+  }
+
+  dids = [...new Set(dids)];
+  const skippedDidCount = normalizedCustomers.length - dids.length;
+
+  try{
+    const res = await fetch("/send-inforu-mail", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dids })
+    });
+    const json = await readJsonResponse(res);
+
+    if(!res.ok || !json.ok){
+      return {
+        ok: false,
+        message: json.message || "Failed to send Inforu mail."
+      };
+    }
+
+    const sentNumbers = Array.isArray(json.numbers) ? json.numbers : [];
+    sentNumbers.forEach(number => inforuSentNumbers.add(normalizeDidValue(number)));
+
+    const added = Number(json.added || sentNumbers.length || dids.length);
+    const messageParts = [`Mail sent to Inforu (${added})`];
+    if(skippedDidCount > 0){
+      messageParts.push(`Skipped non-numeric DID: ${skippedDidCount}`);
+    }
+    if(json.warning){
+      messageParts.push(`Warning: ${json.warning}`);
+    }
+
+    return {
+      ok: true,
+      message: messageParts.join("\n"),
+      numbers: sentNumbers
+    };
+  }catch(e){
+    return {
+      ok: false,
+      message: formatErrorMessage(e)
+    };
+  }
+}
+
 async function runCreateSmsStep(){
   const selected = getSelectedSmsCustomers();
 
@@ -1098,6 +1283,98 @@ async function runCreateSmsStep(){
       ok: false,
       message: "Connection error: " + formatErrorMessage(e),
       lines: []
+    };
+  }
+}
+
+async function runCreateSmsStepForCustomers(customers){
+  const normalizedCustomers = (Array.isArray(customers) ? customers : []).map(normalizeSmsCustomerInput);
+
+  if(normalizedCustomers.length === 0){
+    return { ok: false, message: "לא הוזנו נתונים ליצירה ידנית", lines: [] };
+  }
+
+  if(normalizedCustomers.some(customer => !customer.domain || !customer.numbercgr)){
+    return {
+      ok: false,
+      message: "יש למלא Domain ו-NumberCGRT לפני יצירה ידנית",
+      lines: []
+    };
+  }
+
+  try{
+    const res = await fetch("/create-sms", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ customers: normalizedCustomers })
+    });
+
+    const json = await readJsonResponse(res);
+
+    if(!res.ok || !json.ok){
+      return { ok: false, message: json.message || "API Error", lines: [] };
+    }
+
+    const results = Array.isArray(json.results) ? json.results : [];
+    const lines = results.map(formatSmsResultLine).filter(Boolean);
+    const allSuccessful = results.length > 0 && results.every(result => result?.success);
+
+    return {
+      ok: allSuccessful,
+      message: allSuccessful ? "Create SMS completed successfully" : (lines.join("\n") || "Create SMS failed"),
+      lines,
+      results
+    };
+  }catch(e){
+    return {
+      ok: false,
+      message: "Connection error: " + formatErrorMessage(e),
+      lines: []
+    };
+  }
+}
+
+async function reserveNumberCgrStepForCustomers(customers){
+  const normalizedCustomers = (Array.isArray(customers) ? customers : []).map(normalizeSmsCustomerInput);
+
+  if(normalizedCustomers.length === 0){
+    return { ok: false, message: "לא הוזנו נתונים ליצירה ידנית" };
+  }
+
+  try{
+    const res = await fetch("/reserve-numbercgr", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ customers: normalizedCustomers })
+    });
+
+    const json = await readJsonResponse(res);
+
+    if(!res.ok || !json.ok){
+      return {
+        ok: false,
+        message: json.message || "Failed to update חיפ_סמס"
+      };
+    }
+
+    const missingNumbers = Array.isArray(json.missing_numbers) ? json.missing_numbers : [];
+    const messageParts = [`Updated חיפ_סמס: ${Number(json.updated || 0)}`];
+    if(missingNumbers.length){
+      messageParts.push(`Numbers not found: ${missingNumbers.join(", ")}`);
+    }
+
+    return {
+      ok: missingNumbers.length === 0,
+      message: messageParts.join("\n")
+    };
+  }catch(e){
+    return {
+      ok: false,
+      message: "Failed to update חיפ_סמס: " + formatErrorMessage(e)
     };
   }
 }
@@ -1176,7 +1453,75 @@ async function startCreateFlow(){
   );
 }
 
+function getManualCustomerInput(){
+  return normalizeSmsCustomerInput({
+    domain: document.getElementById("manual-domain")?.value,
+    did: document.getElementById("manual-did")?.value,
+    numbercgr: manualNumberCgrState.number,
+    text: document.getElementById("manual-text")?.value
+  });
+}
+
+function clearManualCustomerInput(){
+  ["manual-domain", "manual-did", "manual-text"].forEach(id => {
+    const input = document.getElementById(id);
+    if(input){
+      input.value = "";
+    }
+  });
+}
+
+async function startManualCreateFlow(){
+  const customer = getManualCustomerInput();
+
+  if(!customer.domain || !customer.numbercgr){
+    showAppNotice("יש למלא Domain ולטעון NumberCGRT מתוך חיפ_סמס ליצירה ידנית", "error");
+    return;
+  }
+
+  const customers = [customer];
+  const stepResults = [];
+
+  const inforuResult = await runInforuMailStepForCustomers(customers);
+  stepResults.push(`1. Inforu Mail\n${inforuResult.message}`);
+  if(!inforuResult.ok){
+    showCustomerFlowNotice(
+      `${buildCustomerFlowHeader(customers)}\n\n${stepResults.join("\n\n")}`,
+      "error",
+      customers
+    );
+    return;
+  }
+
+  const createResult = await runCreateSmsStepForCustomers(customers);
+  stepResults.push(`2. Create SMS\n${createResult.lines.length ? createResult.lines.join("\n") : createResult.message}`);
+
+  if(!createResult.ok){
+    showCustomerFlowNotice(
+      `${buildCustomerFlowHeader(customers)}\n\n${stepResults.join("\n\n")}`,
+      "error",
+      customers
+    );
+    return;
+  }
+
+  const reserveResult = await reserveNumberCgrStepForCustomers(customers);
+  stepResults.push(`3. חיפ_סמס\n${reserveResult.message}`);
+
+  showCustomerFlowNotice(
+    `${buildCustomerFlowHeader(customers)}\n\n${stepResults.join("\n\n")}`,
+    reserveResult.ok ? "success" : "error",
+    customers
+  );
+
+  if(createResult.ok && reserveResult.ok){
+    clearManualCustomerInput();
+    await loadManualNumberCgr();
+  }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   window.alert = (message) => showAppNotice(message, inferNoticeType(message));
   loadData();
+  loadManualNumberCgr();
 });

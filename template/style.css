@@ -463,7 +463,8 @@ background:#e8f7ff;
 }
 
 .sms-guide,
-.sms-lookup{
+.sms-lookup,
+.sms-manual{
 margin-bottom:14px;
 }
 
@@ -523,6 +524,53 @@ border:1px solid #cfe0ef;
 color:#1f4c72;
 line-height:1.7;
 font-weight:600;
+}
+
+.manual-copy{
+margin:8px 0 0;
+color:var(--muted);
+line-height:1.6;
+font-size:14px;
+}
+
+.manual-form-grid{
+display:grid;
+grid-template-columns:repeat(3, minmax(0, 1fr));
+gap:12px;
+margin-top:16px;
+}
+
+.manual-field{
+display:flex;
+flex-direction:column;
+gap:8px;
+font-weight:700;
+color:#2f3a34;
+}
+
+.manual-field span{
+font-size:13px;
+}
+
+.manual-numbercgr-box{
+display:flex;
+align-items:center;
+gap:10px;
+flex-wrap:wrap;
+}
+
+.manual-refresh-btn{
+min-height:36px;
+}
+
+.manual-field-wide{
+grid-column:1 / -1;
+}
+
+.manual-textarea{
+resize:vertical;
+min-height:110px;
+line-height:1.5;
 }
 
 .lookup-row{
@@ -588,6 +636,10 @@ gap:14px;
 
 .search{
 width:100%;
+}
+
+.manual-form-grid{
+grid-template-columns:1fr;
 }
 
 .log-search{

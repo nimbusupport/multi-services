@@ -2060,6 +2060,59 @@ def normalize_phone_with_zero(value: str) -> str:
     return digits if digits.startswith("0") else f"0{digits}"
 
 
+def reserve_cgr_numbers(customers):
+    normalized_customers = []
+    for customer in customers:
+        if not isinstance(customer, dict):
+            continue
+        domain = (customer.get("domain") or "").strip()
+        numbercgr = normalize_phone_with_zero(customer.get("numbercgr") or "")
+        if not domain or not numbercgr:
+            continue
+        normalized_customers.append({
+            "domain": domain,
+            "numbercgr": numbercgr,
+        })
+
+    if not normalized_customers:
+        return {"updated": 0, "missing_numbers": []}
+
+    customer_by_number = {}
+    for customer in normalized_customers:
+        customer_by_number[customer["numbercgr"]] = customer["domain"]
+
+    client = get_gspread_client()
+    cgr_ws = client.open_by_key(SPREADSHEET_ID).worksheet(CGR_SHEET_NAME)
+    cgr_data = cgr_ws.get(f"A{CGR_START_ROW}:E")
+
+    updates = []
+    matched_numbers = set()
+    current_date = datetime.now(ZoneInfo("Asia/Jerusalem")).strftime("%Y-%m-%d")
+
+    for idx, row in enumerate(cgr_data):
+        sheet_number = normalize_phone_with_zero(row[0] if len(row) >= 1 else "")
+        if not sheet_number or sheet_number not in customer_by_number or sheet_number in matched_numbers:
+            continue
+
+        updates.append({
+            "range": (
+                f"{gspread.utils.rowcol_to_a1(CGR_START_ROW + idx, CGR_COL_DOMAIN)}:"
+                f"{gspread.utils.rowcol_to_a1(CGR_START_ROW + idx, CGR_COL_USED)}"
+            ),
+            "values": [[customer_by_number[sheet_number], current_date, True]],
+        })
+        matched_numbers.add(sheet_number)
+
+    if updates:
+        cgr_ws.batch_update(updates)
+
+    missing_numbers = sorted(number for number in customer_by_number if number not in matched_numbers)
+    return {
+        "updated": len(updates),
+        "missing_numbers": missing_numbers,
+    }
+
+
 def is_checked(value) -> bool:
     text = str(value or "").strip().lower()
     return text in ("true", "yes", "1", "v", "\u2713", "\u2714")
@@ -2270,36 +2323,7 @@ def get_pending_customers():
     # Attach NumberCGR from ׳—׳™׳₪_׳¡׳׳¡ (ONLY rows where column C empty)
     try:
         if pending:
-            cgr_ws = client.open_by_key(SPREADSHEET_ID).worksheet(CGR_SHEET_NAME)
-
-            # read more rows so we can filter
-            cgr_data = cgr_ws.get(f"A{CGR_START_ROW}:C")
-
-            free_numbers = []
-
-            for idx, row in enumerate(cgr_data):
-                a_val = row[0] if len(row) >= 1 else ""
-                b_val = row[1] if len(row) >= 2 else ""
-                c_val = row[2] if len(row) >= 3 else ""
-
-                # IMPORTANT: skip rows where column C is not empty
-                if (c_val or "").strip():
-                    continue
-
-                num_digits = digits_only(a_val)
-                if not num_digits:
-                    continue
-
-                numbercgr = num_digits if num_digits.startswith("0") else ("0" + num_digits)
-
-                b_norm = (b_val or "").strip().upper()
-                marked = bool(b_norm) and b_norm not in ("FALSE", "0", "NO")
-
-                free_numbers.append({
-                    "number": numbercgr,
-                    "row": CGR_START_ROW + idx,
-                    "marked": marked
-                })
+            free_numbers = get_available_cgr_numbers()
 
             # attach numbers to customers
             for idx, cust in enumerate(pending):
@@ -2319,6 +2343,40 @@ def get_pending_customers():
             cust["cgr_marked"] = False
 
     return pending
+
+
+def get_available_cgr_numbers(limit=None):
+    client = get_gspread_client()
+    cgr_ws = client.open_by_key(SPREADSHEET_ID).worksheet(CGR_SHEET_NAME)
+    cgr_data = cgr_ws.get(f"A{CGR_START_ROW}:C")
+
+    free_numbers = []
+
+    for idx, row in enumerate(cgr_data):
+        a_val = row[0] if len(row) >= 1 else ""
+        b_val = row[1] if len(row) >= 2 else ""
+        c_val = row[2] if len(row) >= 3 else ""
+
+        if (c_val or "").strip():
+            continue
+
+        numbercgr = normalize_phone_with_zero(a_val)
+        if not numbercgr:
+            continue
+
+        b_norm = (b_val or "").strip().upper()
+        marked = bool(b_norm) and b_norm not in ("FALSE", "0", "NO")
+
+        free_numbers.append({
+            "number": numbercgr,
+            "row": CGR_START_ROW + idx,
+            "marked": marked,
+        })
+
+        if isinstance(limit, int) and limit > 0 and len(free_numbers) >= limit:
+            break
+
+    return free_numbers
 
 
 def get_recordings_waiting_count():
@@ -4199,6 +4257,48 @@ def send_inforu_mail():
         "entries": sort_inforu_log_entries(log_entries),
         "warning": log_warning,
     })
+
+
+@app.route("/reserve-numbercgr", methods=["POST"])
+def reserve_numbercgr():
+    if not session.get("logged_in"):
+        return api_error("Unauthorized", 401, "unauthorized")
+
+    try:
+        payload = request.get_json(silent=True) or {}
+        customers = payload.get("customers", [])
+
+        if not isinstance(customers, list) or not customers:
+            return api_error("No customers provided.", 400, "missing_customers")
+
+        result = reserve_cgr_numbers(customers)
+        return jsonify({
+            "ok": True,
+            **result,
+        })
+    except Exception as exc:
+        return api_error(exc, 500, "reserve_numbercgr_failed")
+
+
+@app.route("/available-numbercgr", methods=["GET"])
+def available_numbercgr():
+    if not session.get("logged_in"):
+        return api_error("Unauthorized", 401, "unauthorized")
+
+    try:
+        numbers = get_available_cgr_numbers(limit=1)
+        if not numbers:
+            return jsonify({"ok": True, "found": False})
+
+        return jsonify({
+            "ok": True,
+            "found": True,
+            "number": numbers[0]["number"],
+            "row": numbers[0]["row"],
+            "marked": bool(numbers[0]["marked"]),
+        })
+    except Exception as exc:
+        return api_error(exc, 500, "available_numbercgr_failed")
 
 
 # ================================
