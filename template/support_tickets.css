@@ -631,7 +631,7 @@ textarea {
 
 .ticket-row {
   display: grid;
-  grid-template-columns: 86px minmax(220px, 1fr) 56px 132px 132px 104px minmax(196px, auto);
+  grid-template-columns: 86px minmax(220px, 1fr) 56px 132px 132px minmax(148px, auto) minmax(196px, auto);
   gap: 10px;
   align-items: center;
   min-height: 82px;
@@ -742,6 +742,13 @@ textarea {
 .ticket-row select {
   min-height: 34px;
   padding: 5px 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.status-select {
+  direction: rtl;
+  text-align: right;
 }
 
 .ticket-actions {
