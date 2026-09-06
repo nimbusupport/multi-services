@@ -12,10 +12,12 @@ body {
 
 :root {
   --tickets-sticky-top: 0px;
+  --tickets-toolbar-sticky-top: 0px;
 }
 
 body.dashboard-page {
   --tickets-sticky-top: calc(var(--dashboard-nav-height) + 18px);
+  --tickets-toolbar-sticky-top: var(--dashboard-nav-height);
 }
 
 .tickets-shell {
@@ -184,6 +186,8 @@ body.dashboard-page {
 
 .tickets-workspace {
   min-width: 0;
+  position: relative;
+  overflow: clip;
   background: rgba(250, 248, 244, 0.92);
   border: 1px solid rgba(255, 255, 255, 0.42);
   border-radius: 14px;
@@ -193,13 +197,14 @@ body.dashboard-page {
 
 .tickets-toolbar {
   position: sticky;
-  top: var(--tickets-sticky-top);
+  top: var(--tickets-toolbar-sticky-top);
   z-index: 30;
   margin: -16px -16px 14px;
   padding: 16px 16px 10px;
-  background: rgba(250, 248, 244, 0.98);
+  background: #faf8f4;
   backdrop-filter: blur(8px);
   border-radius: 14px 14px 0 0;
+  box-shadow: 0 12px 22px rgba(70, 63, 52, 0.08);
 }
 
 .tickets-header {
@@ -1364,6 +1369,7 @@ textarea {
 @media (max-width: 980px) {
   :root {
     --tickets-sticky-top: 72px;
+    --tickets-toolbar-sticky-top: 72px;
   }
 }
 
