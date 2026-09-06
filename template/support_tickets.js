@@ -8,6 +8,7 @@ let autoRefreshTimer = null;
 let leaderboardWorkersVisible = false;
 let imagePreviewScale = 1;
 let coordinationEmailDecisionResolver = null;
+let sendSuccessToastTimer = null;
 
 const AUTO_REFRESH_INTERVAL_MS = 10000;
 const NASTYA_EDITABLE_STATUSES = ["ממתין לתאום", "תואם", "בוצע", "נכשל"];
@@ -660,6 +661,7 @@ async function savePaisDetail(ticketId) {
   if (movedToCoordination) {
     payload.send_nastia_notification = await requestCoordinationEmailDecision();
   }
+  const willShowSendSuccess = payload.send_nastia_notification === true;
 
   try {
     const res = await fetch("/support-tickets-update", {
@@ -672,12 +674,15 @@ async function savePaisDetail(ticketId) {
       throw new Error(data.message || "Save failed");
     }
     if (data?.ticket?.notification_error) {
-      throw new Error(`הסטטוס עודכן אבל שליחת המייל נכשלה: ${data.ticket.notification_error}`);
+      openNotificationErrorModal(`הסטטוס עודכן אבל שליחת המייל נכשלה: ${data.ticket.notification_error}`);
+    } else if (willShowSendSuccess) {
+      showSendSuccessToast();
     }
     closeTicketDetail();
     await loadTickets();
     await loadPaisReport();
   } catch (err) {
+    openNotificationErrorModal(err.message || "Save failed");
     if (message) message.textContent = err.message;
   } finally {
     if (button) button.disabled = false;
@@ -806,6 +811,38 @@ function closeCoordinationEmailModal() {
   modal.setAttribute("aria-hidden", "true");
 }
 
+function openNotificationErrorModal(message) {
+  const modal = document.getElementById("notification-error-modal");
+  const messageHost = document.getElementById("notification-error-message");
+  if (messageHost) {
+    messageHost.textContent = message || "אירעה שגיאה בשליחת המייל.";
+  }
+  if (!modal) return;
+  modal.classList.add("open");
+  modal.setAttribute("aria-hidden", "false");
+}
+
+function closeNotificationErrorModal() {
+  const modal = document.getElementById("notification-error-modal");
+  if (!modal) return;
+  modal.classList.remove("open");
+  modal.setAttribute("aria-hidden", "true");
+}
+
+function showSendSuccessToast() {
+  const toast = document.getElementById("send-success-toast");
+  if (!toast) return;
+  toast.classList.add("visible");
+  toast.setAttribute("aria-hidden", "false");
+  if (sendSuccessToastTimer) {
+    window.clearTimeout(sendSuccessToastTimer);
+  }
+  sendSuccessToastTimer = window.setTimeout(() => {
+    toast.classList.remove("visible");
+    toast.setAttribute("aria-hidden", "true");
+  }, 5000);
+}
+
 function resolveCoordinationEmailDecision(shouldSend) {
   const resolver = coordinationEmailDecisionResolver;
   coordinationEmailDecisionResolver = null;
@@ -912,7 +949,7 @@ function submitTicketSearch() {
 }
 
 function hasOpenModal() {
-  return ["ticket-modal", "ticket-detail-modal", "coordination-email-modal", "image-modal"].some((id) => document.getElementById(id)?.classList.contains("open"));
+  return ["ticket-modal", "ticket-detail-modal", "coordination-email-modal", "notification-error-modal", "image-modal"].some((id) => document.getElementById(id)?.classList.contains("open"));
 }
 
 async function runAutoRefresh() {
@@ -1047,6 +1084,7 @@ async function updateTicket(ticketId, changes) {
   if (movedToCoordination) {
     payload.send_nastia_notification = await requestCoordinationEmailDecision();
   }
+  const willShowSendSuccess = payload.send_nastia_notification === true;
   const res = await fetch("/support-tickets-update", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -1054,10 +1092,13 @@ async function updateTicket(ticketId, changes) {
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok || !data.ok) {
-    alert(data.message || "Update failed");
+    openNotificationErrorModal(data.message || "Update failed");
+    return;
   }
   if (data?.ticket?.notification_error) {
-    alert(`הסטטוס עודכן אבל שליחת המייל נכשלה:\n${data.ticket.notification_error}`);
+    openNotificationErrorModal(`הסטטוס עודכן אבל שליחת המייל נכשלה: ${data.ticket.notification_error}`);
+  } else if (willShowSendSuccess) {
+    showSendSuccessToast();
   }
   await loadTickets();
   await loadPaisReport();
@@ -1442,6 +1483,11 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("coordination-email-modal")?.addEventListener("click", (event) => {
     if (event.target.id === "coordination-email-modal") resolveCoordinationEmailDecision(false);
   });
+  document.getElementById("close-notification-error-modal")?.addEventListener("click", closeNotificationErrorModal);
+  document.getElementById("notification-error-close-btn")?.addEventListener("click", closeNotificationErrorModal);
+  document.getElementById("notification-error-modal")?.addEventListener("click", (event) => {
+    if (event.target.id === "notification-error-modal") closeNotificationErrorModal();
+  });
   document.getElementById("close-image-modal").addEventListener("click", closeImagePreview);
   document.getElementById("image-modal").addEventListener("click", (event) => {
     if (event.target.id === "image-modal") closeImagePreview();
@@ -1484,6 +1530,10 @@ document.addEventListener("DOMContentLoaded", () => {
   document.addEventListener("keydown", (event) => {
     if (document.getElementById("coordination-email-modal")?.classList.contains("open") && event.key === "Escape") {
       resolveCoordinationEmailDecision(false);
+      return;
+    }
+    if (document.getElementById("notification-error-modal")?.classList.contains("open") && event.key === "Escape") {
+      closeNotificationErrorModal();
       return;
     }
     if (!document.getElementById("image-modal")?.classList.contains("open")) return;

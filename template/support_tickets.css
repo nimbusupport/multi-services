@@ -933,6 +933,28 @@ textarea {
   font-weight: 800;
 }
 
+.send-success-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%) translateY(12px);
+  background: #28a86f;
+  color: #fff;
+  padding: 12px 18px;
+  border-radius: 10px;
+  box-shadow: 0 16px 36px rgba(19, 95, 61, 0.28);
+  font-weight: 800;
+  z-index: 1700;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.send-success-toast.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
 .ticket-detail-card header {
   display: flex;
   justify-content: space-between;
