@@ -314,7 +314,12 @@ SUPABASE_BUCKET_URL = (os.environ.get("SUPABASE_BUCKET_URL") or "").strip()
 SUPABASE_BUCKET_REGION = (os.environ.get("SUPABASE_BUCKET_REGION") or "").strip()
 SUPABASE_BUCKET_ACCESS_KEY = (os.environ.get("SUPABASE_BUCKET_ACCESS_KEY") or "").strip()
 SUPABASE_BUCKET_SECRET_KEY = (os.environ.get("SUPABASE_BUCKET_SECRET_KEY") or "").strip()
-NASTIA_NOTIFICATION_EMAIL = (os.environ.get("NASTIA_NOTIFICATION_EMAIL") or "orders@nimbusip.com").strip()
+NASTIA_NOTIFICATION_EMAIL = (os.environ.get("NASTIA_NOTIFICATION_EMAIL") or "nastya@nimbusip.com").strip()
+PAIS_NOTIFICATION_FROM = (
+    os.environ.get("PAIS_NOTIFICATION_FROM")
+    or os.environ.get("NASTIA_NOTIFICATION_FROM")
+    or ""
+).strip()
 SMTP_HOST = (os.environ.get("SMTP_HOST") or "").strip()
 SMTP_PORT = int((os.environ.get("SMTP_PORT") or "587").strip())
 SMTP_USERNAME = (os.environ.get("SMTP_USERNAME") or "").strip()
@@ -1373,18 +1378,30 @@ def save_support_attachments(attachment_files, ticket_number):
 
 
 def smtp_email_enabled():
-    return bool(SMTP_HOST and SMTP_FROM)
+    return bool(SMTP_HOST and (SMTP_FROM or SMTP_USERNAME))
 
 
-def send_plain_email(to_address, subject, body):
+def send_plain_email(to_address, subject, body, from_address=None, html_body=None, attachments=None):
     if not smtp_email_enabled():
         raise RuntimeError("SMTP is not configured")
 
     message = EmailMessage()
     message["Subject"] = subject
-    message["From"] = SMTP_FROM
+    message["From"] = (from_address or SMTP_FROM or SMTP_USERNAME).strip()
     message["To"] = to_address
     message.set_content(body)
+    if html_body:
+        message.add_alternative(html_body, subtype="html")
+    for attachment in attachments or []:
+        if not isinstance(attachment, dict):
+            continue
+        filename = str(attachment.get("filename") or "attachment.txt")
+        content = attachment.get("content") or ""
+        maintype = str(attachment.get("maintype") or "application")
+        subtype = str(attachment.get("subtype") or "octet-stream")
+        if isinstance(content, str):
+            content = content.encode("utf-8")
+        message.add_attachment(content, maintype=maintype, subtype=subtype, filename=filename)
 
     if SMTP_USE_SSL:
         with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=20) as smtp:
@@ -1416,27 +1433,186 @@ def should_notify_nastia(previous_ticket, updated_ticket):
     return moved_to_coordination or assigned_to_nastia
 
 
-def send_nastia_ticket_email(ticket):
+def _pais_email_value(value):
+    return (str(value or "").strip() or "-")
+
+
+def _pais_email_multiline_html(value):
+    return xml_escape(_pais_email_value(value)).replace("\n", "<br>")
+
+
+def build_pais_google_calendar_link(ticket):
     details = ticket.get("details") or {}
+    visit_date = (details.get("visit_date") or "").strip()
+    visit_hour_from = (details.get("visit_hour_from") or "").strip()
+    visit_hour_to = (details.get("visit_hour_to") or "").strip()
+    if not (visit_date and visit_hour_from and visit_hour_to):
+        return None
+
+    try:
+        tz = ZoneInfo("Asia/Jerusalem")
+        start_at = datetime.strptime(f"{visit_date} {visit_hour_from}", "%Y-%m-%d %H:%M").replace(tzinfo=tz)
+        end_at = datetime.strptime(f"{visit_date} {visit_hour_to}", "%Y-%m-%d %H:%M").replace(tzinfo=tz)
+    except ValueError:
+        return None
+
+    ticket_label = ticket.get("ticket_id") or f"#{int(ticket.get('id') or 0):04d}"
     terminal_number = (details.get("terminal_number") or "").strip()
     customer_request = (details.get("customer_request") or "").strip()
     address = (details.get("address") or "").strip()
+    coordinated_worker = (details.get("coordinated_worker") or "").strip()
+    description_lines = [
+        f"מספר קריאה: {ticket_label}",
+        f"מספר מסוף: {terminal_number or '-'}",
+        f"פניית לקוח: {customer_request or '-'}",
+        f"כתובת: {address or '-'}",
+        f"טכנאי מתואם: {coordinated_worker or '-'}",
+    ]
+    summary = f"קריאת שירות מפעל הפיס {ticket_label}"
+    location = address or "מפעל הפיס"
+    start_utc = start_at.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    end_utc = end_at.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    params = {
+        "action": "TEMPLATE",
+        "text": summary,
+        "dates": f"{start_utc}/{end_utc}",
+        "details": "\n".join(description_lines),
+        "location": location,
+        "ctz": "Asia/Jerusalem",
+    }
+    query = "&".join(f"{key}={quote(str(value), safe='')}" for key, value in params.items())
+    return f"https://calendar.google.com/calendar/render?{query}"
+
+
+def build_pais_email_html(ticket, calendar_link=None):
+    details = ticket.get("details") or {}
     ticket_label = ticket.get("ticket_id") or f"#{int(ticket.get('id') or 0):04d}"
-    subject = f"קריאת שירות פייס מספר מסוף {terminal_number or ticket_label}"
-    body_lines = [f"פניית לקוח: {customer_request or '-'}"]
-    if address:
-        body_lines.append(f"כתובת: {address}")
-    body_lines.append(f"מספר קריאה: {ticket_label}")
-    send_plain_email(NASTIA_NOTIFICATION_EMAIL, subject, "\n".join(body_lines))
+    top_rows = [
+        ("מספר קריאה", ticket_label),
+        ("לוח", (ticket.get("service_type") or "מפעל הפיס").strip() or "מפעל הפיס"),
+        ("נוצר בתאריך", ticket.get("created_at_display")),
+        ("יוצר", ticket.get("creator")),
+        ("סטטוס", ticket.get("status")),
+        ("משויך ל", ticket.get("assigned_to")),
+    ]
+    detail_rows = [
+        ("מספר מסוף", details.get("terminal_number")),
+        ("כתובת", details.get("address")),
+        ("כתובת IP סטטית", details.get("static_ip")),
+        ("אלטורה", details.get("altura")),
+        ("Loop Back", details.get("look_back")),
+        ("איש קשר", details.get("contact_name")),
+        ("טלפון איש קשר", details.get("contact_phone")),
+        ("פניית לקוח", details.get("customer_request")),
+        ("פעולות", details.get("actions_taken")),
+        ("טכנאי מתואם", details.get("coordinated_worker")),
+        ("תאריך ביקור", details.get("visit_date")),
+        ("שעת ביקור מ", details.get("visit_hour_from")),
+        ("שעת ביקור עד", details.get("visit_hour_to")),
+        ("הערות כשל", details.get("failure_notes")),
+    ]
+
+    def render_rows(rows):
+        return "".join(
+            f"""
+            <tr>
+              <td style="padding:10px 12px;border-bottom:1px solid #e7dfd2;color:#6a6258;font-weight:700;width:34%;">{xml_escape(label)}</td>
+              <td style="padding:10px 12px;border-bottom:1px solid #e7dfd2;color:#1f2f46;">{_pais_email_multiline_html(value)}</td>
+            </tr>
+            """
+            for label, value in rows
+        )
+
+    calendar_button = ""
+    if calendar_link:
+        calendar_button = f"""
+        <div style="margin:20px 0 0;text-align:center;">
+          <a href="{xml_escape(calendar_link)}" style="display:inline-block;background:#28a86f;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:700;">
+            הוסף ליומן Google
+          </a>
+        </div>
+        """
+
+    return f"""\
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+  <body style="margin:0;padding:24px;background:#f5f1ea;font-family:Arial,'Noto Sans Hebrew',sans-serif;color:#1f2f46;">
+    <div style="max-width:760px;margin:0 auto;background:#fbfaf7;border:1px solid #ded5c9;border-radius:14px;overflow:hidden;">
+      <div style="padding:20px 24px;background:linear-gradient(135deg,#f9f3e8 0%,#eef4ff 100%);border-bottom:1px solid #ded5c9;">
+        <div style="font-size:13px;color:#7b7267;font-weight:700;">מפעל הפיס</div>
+        <div style="font-size:28px;font-weight:800;margin-top:6px;">{xml_escape(ticket_label)}</div>
+      </div>
+      <div style="padding:24px;">
+        <table role="presentation" style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #e7dfd2;border-radius:10px;overflow:hidden;">
+          {render_rows(top_rows)}
+        </table>
+        <div style="height:16px;"></div>
+        <table role="presentation" style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #e7dfd2;border-radius:10px;overflow:hidden;">
+          {render_rows(detail_rows)}
+        </table>
+        {calendar_button}
+      </div>
+    </div>
+  </body>
+</html>
+"""
 
 
-def maybe_send_nastia_ticket_notification(previous_ticket, updated_ticket):
+def send_nastia_ticket_email(ticket):
+    details = ticket.get("details") or {}
+    terminal_number = (details.get("terminal_number") or "").strip()
+    ticket_label = ticket.get("ticket_id") or f"#{int(ticket.get('id') or 0):04d}"
+    subject = f"קריאת שירות מפעל הפיס מס' קריאה : {ticket_label}"
+    calendar_link = build_pais_google_calendar_link(ticket)
+    body_lines = [
+        f"מספר קריאה: {ticket_label}",
+        f"לוח: {(ticket.get('service_type') or 'מפעל הפיס').strip() or 'מפעל הפיס'}",
+        f"נוצר בתאריך: {(ticket.get('created_at_display') or '').strip() or '-'}",
+        f"יוצר: {(ticket.get('creator') or '').strip() or '-'}",
+        f"סטטוס: {(ticket.get('status') or '').strip() or '-'}",
+        f"משויך ל: {(ticket.get('assigned_to') or '').strip() or '-'}",
+        "",
+        f"מספר מסוף: {terminal_number or '-'}",
+        f"כתובת: {(details.get('address') or '').strip() or '-'}",
+        f"כתובת IP סטטית: {(details.get('static_ip') or '').strip() or '-'}",
+        f"אלטורה: {(details.get('altura') or '').strip() or '-'}",
+        f"Loop Back: {(details.get('look_back') or '').strip() or '-'}",
+        f"איש קשר: {(details.get('contact_name') or '').strip() or '-'}",
+        f"טלפון איש קשר: {(details.get('contact_phone') or '').strip() or '-'}",
+        "",
+        f"פניית לקוח: {(details.get('customer_request') or '').strip() or '-'}",
+        f"פעולות: {(details.get('actions_taken') or '').strip() or '-'}",
+        f"טכנאי מתואם: {(details.get('coordinated_worker') or '').strip() or '-'}",
+        f"תאריך ביקור: {(details.get('visit_date') or '').strip() or '-'}",
+        f"שעת ביקור מ: {(details.get('visit_hour_from') or '').strip() or '-'}",
+        f"שעת ביקור עד: {(details.get('visit_hour_to') or '').strip() or '-'}",
+        f"הערות כשל: {(details.get('failure_notes') or '').strip() or '-'}",
+    ]
+    if calendar_link:
+        body_lines.extend([
+            "",
+            f"הוספה ליומן Google: {calendar_link}",
+        ])
+    send_plain_email(
+        NASTIA_NOTIFICATION_EMAIL,
+        subject,
+        "\n".join(body_lines),
+        from_address=PAIS_NOTIFICATION_FROM or SMTP_FROM or SMTP_USERNAME,
+        html_body=build_pais_email_html(ticket, calendar_link=calendar_link),
+    )
+
+
+def maybe_send_nastia_ticket_notification(previous_ticket, updated_ticket, enabled=True):
+    if not enabled:
+        return ""
     if not should_notify_nastia(previous_ticket, updated_ticket):
-        return
+        return ""
     try:
         send_nastia_ticket_email(updated_ticket)
+        return ""
     except Exception as exc:
         print(f"Nastia notification email warning for ticket {updated_ticket.get('id')}: {exc}")
+        return str(exc)
 
 
 def find_support_ticket(tickets, ticket_id):
@@ -1489,7 +1665,9 @@ def create_support_ticket_record(ticket_payload, attachment_files=None, attachme
         tickets = load_support_tickets()
         tickets.append(ticket)
         save_support_tickets(tickets)
-        maybe_send_nastia_ticket_notification({}, ticket)
+        notification_error = maybe_send_nastia_ticket_notification({}, ticket)
+        if notification_error:
+            ticket["notification_error"] = notification_error
         return ticket
 
     response = _supabase_request(
@@ -1521,7 +1699,9 @@ def create_support_ticket_record(ticket_payload, attachment_files=None, attachme
         raise
     ticket["attachments"] = attachments
     ticket["updates"] = []
-    maybe_send_nastia_ticket_notification({}, ticket)
+    notification_error = maybe_send_nastia_ticket_notification({}, ticket)
+    if notification_error:
+        ticket["notification_error"] = notification_error
     return ticket
 
 
@@ -1789,7 +1969,13 @@ def update_support_ticket_record(ticket_id, changes, actor):
             }
             for update in updates
         ]})
-        maybe_send_nastia_ticket_notification(previous_ticket, normalized_ticket)
+        notification_error = maybe_send_nastia_ticket_notification(
+            previous_ticket,
+            normalized_ticket,
+            enabled=bool(changes.get("send_nastia_notification", True)),
+        )
+        if notification_error:
+            normalized_ticket["notification_error"] = notification_error
         return normalized_ticket
 
     persisted = load_support_tickets()
@@ -1813,7 +1999,13 @@ def update_support_ticket_record(ticket_id, changes, actor):
         })
     save_support_tickets(persisted)
     normalized_ticket = normalize_support_ticket(local_ticket)
-    maybe_send_nastia_ticket_notification(previous_ticket, normalized_ticket)
+    notification_error = maybe_send_nastia_ticket_notification(
+        previous_ticket,
+        normalized_ticket,
+        enabled=bool(changes.get("send_nastia_notification", True)),
+    )
+    if notification_error:
+        normalized_ticket["notification_error"] = notification_error
     return normalized_ticket
 
 
@@ -3369,6 +3561,7 @@ def render_ticket_board_page(board_slug):
         priorities=SUPPORT_PRIORITIES,
         support_statuses=SUPPORT_STATUSES,
         pais_statuses=PAIS_STATUSES,
+        nastia_notification_email=NASTIA_NOTIFICATION_EMAIL,
         can_access_home="home" in allowed_pages,
         can_access_support="support_tickets" in allowed_pages,
         can_access_pais="pais_tickets" in allowed_pages,
@@ -3452,6 +3645,7 @@ def nastia_tickets_page():
         priorities=SUPPORT_PRIORITIES,
         support_statuses=SUPPORT_STATUSES,
         pais_statuses=PAIS_STATUSES,
+        nastia_notification_email=NASTIA_NOTIFICATION_EMAIL,
         can_access_home="home" in allowed_pages,
         can_access_support="support_tickets" in allowed_pages,
         can_access_pais="pais_tickets" in allowed_pages,

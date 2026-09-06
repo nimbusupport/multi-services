@@ -490,6 +490,24 @@
     </section>
   </div>
 
+  <div class="ticket-modal" id="coordination-email-modal" aria-hidden="true">
+    <section class="confirm-card">
+      <header>
+        <div>
+          <p>מפעל הפיס</p>
+          <h2>לשלוח מייל אל</h2>
+          <div class="confirm-email-target" id="coordination-email-target">nastya@nimbusip.com</div>
+        </div>
+        <button class="icon-btn" id="close-coordination-email-modal" type="button" title="סגור" aria-label="סגור"><i class="fa-solid fa-xmark"></i></button>
+      </header>
+      <p class="confirm-copy">הסטטוס יעודכן ל-ממתין לתיאום. אפשר גם לעדכן סטטוס בלי לשלוח מייל.</p>
+      <div class="confirm-actions">
+        <button class="create-ticket-btn" id="coordination-email-send-btn" type="button">עדכן סטטוס ושלח</button>
+        <button class="secondary-btn" id="coordination-email-skip-btn" type="button">עדכן סטטוס</button>
+      </div>
+    </section>
+  </div>
+
   <div class="ticket-modal image-modal" id="image-modal" aria-hidden="true">
     <section class="image-card">
       <div class="image-toolbar">
@@ -524,6 +542,7 @@
       currentSupportUser: {{ support_user|tojson }},
       supportStatuses: {{ support_statuses|tojson }},
       paisStatuses: {{ pais_statuses|tojson }},
+      nastiaNotificationEmail: {{ nastia_notification_email|tojson }},
       pageMode: {{ page_mode|tojson }},
       ticketQueue: {{ ticket_queue|tojson }}
     };

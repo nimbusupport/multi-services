@@ -85,6 +85,79 @@ class SupportTicketsTestCase(unittest.TestCase):
             http.MediaIoBaseDownload = object
             sys.modules["googleapiclient.http"] = http
 
+        if "bidi" not in sys.modules:
+            sys.modules["bidi"] = types.ModuleType("bidi")
+
+        if "bidi.algorithm" not in sys.modules:
+            bidi_algorithm = types.ModuleType("bidi.algorithm")
+            bidi_algorithm.get_display = lambda value: value
+            sys.modules["bidi.algorithm"] = bidi_algorithm
+
+        if "reportlab" not in sys.modules:
+            sys.modules["reportlab"] = types.ModuleType("reportlab")
+
+        if "reportlab.lib" not in sys.modules:
+            sys.modules["reportlab.lib"] = types.ModuleType("reportlab.lib")
+
+        if "reportlab.lib.colors" not in sys.modules:
+            colors = types.ModuleType("reportlab.lib.colors")
+            colors.HexColor = lambda value: value
+            colors.whitesmoke = "whitesmoke"
+            colors.black = "black"
+            colors.white = "white"
+            sys.modules["reportlab.lib.colors"] = colors
+
+        if "reportlab.lib.enums" not in sys.modules:
+            enums = types.ModuleType("reportlab.lib.enums")
+            enums.TA_CENTER = 1
+            enums.TA_LEFT = 0
+            enums.TA_RIGHT = 2
+            sys.modules["reportlab.lib.enums"] = enums
+
+        if "reportlab.lib.pagesizes" not in sys.modules:
+            pagesizes = types.ModuleType("reportlab.lib.pagesizes")
+            pagesizes.A4 = (595, 842)
+            sys.modules["reportlab.lib.pagesizes"] = pagesizes
+
+        if "reportlab.lib.styles" not in sys.modules:
+            styles = types.ModuleType("reportlab.lib.styles")
+            styles.ParagraphStyle = lambda *args, **kwargs: {"args": args, "kwargs": kwargs}
+            styles.getSampleStyleSheet = lambda: {}
+            sys.modules["reportlab.lib.styles"] = styles
+
+        if "reportlab.lib.units" not in sys.modules:
+            units = types.ModuleType("reportlab.lib.units")
+            units.mm = 1
+            sys.modules["reportlab.lib.units"] = units
+
+        if "reportlab.pdfbase" not in sys.modules:
+            sys.modules["reportlab.pdfbase"] = types.ModuleType("reportlab.pdfbase")
+
+        if "reportlab.pdfbase.pdfmetrics" not in sys.modules:
+            pdfmetrics = types.ModuleType("reportlab.pdfbase.pdfmetrics")
+            pdfmetrics.registerFont = lambda *args, **kwargs: None
+            sys.modules["reportlab.pdfbase.pdfmetrics"] = pdfmetrics
+
+        if "reportlab.pdfbase.ttfonts" not in sys.modules:
+            ttfonts = types.ModuleType("reportlab.pdfbase.ttfonts")
+
+            class FakeTTFont:
+                def __init__(self, *args, **kwargs):
+                    self.args = args
+                    self.kwargs = kwargs
+
+            ttfonts.TTFont = FakeTTFont
+            sys.modules["reportlab.pdfbase.ttfonts"] = ttfonts
+
+        if "reportlab.platypus" not in sys.modules:
+            platypus = types.ModuleType("reportlab.platypus")
+            platypus.Paragraph = lambda *args, **kwargs: ("Paragraph", args, kwargs)
+            platypus.SimpleDocTemplate = object
+            platypus.Spacer = lambda *args, **kwargs: ("Spacer", args, kwargs)
+            platypus.Table = lambda *args, **kwargs: ("Table", args, kwargs)
+            platypus.TableStyle = lambda *args, **kwargs: ("TableStyle", args, kwargs)
+            sys.modules["reportlab.platypus"] = platypus
+
     def setUp(self):
         self.tempdir = tempfile.TemporaryDirectory()
         self.app = self.app_module.app
@@ -100,10 +173,14 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.original_get_gspread_client = self.app_module.get_gspread_client
         self.original_get_feature_report_counts = self.app_module.get_feature_report_counts
         self.original_send_nastia_ticket_email = self.app_module.send_nastia_ticket_email
+        self.original_send_plain_email = self.app_module.send_plain_email
+        self.original_smtp_from = self.app_module.SMTP_FROM
+        self.original_smtp_username = self.app_module.SMTP_USERNAME
         self.original_token_inforu = self.app_module.TOKEN_INFORU
         self.original_requests_post = self.app_module.requests.post
         self.original_inforu_log_dir = self.app_module.inforu_log_dir
         self.original_inforu_log_path = self.app_module.inforu_log_path
+        self.original_pais_notification_from = self.app_module.PAIS_NOTIFICATION_FROM
         self.original_vercel = os.environ.get("VERCEL")
         self.app_module.SUPPORT_LOG_FILE = self.support_log_file
         self.app_module.SUPPORT_SCREEN_DIR = self.screens_dir
@@ -120,10 +197,14 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.app_module.get_gspread_client = self.original_get_gspread_client
         self.app_module.get_feature_report_counts = self.original_get_feature_report_counts
         self.app_module.send_nastia_ticket_email = self.original_send_nastia_ticket_email
+        self.app_module.send_plain_email = self.original_send_plain_email
+        self.app_module.SMTP_FROM = self.original_smtp_from
+        self.app_module.SMTP_USERNAME = self.original_smtp_username
         self.app_module.TOKEN_INFORU = self.original_token_inforu
         self.app_module.requests.post = self.original_requests_post
         self.app_module.inforu_log_dir = self.original_inforu_log_dir
         self.app_module.inforu_log_path = self.original_inforu_log_path
+        self.app_module.PAIS_NOTIFICATION_FROM = self.original_pais_notification_from
         if self.original_vercel is None:
             os.environ.pop("VERCEL", None)
         else:
@@ -704,7 +785,7 @@ class SupportTicketsTestCase(unittest.TestCase):
             "created_at_display": "08/07/2026 09:00",
             "creator": "Admin",
             "ticket_type": "׳©׳™׳¨׳•׳×",
-            "service_type": "׳׳₪׳¢׳ ׳”׳₪׳™׳¡",
+            "service_type": self.app_module.TICKET_BOARD_DEFAULTS["pais"]["name"],
             "domain": "",
             "priority": "Medium",
             "description": "",
@@ -1154,6 +1235,109 @@ class SupportTicketsTestCase(unittest.TestCase):
         payload = response.get_json()
         self.assertEqual(payload["ticket"]["status"], "נכשל")
         self.assertEqual(payload["ticket"]["details"]["failure_notes"], "לא הצליח")
+
+    def test_pais_coordination_status_can_skip_nastia_email(self):
+        tickets = self.app_module.load_support_tickets()
+        tickets.append({
+            "id": 2,
+            "board_slug": "pais",
+            "created_at": "2026-07-08T09:00:00+03:00",
+            "created_at_display": "08/07/2026 09:00",
+            "creator": "Admin",
+            "ticket_type": "׳©׳™׳¨׳•׳×",
+            "service_type": "׳׳₪׳¢׳ ׳”׳₪׳™׳¡",
+            "domain": "",
+            "priority": "Medium",
+            "description": "",
+            "solution": "",
+            "status": self.app_module.PAIS_STATUSES[0],
+            "assigned_to": "׳ ׳™׳¨",
+            "details": {
+                "terminal_number": "9988",
+                "address": "Email street 4",
+                "customer_request": "׳׳§׳•׳— ׳׳‘׳§׳© ׳×׳™׳׳•׳",
+                "actions_taken": "",
+            },
+            "attachments": [],
+            "updates": [],
+        })
+        self.app_module.save_support_tickets(tickets)
+        sent_tickets = []
+        self.app_module.send_nastia_ticket_email = lambda ticket: sent_tickets.append(ticket)
+
+        self.login("admin@nimbusip.com")
+        response = self.client.post(
+            "/support-tickets-update",
+            json={
+                "ticket_id": 2,
+                "status": self.app_module.PAIS_STATUSES[1],
+                "send_nastia_notification": False,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["ticket"]["status"], self.app_module.PAIS_STATUSES[1])
+        self.assertEqual(len(sent_tickets), 0)
+
+    def test_send_nastia_ticket_email_uses_configured_sender_full_details_and_subject_for_ticket_0043(self):
+        captured = {}
+        self.app_module.PAIS_NOTIFICATION_FROM = ""
+        self.app_module.SMTP_FROM = "nimbuskonan@gmail.com"
+        self.app_module.SMTP_USERNAME = "nimbuskonan@gmail.com"
+
+        def fake_send_plain_email(to_address, subject, body, from_address=None, html_body=None, attachments=None):
+            captured["to_address"] = to_address
+            captured["subject"] = subject
+            captured["body"] = body
+            captured["from_address"] = from_address
+            captured["html_body"] = html_body or ""
+            captured["attachments"] = attachments or []
+
+        self.app_module.send_plain_email = fake_send_plain_email
+
+        self.app_module.send_nastia_ticket_email({
+            "id": 43,
+            "service_type": "מפעל הפיס",
+            "created_at_display": "08/07/2026 09:00",
+            "creator": "Admin",
+            "status": "ממתין לתאום",
+            "assigned_to": "נסטיה",
+            "details": {
+                "terminal_number": "9988",
+                "address": "Email street 4",
+                "static_ip": "1.2.3.4",
+                "altura": "ALT-9",
+                "look_back": "Enabled",
+                "contact_name": "Dana",
+                "contact_phone": "0501234567",
+                "customer_request": "לקוח מבקש תיאום",
+                "actions_taken": "בוצע איפוס",
+                "coordinated_worker": "אסף",
+                "visit_date": "2026-07-09",
+                "visit_hour_from": "09:00",
+                "visit_hour_to": "10:00",
+                "failure_notes": "",
+            },
+        })
+
+        self.assertEqual(captured["to_address"], self.app_module.NASTIA_NOTIFICATION_EMAIL)
+        self.assertEqual(captured["from_address"], "nimbuskonan@gmail.com")
+        self.assertEqual(captured["subject"], "קריאת שירות מפעל הפיס מס' קריאה : #0043")
+        self.assertIn("מספר קריאה: #0043", captured["body"])
+        self.assertIn("סטטוס: ממתין לתאום", captured["body"])
+        self.assertIn("מספר מסוף: 9988", captured["body"])
+        self.assertIn("כתובת: Email street 4", captured["body"])
+        self.assertIn("כתובת IP סטטית: 1.2.3.4", captured["body"])
+        self.assertIn("פניית לקוח: לקוח מבקש תיאום", captured["body"])
+        self.assertIn("טכנאי מתואם: אסף", captured["body"])
+        self.assertIn("שעת ביקור עד: 10:00", captured["body"])
+        self.assertIn("הוספה ליומן Google: https://calendar.google.com/calendar/render?", captured["body"])
+        self.assertIn("<html", captured["html_body"])
+        self.assertIn("הוסף ליומן Google", captured["html_body"])
+        self.assertIn("https://calendar.google.com/calendar/render?", captured["html_body"])
+        self.assertIn("Email street 4", captured["html_body"])
+        self.assertEqual(captured["attachments"], [])
 
 if __name__ == "__main__":
     unittest.main()

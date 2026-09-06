@@ -7,6 +7,7 @@ let paisReportLoading = false;
 let autoRefreshTimer = null;
 let leaderboardWorkersVisible = false;
 let imagePreviewScale = 1;
+let coordinationEmailDecisionResolver = null;
 
 const AUTO_REFRESH_INTERVAL_MS = 10000;
 const NASTYA_EDITABLE_STATUSES = ["ממתין לתאום", "תואם", "בוצע", "נכשל"];
@@ -21,6 +22,7 @@ const technicianUsers = Array.isArray(supportTicketsContext.technicianUsers) ? s
 const currentSupportUser = String(supportTicketsContext.currentSupportUser || "");
 const supportStatuses = Array.isArray(supportTicketsContext.supportStatuses) ? supportTicketsContext.supportStatuses : ["Waiting", "Done"];
 const paisStatuses = Array.isArray(supportTicketsContext.paisStatuses) ? supportTicketsContext.paisStatuses : ["ממתין", "ממתין לתאום", "תואם", "אין מענה", "בוצע", "נכשל"];
+const nastiaNotificationEmail = String(supportTicketsContext.nastiaNotificationEmail || "nastya@nimbusip.com");
 const pageMode = String(supportTicketsContext.pageMode || "board");
 const ticketQueue = String(supportTicketsContext.ticketQueue || "");
 const isNastyaUser = currentSupportUser === "נסטיה";
@@ -587,6 +589,7 @@ function syncPaisDetailVisitRange() {
 }
 
 async function savePaisDetail(ticketId) {
+  const currentTicket = getTicket(ticketId);
   const coordinatedWorkerField = document.getElementById("detail-coordinated-worker");
   const visitDateField = document.getElementById("detail-visit-date");
   const visitHourFromField = document.getElementById("detail-visit-hour-from");
@@ -651,6 +654,13 @@ async function savePaisDetail(ticketId) {
     }
   }
 
+  const movedToCoordination = currentTicket?.board_slug === "pais"
+    && nextStatus === "ממתין לתאום"
+    && currentTicket.status !== "ממתין לתאום";
+  if (movedToCoordination) {
+    payload.send_nastia_notification = await requestCoordinationEmailDecision();
+  }
+
   try {
     const res = await fetch("/support-tickets-update", {
       method: "POST",
@@ -660,6 +670,9 @@ async function savePaisDetail(ticketId) {
     const data = await res.json().catch(() => ({}));
     if (!res.ok || !data.ok) {
       throw new Error(data.message || "Save failed");
+    }
+    if (data?.ticket?.notification_error) {
+      throw new Error(`הסטטוס עודכן אבל שליחת המייל נכשלה: ${data.ticket.notification_error}`);
     }
     closeTicketDetail();
     await loadTickets();
@@ -779,6 +792,40 @@ function closeTicketDetail() {
   modal.setAttribute("aria-hidden", "true");
 }
 
+function openCoordinationEmailModal() {
+  const modal = document.getElementById("coordination-email-modal");
+  if (!modal) return;
+  modal.classList.add("open");
+  modal.setAttribute("aria-hidden", "false");
+}
+
+function closeCoordinationEmailModal() {
+  const modal = document.getElementById("coordination-email-modal");
+  if (!modal) return;
+  modal.classList.remove("open");
+  modal.setAttribute("aria-hidden", "true");
+}
+
+function resolveCoordinationEmailDecision(shouldSend) {
+  const resolver = coordinationEmailDecisionResolver;
+  coordinationEmailDecisionResolver = null;
+  closeCoordinationEmailModal();
+  if (resolver) {
+    resolver(Boolean(shouldSend));
+  }
+}
+
+function requestCoordinationEmailDecision() {
+  const target = document.getElementById("coordination-email-target");
+  if (target) {
+    target.textContent = nastiaNotificationEmail;
+  }
+  openCoordinationEmailModal();
+  return new Promise((resolve) => {
+    coordinationEmailDecisionResolver = resolve;
+  });
+}
+
 function clampImageScale(scale) {
   return Math.min(Math.max(scale, 1), 4);
 }
@@ -865,7 +912,7 @@ function submitTicketSearch() {
 }
 
 function hasOpenModal() {
-  return ["ticket-modal", "ticket-detail-modal", "image-modal"].some((id) => document.getElementById(id)?.classList.contains("open"));
+  return ["ticket-modal", "ticket-detail-modal", "coordination-email-modal", "image-modal"].some((id) => document.getElementById(id)?.classList.contains("open"));
 }
 
 async function runAutoRefresh() {
@@ -991,7 +1038,15 @@ function exportPaisReport() {
 }
 
 async function updateTicket(ticketId, changes) {
+  const currentTicket = getTicket(ticketId);
   const payload = { ticket_id: ticketId, ...changes };
+  const movedToCoordination = currentTicket?.board_slug === "pais"
+    && typeof changes.status === "string"
+    && changes.status === "ממתין לתאום"
+    && currentTicket.status !== "ממתין לתאום";
+  if (movedToCoordination) {
+    payload.send_nastia_notification = await requestCoordinationEmailDecision();
+  }
   const res = await fetch("/support-tickets-update", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -1000,6 +1055,9 @@ async function updateTicket(ticketId, changes) {
   const data = await res.json().catch(() => ({}));
   if (!res.ok || !data.ok) {
     alert(data.message || "Update failed");
+  }
+  if (data?.ticket?.notification_error) {
+    alert(`הסטטוס עודכן אבל שליחת המייל נכשלה:\n${data.ticket.notification_error}`);
   }
   await loadTickets();
   await loadPaisReport();
@@ -1378,6 +1436,12 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("ticket-detail-modal").addEventListener("click", (event) => {
     if (event.target.id === "ticket-detail-modal") closeTicketDetail();
   });
+  document.getElementById("close-coordination-email-modal")?.addEventListener("click", () => resolveCoordinationEmailDecision(false));
+  document.getElementById("coordination-email-send-btn")?.addEventListener("click", () => resolveCoordinationEmailDecision(true));
+  document.getElementById("coordination-email-skip-btn")?.addEventListener("click", () => resolveCoordinationEmailDecision(false));
+  document.getElementById("coordination-email-modal")?.addEventListener("click", (event) => {
+    if (event.target.id === "coordination-email-modal") resolveCoordinationEmailDecision(false);
+  });
   document.getElementById("close-image-modal").addEventListener("click", closeImagePreview);
   document.getElementById("image-modal").addEventListener("click", (event) => {
     if (event.target.id === "image-modal") closeImagePreview();
@@ -1418,6 +1482,10 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
   document.addEventListener("keydown", (event) => {
+    if (document.getElementById("coordination-email-modal")?.classList.contains("open") && event.key === "Escape") {
+      resolveCoordinationEmailDecision(false);
+      return;
+    }
     if (!document.getElementById("image-modal")?.classList.contains("open")) return;
     if (event.key === "Escape") {
       closeImagePreview();

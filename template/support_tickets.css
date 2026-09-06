@@ -863,6 +863,76 @@ textarea {
   direction: rtl;
 }
 
+.confirm-card {
+  width: min(440px, 100%);
+  border-radius: 12px;
+  background: #fbfaf7;
+  padding: 20px;
+  box-shadow: 0 22px 48px rgba(35, 32, 27, 0.28);
+  direction: rtl;
+}
+
+.confirm-card header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.confirm-card header p,
+.confirm-card header h2,
+.confirm-copy {
+  margin: 0;
+}
+
+.confirm-card header p {
+  color: #7b7267;
+  font-size: 12px;
+  font-weight: 800;
+  margin-bottom: 6px;
+}
+
+.confirm-card header h2 {
+  font-size: 24px;
+  line-height: 1.3;
+}
+
+.confirm-email-target {
+  margin-top: 8px;
+  direction: ltr;
+  unicode-bidi: embed;
+  font-size: 24px;
+  line-height: 1.3;
+  font-weight: 800;
+  color: #1f2f46;
+  text-align: left;
+}
+
+.confirm-copy {
+  margin-top: 14px;
+  color: #5f574d;
+  line-height: 1.6;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+}
+
+.secondary-btn {
+  min-height: 40px;
+  border: 1px solid #d8cfc1;
+  border-radius: 8px;
+  padding: 0 14px;
+  background: #fff;
+  color: #2f312d;
+  cursor: pointer;
+  font-weight: 800;
+}
+
 .ticket-detail-card header {
   display: flex;
   justify-content: space-between;
