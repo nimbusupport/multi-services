@@ -449,6 +449,48 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertEqual(payload["services"][4]["entries"][0]["status"], "בוצע")
         self.assertEqual(payload["services"][5]["entries"][0]["status"], "לא הוגדר")
 
+    def test_recording_storage_data_excludes_not_interested_customers(self):
+        class FakeWorksheet:
+            def __init__(self, rows):
+                self.rows = rows
+
+            def get_all_values(self):
+                return self.rows
+
+        class FakeSpreadsheet:
+            def __init__(self, worksheets):
+                self.worksheets = worksheets
+
+            def worksheet(self, name):
+                return FakeWorksheet(self.worksheets[name])
+
+        class FakeGspreadClient:
+            def __init__(self, worksheets):
+                self.worksheets = worksheets
+
+            def open_by_key(self, key):
+                return FakeSpreadsheet(self.worksheets)
+
+        worksheets = {
+            self.app_module.RECORDING_STORAGE_SHEET_NAME: [
+                ["name", "id", "", "", "order_id", "", "", "status", "", "storage_size"],
+                ["Active Customer", "123", "", "", "1001", "", "", "ממתין", "", "50GB"],
+                ["Ignore Customer", "456", "", "", "1002", "", "", "לא מעוניין", "", "100GB"],
+                ["Done Customer", "789", "", "", "1003", "", "", "בוצע", "", "200GB"],
+            ],
+        }
+        self.app_module.get_gspread_client = lambda: FakeGspreadClient(worksheets)
+
+        self.login("admin@nimbusip.com")
+        response = self.client.get("/recording-storage-data")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(len(payload["customers"]), 1)
+        self.assertEqual(payload["customers"][0]["name"], "Active Customer")
+        self.assertEqual(payload["customers"][0]["status"], "ממתין")
+
     def test_can_create_pais_ticket_without_description_solution(self):
         self.login("admin@nimbusip.com")
         response = self.client.post(

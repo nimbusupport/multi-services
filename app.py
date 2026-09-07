@@ -209,6 +209,7 @@ COL_K = 11         # K
 
 STATUS_PENDING = "\u05de\u05de\u05ea\u05d9\u05df"
 STATUS_DONE = "\u05d1\u05d5\u05e6\u05e2"
+STATUS_NOT_INTERESTED = "\u05dc\u05d0 \u05de\u05e2\u05d5\u05e0\u05d9\u05d9\u05df"
 K_REQUIRED_VALUE = "\u05dc\u05e7\u05d5\u05d7 \u05d4\u05d5\u05ea\u05e7\u05df"
 
 # ENV
@@ -4836,7 +4837,7 @@ def get_recording_storage_customers(include_domains=False):
         status = row[7].strip() if len(row) >= 8 else ""
         storage_size = row[9].strip() if len(row) >= 10 else ""
 
-        if is_done_status(status):
+        if is_done_status(status) or status == STATUS_NOT_INTERESTED:
             continue
 
         domain = ""
