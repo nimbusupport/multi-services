@@ -591,7 +591,7 @@ class SupportTicketsTestCase(unittest.TestCase):
         ticket_folder = os.path.join(self.screens_dir, "TicketID0001")
         self.assertFalse(os.path.exists(os.path.join(ticket_folder, "example.jpg")))
 
-    def test_pais_coordination_status_sends_nastia_email(self):
+    def test_pais_coordination_status_only_moves_ticket_to_nastia_queue(self):
         tickets = self.app_module.load_support_tickets()
         tickets.append({
             "id": 2,
@@ -630,9 +630,9 @@ class SupportTicketsTestCase(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(sent_tickets), 1)
-        self.assertEqual(sent_tickets[0]["details"]["terminal_number"], "9988")
-        self.assertEqual(sent_tickets[0]["details"]["customer_request"], "לקוח מבקש תיאום")
+        payload = response.get_json()
+        self.assertEqual(payload["ticket"]["status"], "ממתין לתאום")
+        self.assertEqual(len(sent_tickets), 0)
 
     def test_extended_assignee_list_is_available(self):
         self.assertIn("איציק", self.app_module.SUPPORT_USERS)
@@ -1278,7 +1278,7 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertEqual(payload["ticket"]["status"], "נכשל")
         self.assertEqual(payload["ticket"]["details"]["failure_notes"], "לא הצליח")
 
-    def test_pais_coordination_status_can_skip_nastia_email(self):
+    def test_nastya_coordination_save_sends_email_only_after_worker_and_visit_are_set(self):
         tickets = self.app_module.load_support_tickets()
         tickets.append({
             "id": 2,
@@ -1313,14 +1313,35 @@ class SupportTicketsTestCase(unittest.TestCase):
             json={
                 "ticket_id": 2,
                 "status": self.app_module.PAIS_STATUSES[1],
-                "send_nastia_notification": False,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(sent_tickets), 0)
+
+        self.login("nastya@nimbusip.com", "tygeydfuyw5t3g")
+        response = self.client.post(
+            "/support-tickets-update",
+            json={
+                "ticket_id": 2,
+                "details": {
+                    "actions_taken": "",
+                    "coordinated_worker": "אסף",
+                    "visit_date": "2026-07-09",
+                    "visit_hour_from": "09:00",
+                    "visit_hour_to": "10:00",
+                    "failure_notes": "",
+                },
+                "send_nastia_notification": True,
             },
         )
 
         self.assertEqual(response.status_code, 200)
         payload = response.get_json()
-        self.assertEqual(payload["ticket"]["status"], self.app_module.PAIS_STATUSES[1])
-        self.assertEqual(len(sent_tickets), 0)
+        self.assertEqual(payload["ticket"]["status"], "תואם")
+        self.assertEqual(len(sent_tickets), 1)
+        self.assertEqual(sent_tickets[0]["details"]["coordinated_worker"], "אסף")
+        self.assertEqual(sent_tickets[0]["details"]["visit_date"], "2026-07-09")
 
     def test_send_nastia_ticket_email_uses_configured_sender_full_details_and_subject_for_ticket_0043(self):
         captured = {}
@@ -1379,7 +1400,26 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertIn("הוסף ליומן Google", captured["html_body"])
         self.assertIn("https://calendar.google.com/calendar/render?", captured["html_body"])
         self.assertIn("Email street 4", captured["html_body"])
+        self.assertIn("add=assafh%40nimbusip.com", captured["body"])
+        self.assertIn("add=assafh%40nimbusip.com", captured["html_body"])
         self.assertEqual(captured["attachments"], [])
+
+    def test_golan_coordination_calendar_link_includes_worker_guest_email(self):
+        calendar_link = self.app_module.build_pais_google_calendar_link({
+            "id": 44,
+            "details": {
+                "terminal_number": "1234",
+                "address": "Calendar road 8",
+                "customer_request": "Need visit",
+                "coordinated_worker": "גולן",
+                "visit_date": "2026-07-10",
+                "visit_hour_from": "11:00",
+                "visit_hour_to": "12:00",
+            },
+        })
+
+        self.assertIsNotNone(calendar_link)
+        self.assertIn("add=golan%40nimbusip.com", calendar_link)
 
 if __name__ == "__main__":
     unittest.main()

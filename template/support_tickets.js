@@ -7,7 +7,6 @@ let paisReportLoading = false;
 let autoRefreshTimer = null;
 let leaderboardWorkersVisible = false;
 let imagePreviewScale = 1;
-let coordinationEmailDecisionResolver = null;
 let sendSuccessToastTimer = null;
 
 const AUTO_REFRESH_INTERVAL_MS = 10000;
@@ -23,10 +22,9 @@ const technicianUsers = Array.isArray(supportTicketsContext.technicianUsers) ? s
 const currentSupportUser = String(supportTicketsContext.currentSupportUser || "");
 const supportStatuses = Array.isArray(supportTicketsContext.supportStatuses) ? supportTicketsContext.supportStatuses : ["Waiting", "Done"];
 const paisStatuses = Array.isArray(supportTicketsContext.paisStatuses) ? supportTicketsContext.paisStatuses : ["ממתין", "ממתין לתאום", "תואם", "אין מענה", "בוצע", "נכשל"];
-const nastiaNotificationEmail = String(supportTicketsContext.nastiaNotificationEmail || "nastya@nimbusip.com");
 const pageMode = String(supportTicketsContext.pageMode || "board");
 const ticketQueue = String(supportTicketsContext.ticketQueue || "");
-const isNastyaUser = currentSupportUser === "נסטיה";
+const isNastyaQueuePage = pageMode === "nastia" || ticketQueue === "nastia";
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -101,7 +99,7 @@ function displayTicketStatus(ticket) {
 }
 
 function statusOptionsForTicket(ticket) {
-  if (ticket.board_slug === "pais" && isNastyaUser && NASTYA_EDITABLE_STATUSES.includes(ticket.status)) {
+  if (ticket.board_slug === "pais" && isNastyaQueuePage && NASTYA_EDITABLE_STATUSES.includes(ticket.status)) {
     const options = [
       { value: ticket.status, label: displayTicketStatus(ticket) },
       ...NASTYA_FINAL_STATUSES
@@ -119,7 +117,7 @@ function statusOptionsForTicket(ticket) {
 }
 
 function canNastyaEditPaisInlineStatus(ticket) {
-  return ticket.board_slug === "pais" && isNastyaUser && NASTYA_EDITABLE_STATUSES.includes(ticket.status);
+  return ticket.board_slug === "pais" && isNastyaQueuePage && NASTYA_EDITABLE_STATUSES.includes(ticket.status);
 }
 
 function ticketDetails(ticket) {
@@ -380,8 +378,8 @@ function renderTickets(tickets, users) {
         ${escapeHtml(ticket.creator)}<br>${escapeHtml(ticketListTimestamp(ticket))}
         ${coordinationText ? `<div class="ticket-meta-note">${escapeHtml(coordinationText)}</div>` : ""}
       </div>
-      <select class="assignee-select" data-ticket-id="${ticket.id}" ${isNastyaUser && ticket.board_slug === "pais" ? "disabled" : ""}>${assigneeOptions}</select>
-      <select class="status-select" data-ticket-id="${ticket.id}" ${(isNastyaUser && ticket.board_slug === "pais" && !canNastyaEditPaisInlineStatus(ticket)) ? "disabled" : ""}>${statusOptionsForTicket(ticket)}</select>
+      <select class="assignee-select" data-ticket-id="${ticket.id}" ${isNastyaQueuePage && ticket.board_slug === "pais" ? "disabled" : ""}>${assigneeOptions}</select>
+      <select class="status-select" data-ticket-id="${ticket.id}" ${(isNastyaQueuePage && ticket.board_slug === "pais" && !canNastyaEditPaisInlineStatus(ticket)) ? "disabled" : ""}>${statusOptionsForTicket(ticket)}</select>
       <div class="ticket-actions">
         <span class="pill ${statusClass}">${escapeHtml(displayTicketStatus(ticket))}</span>
         <span class="pill ${priorityClass(ticket.priority || "Medium")}">${escapeHtml(ticket.priority || "Medium")}</span>
@@ -488,7 +486,7 @@ function detailSection(title, value) {
 
 function renderPaisDetailSections(ticket) {
   const details = ticketDetails(ticket);
-  const isCoordinatorView = isNastyaUser;
+  const isCoordinatorView = isNastyaQueuePage;
   const technicianOptions = ['<option value="">בחר עובד</option>']
     .concat(technicianUsers.map((user) => `<option value="${escapeHtml(user)}" ${details.coordinated_worker === user ? "selected" : ""}>${escapeHtml(user)}</option>`))
     .join("");
@@ -591,6 +589,7 @@ function syncPaisDetailVisitRange() {
 
 async function savePaisDetail(ticketId) {
   const currentTicket = getTicket(ticketId);
+  const currentDetails = ticketDetails(currentTicket);
   const coordinatedWorkerField = document.getElementById("detail-coordinated-worker");
   const visitDateField = document.getElementById("detail-visit-date");
   const visitHourFromField = document.getElementById("detail-visit-hour-from");
@@ -628,7 +627,7 @@ async function savePaisDetail(ticketId) {
   clearCoordinationValidation();
   if (button) button.disabled = true;
 
-  if (isNastyaUser && !isFinalStatus) {
+  if (isNastyaQueuePage && !isFinalStatus) {
     if (!coordinationPayload.coordinated_worker) {
       setFieldInvalid(coordinatedWorkerField, true);
       if (message) message.textContent = "לא נבחר טכנאי מטפל";
@@ -655,11 +654,10 @@ async function savePaisDetail(ticketId) {
     }
   }
 
-  const movedToCoordination = currentTicket?.board_slug === "pais"
-    && nextStatus === "ממתין לתאום"
-    && currentTicket.status !== "ממתין לתאום";
-  if (movedToCoordination) {
-    payload.send_nastia_notification = await requestCoordinationEmailDecision();
+  const coordinationChanged = ["coordinated_worker", "visit_date", "visit_hour_from", "visit_hour_to"]
+    .some((fieldName) => String(currentDetails?.[fieldName] || "") !== String(coordinationPayload[fieldName] || ""));
+  if (isNastyaQueuePage && shouldMarkCoordinated && coordinationChanged) {
+    payload.send_nastia_notification = true;
   }
   const willShowSendSuccess = payload.send_nastia_notification === true;
 
@@ -797,20 +795,6 @@ function closeTicketDetail() {
   modal.setAttribute("aria-hidden", "true");
 }
 
-function openCoordinationEmailModal() {
-  const modal = document.getElementById("coordination-email-modal");
-  if (!modal) return;
-  modal.classList.add("open");
-  modal.setAttribute("aria-hidden", "false");
-}
-
-function closeCoordinationEmailModal() {
-  const modal = document.getElementById("coordination-email-modal");
-  if (!modal) return;
-  modal.classList.remove("open");
-  modal.setAttribute("aria-hidden", "true");
-}
-
 function openNotificationErrorModal(message) {
   const modal = document.getElementById("notification-error-modal");
   const messageHost = document.getElementById("notification-error-message");
@@ -841,26 +825,6 @@ function showSendSuccessToast() {
     toast.classList.remove("visible");
     toast.setAttribute("aria-hidden", "true");
   }, 5000);
-}
-
-function resolveCoordinationEmailDecision(shouldSend) {
-  const resolver = coordinationEmailDecisionResolver;
-  coordinationEmailDecisionResolver = null;
-  closeCoordinationEmailModal();
-  if (resolver) {
-    resolver(Boolean(shouldSend));
-  }
-}
-
-function requestCoordinationEmailDecision() {
-  const target = document.getElementById("coordination-email-target");
-  if (target) {
-    target.textContent = nastiaNotificationEmail;
-  }
-  openCoordinationEmailModal();
-  return new Promise((resolve) => {
-    coordinationEmailDecisionResolver = resolve;
-  });
 }
 
 function clampImageScale(scale) {
@@ -949,7 +913,7 @@ function submitTicketSearch() {
 }
 
 function hasOpenModal() {
-  return ["ticket-modal", "ticket-detail-modal", "coordination-email-modal", "notification-error-modal", "image-modal"].some((id) => document.getElementById(id)?.classList.contains("open"));
+  return ["ticket-modal", "ticket-detail-modal", "notification-error-modal", "image-modal"].some((id) => document.getElementById(id)?.classList.contains("open"));
 }
 
 async function runAutoRefresh() {
@@ -1075,15 +1039,7 @@ function exportPaisReport() {
 }
 
 async function updateTicket(ticketId, changes) {
-  const currentTicket = getTicket(ticketId);
   const payload = { ticket_id: ticketId, ...changes };
-  const movedToCoordination = currentTicket?.board_slug === "pais"
-    && typeof changes.status === "string"
-    && changes.status === "ממתין לתאום"
-    && currentTicket.status !== "ממתין לתאום";
-  if (movedToCoordination) {
-    payload.send_nastia_notification = await requestCoordinationEmailDecision();
-  }
   const willShowSendSuccess = payload.send_nastia_notification === true;
   const res = await fetch("/support-tickets-update", {
     method: "POST",
@@ -1477,12 +1433,6 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("ticket-detail-modal").addEventListener("click", (event) => {
     if (event.target.id === "ticket-detail-modal") closeTicketDetail();
   });
-  document.getElementById("close-coordination-email-modal")?.addEventListener("click", () => resolveCoordinationEmailDecision(false));
-  document.getElementById("coordination-email-send-btn")?.addEventListener("click", () => resolveCoordinationEmailDecision(true));
-  document.getElementById("coordination-email-skip-btn")?.addEventListener("click", () => resolveCoordinationEmailDecision(false));
-  document.getElementById("coordination-email-modal")?.addEventListener("click", (event) => {
-    if (event.target.id === "coordination-email-modal") resolveCoordinationEmailDecision(false);
-  });
   document.getElementById("close-notification-error-modal")?.addEventListener("click", closeNotificationErrorModal);
   document.getElementById("notification-error-close-btn")?.addEventListener("click", closeNotificationErrorModal);
   document.getElementById("notification-error-modal")?.addEventListener("click", (event) => {
@@ -1528,10 +1478,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
   document.addEventListener("keydown", (event) => {
-    if (document.getElementById("coordination-email-modal")?.classList.contains("open") && event.key === "Escape") {
-      resolveCoordinationEmailDecision(false);
-      return;
-    }
     if (document.getElementById("notification-error-modal")?.classList.contains("open") && event.key === "Escape") {
       closeNotificationErrorModal();
       return;

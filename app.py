@@ -321,6 +321,10 @@ PAIS_NOTIFICATION_FROM = (
     or os.environ.get("NASTIA_NOTIFICATION_FROM")
     or ""
 ).strip()
+PAIS_CALENDAR_GUEST_EMAILS = {
+    "גולן": "golan@nimbusip.com",
+    "אסף": "assafh@nimbusip.com",
+}
 SMTP_HOST = (os.environ.get("SMTP_HOST") or "").strip()
 SMTP_PORT = int((os.environ.get("SMTP_PORT") or "587").strip())
 SMTP_USERNAME = (os.environ.get("SMTP_USERNAME") or "").strip()
@@ -1419,19 +1423,36 @@ def send_plain_email(to_address, subject, body, from_address=None, html_body=Non
         smtp.send_message(message)
 
 
-def should_notify_nastia(previous_ticket, updated_ticket):
+def pais_ticket_has_complete_coordination_details(ticket):
+    details = ticket.get("details") or {}
+    return all([
+        (details.get("coordinated_worker") or "").strip(),
+        (details.get("visit_date") or "").strip(),
+        (details.get("visit_hour_from") or "").strip(),
+        (details.get("visit_hour_to") or "").strip(),
+    ])
+
+
+def pais_coordination_details_changed(previous_ticket, updated_ticket):
+    previous_details = (previous_ticket or {}).get("details") or {}
+    updated_details = (updated_ticket or {}).get("details") or {}
+    fields = ("coordinated_worker", "visit_date", "visit_hour_from", "visit_hour_to")
+    return any(
+        (previous_details.get(field_name) or "").strip() != (updated_details.get(field_name) or "").strip()
+        for field_name in fields
+    )
+
+
+def should_notify_nastia(previous_ticket, updated_ticket, enabled=False):
+    if not enabled:
+        return False
     if (updated_ticket.get("board_slug") or "").strip().lower() != "pais":
         return False
 
-    previous_ticket = previous_ticket or {}
-    previous_status = (previous_ticket.get("status") or "").strip()
-    updated_status = (updated_ticket.get("status") or "").strip()
-    previous_assignee = (previous_ticket.get("assigned_to") or "").strip()
-    updated_assignee = (updated_ticket.get("assigned_to") or "").strip()
-
-    moved_to_coordination = updated_status == "ממתין לתאום" and previous_status != "ממתין לתאום"
-    assigned_to_nastia = updated_assignee == "נסטיה" and previous_assignee != "נסטיה"
-    return moved_to_coordination or assigned_to_nastia
+    return pais_ticket_has_complete_coordination_details(updated_ticket) and pais_coordination_details_changed(
+        previous_ticket,
+        updated_ticket,
+    )
 
 
 def _pais_email_value(value):
@@ -1462,6 +1483,7 @@ def build_pais_google_calendar_link(ticket):
     customer_request = (details.get("customer_request") or "").strip()
     address = (details.get("address") or "").strip()
     coordinated_worker = (details.get("coordinated_worker") or "").strip()
+    guest_email = PAIS_CALENDAR_GUEST_EMAILS.get(coordinated_worker, "")
     description_lines = [
         f"מספר קריאה: {ticket_label}",
         f"מספר מסוף: {terminal_number or '-'}",
@@ -1481,6 +1503,8 @@ def build_pais_google_calendar_link(ticket):
         "location": location,
         "ctz": "Asia/Jerusalem",
     }
+    if guest_email:
+        params["add"] = guest_email
     query = "&".join(f"{key}={quote(str(value), safe='')}" for key, value in params.items())
     return f"https://calendar.google.com/calendar/render?{query}"
 
@@ -1604,9 +1628,7 @@ def send_nastia_ticket_email(ticket):
 
 
 def maybe_send_nastia_ticket_notification(previous_ticket, updated_ticket, enabled=True):
-    if not enabled:
-        return ""
-    if not should_notify_nastia(previous_ticket, updated_ticket):
+    if not should_notify_nastia(previous_ticket, updated_ticket, enabled=enabled):
         return ""
     try:
         send_nastia_ticket_email(updated_ticket)
@@ -1666,9 +1688,6 @@ def create_support_ticket_record(ticket_payload, attachment_files=None, attachme
         tickets = load_support_tickets()
         tickets.append(ticket)
         save_support_tickets(tickets)
-        notification_error = maybe_send_nastia_ticket_notification({}, ticket)
-        if notification_error:
-            ticket["notification_error"] = notification_error
         return ticket
 
     response = _supabase_request(
@@ -1700,9 +1719,6 @@ def create_support_ticket_record(ticket_payload, attachment_files=None, attachme
         raise
     ticket["attachments"] = attachments
     ticket["updates"] = []
-    notification_error = maybe_send_nastia_ticket_notification({}, ticket)
-    if notification_error:
-        ticket["notification_error"] = notification_error
     return ticket
 
 
@@ -1973,7 +1989,7 @@ def update_support_ticket_record(ticket_id, changes, actor):
         notification_error = maybe_send_nastia_ticket_notification(
             previous_ticket,
             normalized_ticket,
-            enabled=bool(changes.get("send_nastia_notification", True)),
+            enabled=bool(changes.get("send_nastia_notification", False)),
         )
         if notification_error:
             normalized_ticket["notification_error"] = notification_error
@@ -2003,7 +2019,7 @@ def update_support_ticket_record(ticket_id, changes, actor):
     notification_error = maybe_send_nastia_ticket_notification(
         previous_ticket,
         normalized_ticket,
-        enabled=bool(changes.get("send_nastia_notification", True)),
+        enabled=bool(changes.get("send_nastia_notification", False)),
     )
     if notification_error:
         normalized_ticket["notification_error"] = notification_error
