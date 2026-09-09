@@ -282,7 +282,7 @@ FULL_ACCESS_PAGES = {
     "pais_tickets",
     "nastia_tickets",
 }
-TICKETS_ONLY_ALLOWED_PAGES = {"support_tickets", "pais_tickets"}
+TICKETS_ONLY_ALLOWED_PAGES = {"support_tickets", "pais_tickets", "nastia_tickets"}
 LOGIN_USER_OVERRIDES = {
     "nastya@nimbusip.com": {
         "password": "tygeydfuyw5t3g",
@@ -1443,6 +1443,17 @@ def pais_coordination_details_changed(previous_ticket, updated_ticket):
     )
 
 
+def actor_can_trigger_nastia_notification(actor):
+    return (actor or "").strip() in COORDINATION_USERS
+
+
+def request_targets_nastia_queue(changes):
+    payload = changes or {}
+    source_page_mode = (payload.get("source_page_mode") or payload.get("page_mode") or "").strip().lower()
+    source_ticket_queue = (payload.get("source_ticket_queue") or payload.get("ticket_queue") or "").strip().lower()
+    return source_page_mode == "nastia" or source_ticket_queue == "nastia"
+
+
 def should_notify_nastia(previous_ticket, updated_ticket, enabled=False):
     if not enabled:
         return False
@@ -1627,15 +1638,22 @@ def send_nastia_ticket_email(ticket):
     )
 
 
-def maybe_send_nastia_ticket_notification(previous_ticket, updated_ticket, enabled=True):
-    if not should_notify_nastia(previous_ticket, updated_ticket, enabled=enabled):
-        return ""
+def process_nastia_ticket_notification(previous_ticket, updated_ticket, enabled=True):
+    attempted = should_notify_nastia(previous_ticket, updated_ticket, enabled=enabled)
+    result = {
+        "notification_attempted": attempted,
+        "notification_sent": False,
+        "notification_error": "",
+    }
+    if not attempted:
+        return result
     try:
         send_nastia_ticket_email(updated_ticket)
-        return ""
+        result["notification_sent"] = True
     except Exception as exc:
         print(f"Nastia notification email warning for ticket {updated_ticket.get('id')}: {exc}")
-        return str(exc)
+        result["notification_error"] = str(exc)
+    return result
 
 
 def find_support_ticket(tickets, ticket_id):
@@ -1647,6 +1665,17 @@ def find_support_ticket(tickets, ticket_id):
         if int(ticket.get("id") or 0) == number:
             return ticket
     return None
+
+
+def nastia_notification_enabled(previous_ticket, updated_ticket, actor, changes):
+    if bool((changes or {}).get("send_nastia_notification", False)):
+        return True
+    if not (pais_ticket_has_complete_coordination_details(updated_ticket) and pais_coordination_details_changed(
+        previous_ticket,
+        updated_ticket,
+    )):
+        return False
+    return actor_can_trigger_nastia_notification(actor) or request_targets_nastia_queue(changes)
 
 
 def delete_support_attachments(ticket):
@@ -1986,13 +2015,13 @@ def update_support_ticket_record(ticket_id, changes, actor):
             }
             for update in updates
         ]})
-        notification_error = maybe_send_nastia_ticket_notification(
+        notification_enabled = nastia_notification_enabled(previous_ticket, normalized_ticket, actor, changes)
+        notification_result = process_nastia_ticket_notification(
             previous_ticket,
             normalized_ticket,
-            enabled=bool(changes.get("send_nastia_notification", False)),
+            enabled=notification_enabled,
         )
-        if notification_error:
-            normalized_ticket["notification_error"] = notification_error
+        normalized_ticket.update(notification_result)
         return normalized_ticket
 
     persisted = load_support_tickets()
@@ -2016,13 +2045,13 @@ def update_support_ticket_record(ticket_id, changes, actor):
         })
     save_support_tickets(persisted)
     normalized_ticket = normalize_support_ticket(local_ticket)
-    notification_error = maybe_send_nastia_ticket_notification(
+    notification_enabled = nastia_notification_enabled(previous_ticket, normalized_ticket, actor, changes)
+    notification_result = process_nastia_ticket_notification(
         previous_ticket,
         normalized_ticket,
-        enabled=bool(changes.get("send_nastia_notification", False)),
+        enabled=notification_enabled,
     )
-    if notification_error:
-        normalized_ticket["notification_error"] = notification_error
+    normalized_ticket.update(notification_result)
     return normalized_ticket
 
 

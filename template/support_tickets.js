@@ -611,6 +611,8 @@ async function savePaisDetail(ticketId) {
 
   const payload = {
     ticket_id: ticketId,
+    source_page_mode: pageMode,
+    source_ticket_queue: ticketQueue,
     status: nextStatus,
     details: {
       actions_taken: document.getElementById("detail-actions-taken")?.value || "",
@@ -659,7 +661,6 @@ async function savePaisDetail(ticketId) {
   if (isNastyaQueuePage && shouldMarkCoordinated && coordinationChanged) {
     payload.send_nastia_notification = true;
   }
-  const willShowSendSuccess = payload.send_nastia_notification === true;
 
   try {
     const res = await fetch("/support-tickets-update", {
@@ -673,8 +674,10 @@ async function savePaisDetail(ticketId) {
     }
     if (data?.ticket?.notification_error) {
       openNotificationErrorModal(`הסטטוס עודכן אבל שליחת המייל נכשלה: ${data.ticket.notification_error}`);
-    } else if (willShowSendSuccess) {
+    } else if (data?.ticket?.notification_sent === true) {
       showSendSuccessToast();
+    } else if (payload.send_nastia_notification === true) {
+      openNotificationErrorModal("הסטטוס עודכן אבל טריגר המייל לא הופעל.");
     }
     closeTicketDetail();
     await loadTickets();
@@ -1039,8 +1042,12 @@ function exportPaisReport() {
 }
 
 async function updateTicket(ticketId, changes) {
-  const payload = { ticket_id: ticketId, ...changes };
-  const willShowSendSuccess = payload.send_nastia_notification === true;
+  const payload = {
+    ticket_id: ticketId,
+    source_page_mode: pageMode,
+    source_ticket_queue: ticketQueue,
+    ...changes,
+  };
   const res = await fetch("/support-tickets-update", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -1053,8 +1060,10 @@ async function updateTicket(ticketId, changes) {
   }
   if (data?.ticket?.notification_error) {
     openNotificationErrorModal(`הסטטוס עודכן אבל שליחת המייל נכשלה: ${data.ticket.notification_error}`);
-  } else if (willShowSendSuccess) {
+  } else if (data?.ticket?.notification_sent === true) {
     showSendSuccessToast();
+  } else if (payload.send_nastia_notification === true) {
+    openNotificationErrorModal("הסטטוס עודכן אבל טריגר המייל לא הופעל.");
   }
   await loadTickets();
   await loadPaisReport();

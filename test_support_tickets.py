@@ -1319,6 +1319,7 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(sent_tickets), 0)
 
+        self.client.get("/logout")
         self.login("nastya@nimbusip.com", "tygeydfuyw5t3g")
         response = self.client.post(
             "/support-tickets-update",
@@ -1332,7 +1333,6 @@ class SupportTicketsTestCase(unittest.TestCase):
                     "visit_hour_to": "10:00",
                     "failure_notes": "",
                 },
-                "send_nastia_notification": True,
             },
         )
 
@@ -1342,6 +1342,120 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertEqual(len(sent_tickets), 1)
         self.assertEqual(sent_tickets[0]["details"]["coordinated_worker"], "אסף")
         self.assertEqual(sent_tickets[0]["details"]["visit_date"], "2026-07-09")
+
+    def test_admin_coordination_save_without_flag_does_not_send_email(self):
+        tickets = self.app_module.load_support_tickets()
+        tickets.append({
+            "id": 2,
+            "board_slug": "pais",
+            "created_at": "2026-07-08T09:00:00+03:00",
+            "created_at_display": "08/07/2026 09:00",
+            "creator": "Admin",
+            "ticket_type": "שירות",
+            "service_type": "מפעל הפיס",
+            "domain": "",
+            "priority": "Medium",
+            "description": "",
+            "solution": "",
+            "status": self.app_module.PAIS_STATUSES[1],
+            "assigned_to": "ניר",
+            "details": {
+                "terminal_number": "9988",
+                "address": "Email street 4",
+                "customer_request": "לקוח מבקש תיאום",
+                "actions_taken": "",
+                "coordinated_worker": "",
+                "visit_date": "",
+                "visit_hour_from": "",
+                "visit_hour_to": "",
+                "failure_notes": "",
+            },
+            "attachments": [],
+            "updates": [],
+        })
+        self.app_module.save_support_tickets(tickets)
+        sent_tickets = []
+        self.app_module.send_nastia_ticket_email = lambda ticket: sent_tickets.append(ticket)
+
+        self.login("admin@nimbusip.com")
+        response = self.client.post(
+            "/support-tickets-update",
+            json={
+                "ticket_id": 2,
+                "details": {
+                    "actions_taken": "",
+                    "coordinated_worker": "אסף",
+                    "visit_date": "2026-07-09",
+                    "visit_hour_from": "09:00",
+                    "visit_hour_to": "10:00",
+                    "failure_notes": "",
+                },
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["ticket"]["status"], "תואם")
+        self.assertEqual(len(sent_tickets), 0)
+
+    def test_admin_coordination_save_from_nastya_queue_sends_email_without_flag(self):
+        tickets = self.app_module.load_support_tickets()
+        tickets.append({
+            "id": 2,
+            "board_slug": "pais",
+            "created_at": "2026-07-08T09:00:00+03:00",
+            "created_at_display": "08/07/2026 09:00",
+            "creator": "Admin",
+            "ticket_type": "שירות",
+            "service_type": "מפעל הפיס",
+            "domain": "",
+            "priority": "Medium",
+            "description": "",
+            "solution": "",
+            "status": self.app_module.PAIS_STATUSES[1],
+            "assigned_to": "ניר",
+            "details": {
+                "terminal_number": "9988",
+                "address": "Email street 4",
+                "customer_request": "לקוח מבקש תיאום",
+                "actions_taken": "",
+                "coordinated_worker": "",
+                "visit_date": "",
+                "visit_hour_from": "",
+                "visit_hour_to": "",
+                "failure_notes": "",
+            },
+            "attachments": [],
+            "updates": [],
+        })
+        self.app_module.save_support_tickets(tickets)
+        sent_tickets = []
+        self.app_module.send_nastia_ticket_email = lambda ticket: sent_tickets.append(ticket)
+
+        self.login("admin@nimbusip.com")
+        response = self.client.post(
+            "/support-tickets-update",
+            json={
+                "ticket_id": 2,
+                "source_page_mode": "nastia",
+                "source_ticket_queue": "nastia",
+                "details": {
+                    "actions_taken": "",
+                    "coordinated_worker": "אסף",
+                    "visit_date": "2026-07-09",
+                    "visit_hour_from": "09:00",
+                    "visit_hour_to": "10:00",
+                    "failure_notes": "",
+                },
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["ticket"]["status"], "תואם")
+        self.assertTrue(payload["ticket"]["notification_attempted"])
+        self.assertTrue(payload["ticket"]["notification_sent"])
+        self.assertEqual(len(sent_tickets), 1)
 
     def test_send_nastia_ticket_email_uses_configured_sender_full_details_and_subject_for_ticket_0043(self):
         captured = {}
