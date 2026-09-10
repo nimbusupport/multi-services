@@ -48,7 +48,7 @@ create table if not exists public.support_app_users (
   email text primary key,
   password_hash text not null,
   role text not null default 'user',
-  allowed_pages jsonb not null default '["home","sms","bot","f2m","recording_storage","human_service","record","features_report","support_tickets","pais_tickets","nastia_tickets"]'::jsonb,
+  allowed_pages jsonb not null default '["home","sms","bot","f2m","recording_storage","human_service","record","features_report","support_tickets","pais_tickets","hot_tickets","nastia_tickets"]'::jsonb,
   active boolean not null default true,
   created_at timestamptz not null default timezone('asia/jerusalem', now())
 );
@@ -63,7 +63,8 @@ create index if not exists support_app_users_active_idx on public.support_app_us
 insert into public.ticket_boards (slug, name, icon_path, route_path, sort_order)
 values
   ('support', 'Support Tickets', '', '/support-tickets', 1),
-  ('pais', 'מפעל הפיס', '/picture/pais.png', '/pais-tickets', 2)
+  ('pais', 'מפעל הפיס', '/picture/pais.png', '/pais-tickets', 2),
+  ('hot-kiryot', 'הוט קריות', 'https://hot.nimbusip.com/themes/default/images/logo.png', '/hot-kiryot-tickets', 3)
 on conflict (slug) do update
 set
   name = excluded.name,
@@ -76,7 +77,7 @@ values (
   'nastya@nimbusip.com',
   'scrypt:32768:8:1$53nNPimyycdSlojs$076085ce5b96ec5783150231fd74b66b213986b05bf9507ac2b6219b0c10a969efd0ac6f99c32223cf997dc8500a2345b5502e22c676dac29958ca5a40ceeb95',
   'tickets_only',
-  '["support_tickets","pais_tickets"]'::jsonb,
+  '["support_tickets","pais_tickets","hot_tickets"]'::jsonb,
   true
 )
 on conflict (email) do update

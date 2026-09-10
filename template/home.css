@@ -456,6 +456,8 @@ body.dashboard-page .brand-word {
 .theme-storage .card-icon { color: #2e5bc4; }
 .theme-pais .card-hero { background: linear-gradient(135deg, #1f4372 0%, #3a6aac 60%, #5888cc 100%); }
 .theme-pais .card-icon { color: #285189; }
+.theme-hot .card-hero { background: linear-gradient(135deg, #8f1d1f 0%, #c93438 58%, #ef5f48 100%); }
+.theme-hot .card-icon { color: #aa2629; }
 .theme-lookup .card-hero { background: linear-gradient(135deg, #0c6454 0%, #158f73 56%, #1eb38e 100%); }
 .theme-lookup .card-icon { color: #147b64; }
 .theme-coord .card-hero { background: linear-gradient(135deg, #9a1f24 0%, #cc3538 56%, #e75457 100%); }

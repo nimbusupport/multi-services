@@ -280,9 +280,10 @@ FULL_ACCESS_PAGES = {
     "features_report",
     "support_tickets",
     "pais_tickets",
+    "hot_tickets",
     "nastia_tickets",
 }
-TICKETS_ONLY_ALLOWED_PAGES = {"support_tickets", "pais_tickets", "nastia_tickets"}
+TICKETS_ONLY_ALLOWED_PAGES = {"support_tickets", "pais_tickets", "hot_tickets", "nastia_tickets"}
 LOGIN_USER_OVERRIDES = {
     "nastya@nimbusip.com": {
         "password": "tygeydfuyw5t3g",
@@ -338,6 +339,9 @@ TICKET_BOARD_DEFAULTS = {
         "name": "Support Tickets",
         "icon_path": "",
         "route_path": "/support-tickets",
+        "workflow": "support",
+        "paste_template": "",
+        "report_enabled": False,
         "sort_order": 1,
     },
     "pais": {
@@ -345,7 +349,20 @@ TICKET_BOARD_DEFAULTS = {
         "name": "מפעל הפיס",
         "icon_path": "/picture/pais.png",
         "route_path": "/pais-tickets",
+        "workflow": "coordination",
+        "paste_template": "pais",
+        "report_enabled": True,
         "sort_order": 2,
+    },
+    "hot-kiryot": {
+        "slug": "hot-kiryot",
+        "name": "הוט קריות",
+        "icon_path": "https://hot.nimbusip.com/themes/default/images/logo.png",
+        "route_path": "/hot-kiryot-tickets",
+        "workflow": "coordination",
+        "paste_template": "hot-kiryot",
+        "report_enabled": False,
+        "sort_order": 3,
     },
 }
 SERVICE_ACTIVITY = {
@@ -358,6 +375,7 @@ SERVICE_ACTIVITY = {
     "human_service": {},
     "support_tickets": {},
     "pais_tickets": {},
+    "hot_tickets": {},
     "nastia_tickets": {},
 }
 
@@ -469,6 +487,10 @@ def normalize_allowed_pages(values):
         return sorted(FULL_ACCESS_PAGES)
     if "all" in normalized:
         return sorted(FULL_ACCESS_PAGES)
+    # Backfill newly added ticket boards for users whose stored allowed_pages
+    # were saved before these board keys existed.
+    if normalized.intersection({"support_tickets", "pais_tickets", "nastia_tickets", "hot_tickets"}):
+        normalized.add("hot_tickets")
     return sorted(normalized)
 
 
@@ -495,6 +517,8 @@ def first_allowed_route():
         return url_for("support_tickets_page")
     if "pais_tickets" in allowed:
         return url_for("pais_tickets_page")
+    if "hot_tickets" in allowed:
+        return url_for("hot_kiryot_tickets_page")
     if "configuration" in allowed:
         return url_for("configuration_page")
     return url_for("home")
@@ -510,6 +534,8 @@ def route_page_key(path):
         return "support_tickets"
     if normalized_path.startswith("/pais-tickets"):
         return "pais_tickets"
+    if normalized_path.startswith("/hot-kiryot-tickets"):
+        return "hot_tickets"
     if normalized_path.startswith("/nastia-tickets"):
         return "nastia_tickets"
     if normalized_path.startswith("/dashboard-data") or normalized_path == "/home":
@@ -546,7 +572,7 @@ def enforce_page_access():
 
 
 def pais_ticket_is_coordination(ticket):
-    if (ticket.get("board_slug") or "").strip().lower() != "pais":
+    if not board_supports_coordination((ticket.get("board_slug") or "").strip().lower()):
         return False
     details = ticket.get("details") or {}
     return (
@@ -586,11 +612,32 @@ def get_ticket_board(board_slug):
     return dict(TICKET_BOARD_DEFAULTS["support"])
 
 
+def board_supports_coordination(board_slug):
+    return get_ticket_board(board_slug).get("workflow") == "coordination"
+
+
+def board_has_coordination_report(board_slug):
+    return bool(get_ticket_board(board_slug).get("report_enabled"))
+
+
+def board_statuses(board_slug):
+    return PAIS_STATUSES if board_supports_coordination(board_slug) else SUPPORT_STATUSES
+
+
+def board_page_key(board_slug):
+    normalized_board_slug = (board_slug or "").strip().lower()
+    if normalized_board_slug == "pais":
+        return "pais_tickets"
+    if normalized_board_slug == "hot-kiryot":
+        return "hot_tickets"
+    return "support_tickets"
+
+
 def support_page_key(board_slug, queue_slug=""):
     normalized_queue = (queue_slug or "").strip().lower()
     if normalized_queue == "nastia":
         return "nastia_tickets"
-    return "pais_tickets" if (board_slug or "").strip().lower() == "pais" else "support_tickets"
+    return board_page_key(board_slug)
 
 
 def _supabase_headers(prefer=None):
@@ -1037,7 +1084,18 @@ def load_ticket_boards():
         rows = response.json()
         if not isinstance(rows, list) or not rows:
             return default_ticket_boards()
-        return rows
+        merged_rows = []
+        seen_slugs = set()
+        for row in rows:
+            board_slug = (row.get("slug") or "").strip().lower()
+            default_board = TICKET_BOARD_DEFAULTS.get(board_slug, {})
+            merged_rows.append({**default_board, **row})
+            if board_slug:
+                seen_slugs.add(board_slug)
+        for board_slug, default_board in TICKET_BOARD_DEFAULTS.items():
+            if board_slug not in seen_slugs:
+                merged_rows.append(dict(default_board))
+        return sorted(merged_rows, key=lambda item: item.get("sort_order", 999))
     except Exception:
         return default_ticket_boards()
 
@@ -1255,7 +1313,9 @@ def visit_slot_is_valid(visit_hour_from, visit_hour_to):
 def coordination_slot_conflicts(ticket_id, coordinated_worker, visit_date, visit_hour_from, visit_hour_to):
     if not coordinated_worker or not visit_date or not visit_hour_from or not visit_hour_to:
         return None
-    for ticket in load_support_tickets("pais"):
+    for ticket in load_support_tickets():
+        if not board_supports_coordination(ticket.get("board_slug")):
+            continue
         if int(ticket.get("id") or 0) == int(ticket_id or 0):
             continue
         details = ticket.get("details") or {}
@@ -1423,7 +1483,7 @@ def send_plain_email(to_address, subject, body, from_address=None, html_body=Non
         smtp.send_message(message)
 
 
-def pais_ticket_has_complete_coordination_details(ticket):
+def coordination_ticket_has_complete_details(ticket):
     details = ticket.get("details") or {}
     return all([
         (details.get("coordinated_worker") or "").strip(),
@@ -1433,7 +1493,7 @@ def pais_ticket_has_complete_coordination_details(ticket):
     ])
 
 
-def pais_coordination_details_changed(previous_ticket, updated_ticket):
+def coordination_ticket_details_changed(previous_ticket, updated_ticket):
     previous_details = (previous_ticket or {}).get("details") or {}
     updated_details = (updated_ticket or {}).get("details") or {}
     fields = ("coordinated_worker", "visit_date", "visit_hour_from", "visit_hour_to")
@@ -1457,10 +1517,10 @@ def request_targets_nastia_queue(changes):
 def should_notify_nastia(previous_ticket, updated_ticket, enabled=False):
     if not enabled:
         return False
-    if (updated_ticket.get("board_slug") or "").strip().lower() != "pais":
+    if not board_supports_coordination((updated_ticket.get("board_slug") or "").strip().lower()):
         return False
 
-    return pais_ticket_has_complete_coordination_details(updated_ticket) and pais_coordination_details_changed(
+    return coordination_ticket_has_complete_details(updated_ticket) and coordination_ticket_details_changed(
         previous_ticket,
         updated_ticket,
     )
@@ -1472,6 +1532,100 @@ def _pais_email_value(value):
 
 def _pais_email_multiline_html(value):
     return xml_escape(_pais_email_value(value)).replace("\n", "<br>")
+
+
+def coordination_ticket_email_context(ticket):
+    board_slug = (ticket.get("board_slug") or "").strip().lower()
+    board = get_ticket_board(board_slug)
+    board_name = (ticket.get("service_type") or board["name"]).strip() or board["name"]
+    ticket_label = ticket.get("ticket_id") or f"#{int(ticket.get('id') or 0):04d}"
+    details = ticket.get("details") or {}
+
+    top_rows = [
+        ("מספר קריאה", ticket_label),
+        ("לוח", board_name),
+        ("נוצר בתאריך", ticket.get("created_at_display")),
+        ("יוצר", ticket.get("creator")),
+        ("סטטוס", ticket.get("status")),
+        ("משויך ל", ticket.get("assigned_to")),
+    ]
+
+    if board_slug == "hot-kiryot":
+        detail_rows = [
+            ("שעה ותאריך פתיחת תקלה", details.get("opened_at")),
+            ("מספר קריאה שהוקצה", details.get("call_number")),
+            ("תומך במוקד שפתח פניה / טיפל בלקוח", details.get("opened_by")),
+            ("ח.פ. / מס לקוח", details.get("customer_id")),
+            ("שם לקוח", details.get("customer_name")),
+            ("קוד קו / ID-LINK", details.get("line_code")),
+            ("כתובת", details.get("address")),
+            ("איש קשר במקום", details.get("on_site_contact")),
+            ("איש קשר טכני מטעם הלקוח", details.get("technical_contact")),
+            ("שעות פעילות / זמינות לקוח", details.get("availability_hours")),
+            ("בדיקות שבוצעו מרחוק", details.get("remote_checks")),
+            ("מהות התקלה", details.get("issue_summary")),
+            ("פעולות / בדיקות שטכנאי צריך לבצע", details.get("technician_actions")),
+            ("סוג ציוד קיים אצל הלקוח", details.get("equipment_type")),
+            ("הסכם שירות ואיזה ציוד באחריות הוט", details.get("service_agreement")),
+            ("פרטים טכניים נוספים", details.get("technical_notes")),
+            ("טכנאי מתואם", details.get("coordinated_worker")),
+            ("תאריך ביקור", details.get("visit_date")),
+            ("שעת ביקור מ", details.get("visit_hour_from")),
+            ("שעת ביקור עד", details.get("visit_hour_to")),
+            ("הערות כשל", details.get("failure_notes")),
+        ]
+        calendar_description_lines = [
+            f"מספר קריאה: {ticket_label}",
+            f"לקוח: {(details.get('customer_name') or '').strip() or '-'}",
+            f"מהות התקלה: {(details.get('issue_summary') or '').strip() or '-'}",
+            f"כתובת: {(details.get('address') or '').strip() or '-'}",
+            f"טכנאי מתואם: {(details.get('coordinated_worker') or '').strip() or '-'}",
+        ]
+        calendar_summary = f"קריאת שירות הוט קריות {ticket_label}"
+        location = (details.get("address") or "").strip() or "הוט קריות"
+        subject = f"קריאת שירות הוט קריות מס' קריאה : {ticket_label}"
+    else:
+        terminal_number = (details.get("terminal_number") or "").strip()
+        detail_rows = [
+            ("מספר מסוף", details.get("terminal_number")),
+            ("כתובת", details.get("address")),
+            ("כתובת IP סטטית", details.get("static_ip")),
+            ("אלטורה", details.get("altura")),
+            ("Loop Back", details.get("look_back")),
+            ("איש קשר", details.get("contact_name")),
+            ("טלפון איש קשר", details.get("contact_phone")),
+            ("פניית לקוח", details.get("customer_request")),
+            ("פעולות", details.get("actions_taken")),
+            ("טכנאי מתואם", details.get("coordinated_worker")),
+            ("תאריך ביקור", details.get("visit_date")),
+            ("שעת ביקור מ", details.get("visit_hour_from")),
+            ("שעת ביקור עד", details.get("visit_hour_to")),
+            ("הערות כשל", details.get("failure_notes")),
+        ]
+        calendar_description_lines = [
+            f"מספר קריאה: {ticket_label}",
+            f"מספר מסוף: {terminal_number or '-'}",
+            f"פניית לקוח: {(details.get('customer_request') or '').strip() or '-'}",
+            f"כתובת: {(details.get('address') or '').strip() or '-'}",
+            f"טכנאי מתואם: {(details.get('coordinated_worker') or '').strip() or '-'}",
+        ]
+        calendar_summary = f"קריאת שירות מפעל הפיס {ticket_label}"
+        location = (details.get("address") or "").strip() or "מפעל הפיס"
+        subject = f"קריאת שירות מפעל הפיס מס' קריאה : {ticket_label}"
+
+    return {
+        "board_name": board_name,
+        "ticket_label": ticket_label,
+        "top_rows": top_rows,
+        "detail_rows": detail_rows,
+        "calendar_description_lines": calendar_description_lines,
+        "calendar_summary": calendar_summary,
+        "location": location,
+        "subject": subject,
+        "body_lines": [f"{label}: {_pais_email_value(value)}" for label, value in top_rows]
+        + [""]
+        + [f"{label}: {_pais_email_value(value)}" for label, value in detail_rows],
+    }
 
 
 def build_pais_google_calendar_link(ticket):
@@ -1489,29 +1643,17 @@ def build_pais_google_calendar_link(ticket):
     except ValueError:
         return None
 
-    ticket_label = ticket.get("ticket_id") or f"#{int(ticket.get('id') or 0):04d}"
-    terminal_number = (details.get("terminal_number") or "").strip()
-    customer_request = (details.get("customer_request") or "").strip()
-    address = (details.get("address") or "").strip()
+    email_context = coordination_ticket_email_context(ticket)
     coordinated_worker = (details.get("coordinated_worker") or "").strip()
     guest_email = PAIS_CALENDAR_GUEST_EMAILS.get(coordinated_worker, "")
-    description_lines = [
-        f"מספר קריאה: {ticket_label}",
-        f"מספר מסוף: {terminal_number or '-'}",
-        f"פניית לקוח: {customer_request or '-'}",
-        f"כתובת: {address or '-'}",
-        f"טכנאי מתואם: {coordinated_worker or '-'}",
-    ]
-    summary = f"קריאת שירות מפעל הפיס {ticket_label}"
-    location = address or "מפעל הפיס"
     start_utc = start_at.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     end_utc = end_at.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     params = {
         "action": "TEMPLATE",
-        "text": summary,
+        "text": email_context["calendar_summary"],
         "dates": f"{start_utc}/{end_utc}",
-        "details": "\n".join(description_lines),
-        "location": location,
+        "details": "\n".join(email_context["calendar_description_lines"]),
+        "location": email_context["location"],
         "ctz": "Asia/Jerusalem",
     }
     if guest_email:
@@ -1521,32 +1663,7 @@ def build_pais_google_calendar_link(ticket):
 
 
 def build_pais_email_html(ticket, calendar_link=None):
-    details = ticket.get("details") or {}
-    ticket_label = ticket.get("ticket_id") or f"#{int(ticket.get('id') or 0):04d}"
-    top_rows = [
-        ("מספר קריאה", ticket_label),
-        ("לוח", (ticket.get("service_type") or "מפעל הפיס").strip() or "מפעל הפיס"),
-        ("נוצר בתאריך", ticket.get("created_at_display")),
-        ("יוצר", ticket.get("creator")),
-        ("סטטוס", ticket.get("status")),
-        ("משויך ל", ticket.get("assigned_to")),
-    ]
-    detail_rows = [
-        ("מספר מסוף", details.get("terminal_number")),
-        ("כתובת", details.get("address")),
-        ("כתובת IP סטטית", details.get("static_ip")),
-        ("אלטורה", details.get("altura")),
-        ("Loop Back", details.get("look_back")),
-        ("איש קשר", details.get("contact_name")),
-        ("טלפון איש קשר", details.get("contact_phone")),
-        ("פניית לקוח", details.get("customer_request")),
-        ("פעולות", details.get("actions_taken")),
-        ("טכנאי מתואם", details.get("coordinated_worker")),
-        ("תאריך ביקור", details.get("visit_date")),
-        ("שעת ביקור מ", details.get("visit_hour_from")),
-        ("שעת ביקור עד", details.get("visit_hour_to")),
-        ("הערות כשל", details.get("failure_notes")),
-    ]
+    email_context = coordination_ticket_email_context(ticket)
 
     def render_rows(rows):
         return "".join(
@@ -1575,16 +1692,16 @@ def build_pais_email_html(ticket, calendar_link=None):
   <body style="margin:0;padding:24px;background:#f5f1ea;font-family:Arial,'Noto Sans Hebrew',sans-serif;color:#1f2f46;">
     <div style="max-width:760px;margin:0 auto;background:#fbfaf7;border:1px solid #ded5c9;border-radius:14px;overflow:hidden;">
       <div style="padding:20px 24px;background:linear-gradient(135deg,#f9f3e8 0%,#eef4ff 100%);border-bottom:1px solid #ded5c9;">
-        <div style="font-size:13px;color:#7b7267;font-weight:700;">מפעל הפיס</div>
-        <div style="font-size:28px;font-weight:800;margin-top:6px;">{xml_escape(ticket_label)}</div>
+        <div style="font-size:13px;color:#7b7267;font-weight:700;">{xml_escape(email_context['board_name'])}</div>
+        <div style="font-size:28px;font-weight:800;margin-top:6px;">{xml_escape(email_context['ticket_label'])}</div>
       </div>
       <div style="padding:24px;">
         <table role="presentation" style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #e7dfd2;border-radius:10px;overflow:hidden;">
-          {render_rows(top_rows)}
+          {render_rows(email_context["top_rows"])}
         </table>
         <div style="height:16px;"></div>
         <table role="presentation" style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #e7dfd2;border-radius:10px;overflow:hidden;">
-          {render_rows(detail_rows)}
+          {render_rows(email_context["detail_rows"])}
         </table>
         {calendar_button}
       </div>
@@ -1595,35 +1712,9 @@ def build_pais_email_html(ticket, calendar_link=None):
 
 
 def send_nastia_ticket_email(ticket):
-    details = ticket.get("details") or {}
-    terminal_number = (details.get("terminal_number") or "").strip()
-    ticket_label = ticket.get("ticket_id") or f"#{int(ticket.get('id') or 0):04d}"
-    subject = f"קריאת שירות מפעל הפיס מס' קריאה : {ticket_label}"
+    email_context = coordination_ticket_email_context(ticket)
     calendar_link = build_pais_google_calendar_link(ticket)
-    body_lines = [
-        f"מספר קריאה: {ticket_label}",
-        f"לוח: {(ticket.get('service_type') or 'מפעל הפיס').strip() or 'מפעל הפיס'}",
-        f"נוצר בתאריך: {(ticket.get('created_at_display') or '').strip() or '-'}",
-        f"יוצר: {(ticket.get('creator') or '').strip() or '-'}",
-        f"סטטוס: {(ticket.get('status') or '').strip() or '-'}",
-        f"משויך ל: {(ticket.get('assigned_to') or '').strip() or '-'}",
-        "",
-        f"מספר מסוף: {terminal_number or '-'}",
-        f"כתובת: {(details.get('address') or '').strip() or '-'}",
-        f"כתובת IP סטטית: {(details.get('static_ip') or '').strip() or '-'}",
-        f"אלטורה: {(details.get('altura') or '').strip() or '-'}",
-        f"Loop Back: {(details.get('look_back') or '').strip() or '-'}",
-        f"איש קשר: {(details.get('contact_name') or '').strip() or '-'}",
-        f"טלפון איש קשר: {(details.get('contact_phone') or '').strip() or '-'}",
-        "",
-        f"פניית לקוח: {(details.get('customer_request') or '').strip() or '-'}",
-        f"פעולות: {(details.get('actions_taken') or '').strip() or '-'}",
-        f"טכנאי מתואם: {(details.get('coordinated_worker') or '').strip() or '-'}",
-        f"תאריך ביקור: {(details.get('visit_date') or '').strip() or '-'}",
-        f"שעת ביקור מ: {(details.get('visit_hour_from') or '').strip() or '-'}",
-        f"שעת ביקור עד: {(details.get('visit_hour_to') or '').strip() or '-'}",
-        f"הערות כשל: {(details.get('failure_notes') or '').strip() or '-'}",
-    ]
+    body_lines = list(email_context["body_lines"])
     if calendar_link:
         body_lines.extend([
             "",
@@ -1631,7 +1722,7 @@ def send_nastia_ticket_email(ticket):
         ])
     send_plain_email(
         NASTIA_NOTIFICATION_EMAIL,
-        subject,
+        email_context["subject"],
         "\n".join(body_lines),
         from_address=PAIS_NOTIFICATION_FROM or SMTP_FROM or SMTP_USERNAME,
         html_body=build_pais_email_html(ticket, calendar_link=calendar_link),
@@ -1670,7 +1761,7 @@ def find_support_ticket(tickets, ticket_id):
 def nastia_notification_enabled(previous_ticket, updated_ticket, actor, changes):
     if bool((changes or {}).get("send_nastia_notification", False)):
         return True
-    if not (pais_ticket_has_complete_coordination_details(updated_ticket) and pais_coordination_details_changed(
+    if not (coordination_ticket_has_complete_details(updated_ticket) and coordination_ticket_details_changed(
         previous_ticket,
         updated_ticket,
     )):
@@ -1700,6 +1791,25 @@ def delete_support_attachments(ticket):
             shutil.rmtree(folder_path, ignore_errors=True)
 
 
+def ensure_ticket_board_exists(board_slug):
+    board = get_ticket_board(board_slug)
+    normalized_board_slug = (board.get("slug") or "").strip().lower()
+    if not normalized_board_slug or normalized_board_slug == "support":
+        return
+    _supabase_request(
+        "POST",
+        "ticket_boards",
+        json_body=[{
+            "slug": board["slug"],
+            "name": board["name"],
+            "icon_path": board.get("icon_path") or "",
+            "route_path": board["route_path"],
+            "sort_order": int(board.get("sort_order") or 1),
+        }],
+        prefer="resolution=merge-duplicates,return=minimal",
+    )
+
+
 def create_support_ticket_record(ticket_payload, attachment_files=None, attachment_file=None):
     attachment_files = [file_storage for file_storage in (attachment_files or []) if file_storage and file_storage.filename]
     if attachment_file and attachment_file.filename:
@@ -1719,6 +1829,7 @@ def create_support_ticket_record(ticket_payload, attachment_files=None, attachme
         save_support_tickets(tickets)
         return ticket
 
+    ensure_ticket_board_exists(ticket_payload.get("board_slug"))
     response = _supabase_request(
         "POST",
         "support_tickets",
@@ -1957,6 +2068,7 @@ def update_support_ticket_record(ticket_id, changes, actor):
     if "details" in changes and isinstance(changes.get("details"), dict):
         detail_fields = {
             "actions_taken",
+            "technician_actions",
             "coordinated_worker",
             "visit_date",
             "visit_hour_from",
@@ -3573,9 +3685,16 @@ def dashboard_data():
             "pais_tickets",
             lambda: len([t for t in load_support_tickets("pais") if support_ticket_is_open(t)]),
         ),
+        "hot_tickets": service_dashboard_entry(
+            "hot_tickets",
+            lambda: len([t for t in load_support_tickets("hot-kiryot") if support_ticket_is_open(t)]),
+        ),
         "nastia_tickets": service_dashboard_entry(
             "nastia_tickets",
-            lambda: len([t for t in load_support_tickets("pais") if (t.get("status") or "").strip() == "ממתין לתאום"]),
+            lambda: len([
+                t for t in load_support_tickets()
+                if board_supports_coordination(t.get("board_slug")) and (t.get("status") or "").strip() == "ממתין לתאום"
+            ]),
         ),
     })
 
@@ -3601,7 +3720,7 @@ def render_ticket_board_page(board_slug):
         page_icon_path=board.get("icon_path") or "",
         ticket_queue="",
         show_create_button=True,
-        show_pais_report=board["slug"] == "pais",
+        show_pais_report=board_has_coordination_report(board["slug"]),
         service_types=SUPPORT_SERVICE_TYPES,
         ticket_types=SUPPORT_TICKET_TYPES,
         priorities=SUPPORT_PRIORITIES,
@@ -3611,6 +3730,7 @@ def render_ticket_board_page(board_slug):
         can_access_home="home" in allowed_pages,
         can_access_support="support_tickets" in allowed_pages,
         can_access_pais="pais_tickets" in allowed_pages,
+        can_access_hot="hot_tickets" in allowed_pages,
         can_access_nastia="nastia_tickets" in allowed_pages,
     )
 
@@ -3663,6 +3783,11 @@ def pais_tickets_page():
     return render_ticket_board_page("pais")
 
 
+@app.route("/hot-kiryot-tickets")
+def hot_kiryot_tickets_page():
+    return render_ticket_board_page("hot-kiryot")
+
+
 @app.route("/nastia-tickets")
 def nastia_tickets_page():
     if not session.get("logged_in"):
@@ -3695,6 +3820,7 @@ def nastia_tickets_page():
         can_access_home="home" in allowed_pages,
         can_access_support="support_tickets" in allowed_pages,
         can_access_pais="pais_tickets" in allowed_pages,
+        can_access_hot="hot_tickets" in allowed_pages,
         can_access_nastia="nastia_tickets" in allowed_pages,
     )
 
@@ -3747,6 +3873,14 @@ def support_tickets_data():
                     or search in str((t.get("details") or {}).get("address") or "").lower()
                 )
             ]
+        elif board_slug == "hot-kiryot":
+            filtered = [
+                t for t in filtered
+                if any(
+                    search in str((t.get("details") or {}).get(field_name) or "").lower()
+                    for field_name in ("call_number", "customer_name", "address", "line_code", "issue_summary")
+                )
+            ]
         else:
             filtered = [
                 t for t in filtered
@@ -3761,7 +3895,7 @@ def support_tickets_data():
         "current_user": current_support_user,
         "board": get_ticket_board(board_slug),
         "users": TECHNICIAN_SUPPORT_USERS,
-        "statuses": PAIS_STATUSES if board_slug == "pais" else SUPPORT_STATUSES,
+        "statuses": board_statuses(board_slug),
     })
 
 
@@ -3907,6 +4041,48 @@ def support_tickets_create():
         ticket_type = "שירות"
         description = ""
         solution = ""
+    elif board["slug"] == "hot-kiryot":
+        call_number = (request.form.get("call_number") or "").strip()
+        address = (request.form.get("address") or "").strip()
+        customer_name = (request.form.get("customer_name") or "").strip()
+        issue_summary = (request.form.get("issue_summary") or "").strip()
+        if not call_number:
+            return jsonify({"ok": False, "message": "מספר קריאה הוא שדה חובה"}), 400
+        if not address:
+            return jsonify({"ok": False, "message": "כתובת היא שדה חובה"}), 400
+        if not customer_name:
+            return jsonify({"ok": False, "message": "שם לקוח הוא שדה חובה"}), 400
+        if not issue_summary:
+            return jsonify({"ok": False, "message": "מהות התקלה היא שדה חובה"}), 400
+        details = {
+            "opened_at": (request.form.get("opened_at") or "").strip(),
+            "call_number": call_number,
+            "opened_by": (request.form.get("opened_by") or "").strip(),
+            "customer_id": (request.form.get("customer_id") or "").strip(),
+            "customer_name": customer_name,
+            "line_code": (request.form.get("line_code") or "").strip(),
+            "address": address,
+            "on_site_contact": (request.form.get("on_site_contact") or "").strip(),
+            "technical_contact": (request.form.get("technical_contact") or "").strip(),
+            "availability_hours": (request.form.get("availability_hours") or "").strip(),
+            "remote_checks": (request.form.get("remote_checks") or "").strip(),
+            "issue_summary": issue_summary,
+            "technician_actions": (request.form.get("technician_actions") or "").strip(),
+            "equipment_type": (request.form.get("equipment_type") or "").strip(),
+            "service_agreement": (request.form.get("service_agreement") or "").strip(),
+            "technical_notes": (request.form.get("technical_notes") or "").strip(),
+            "coordinated_worker": "",
+            "visit_date": "",
+            "visit_hour_from": "",
+            "visit_hour_to": "",
+            "failure_notes": "",
+        }
+        service_type = board["name"]
+        domain = ""
+        priority = "Medium"
+        ticket_type = "שירות"
+        description = ""
+        solution = ""
     else:
         if ticket_type not in SUPPORT_TICKET_TYPES:
             return jsonify({"ok": False, "message": "Invalid ticket type"}), 400
@@ -3928,7 +4104,7 @@ def support_tickets_create():
         "priority": priority,
         "description": description,
         "solution": solution,
-        "status": "ממתין" if board["slug"] == "pais" else "Waiting",
+        "status": "ממתין" if board_supports_coordination(board["slug"]) else "Waiting",
         "assigned_to": assigned_to,
         "details": details,
     }

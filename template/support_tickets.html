@@ -37,6 +37,9 @@
         {% if can_access_pais %}
         <a class="nav-link {% if ticket_board.slug == 'pais' and page_mode != 'nastia' %}active{% endif %}" href="/pais-tickets"><span class="nav-icon"><img class="nav-pais-icon" src="/picture/pais.png" alt=""></span><span class="nav-label">מפעל הפיס</span></a>
         {% endif %}
+        {% if can_access_hot %}
+        <a class="nav-link {% if ticket_board.slug == 'hot-kiryot' and page_mode != 'nastia' %}active{% endif %}" href="/hot-kiryot-tickets"><span class="nav-icon"><img class="nav-pais-icon" src="https://hot.nimbusip.com/themes/default/images/logo.png" alt=""></span><span class="nav-label">הוט קריות</span></a>
+        {% endif %}
         {% if can_access_nastia %}
         <a class="nav-link {% if page_mode == 'nastia' %}active{% endif %}" href="/nastia-tickets"><span class="nav-icon"><i class="fa-solid fa-user-clock"></i></span><span class="nav-label">נסטיה</span></a>
         {% endif %}
@@ -73,6 +76,12 @@
         <a class="ticket-board-link {% if ticket_board.slug == 'pais' and page_mode != 'nastia' %}active{% endif %}" href="/pais-tickets">
           <img src="/picture/pais.png" alt="">
           <span>מפעל הפיס</span>
+        </a>
+        {% endif %}
+        {% if can_access_hot %}
+        <a class="ticket-board-link {% if ticket_board.slug == 'hot-kiryot' and page_mode != 'nastia' %}active{% endif %}" href="/hot-kiryot-tickets">
+          <img src="https://hot.nimbusip.com/themes/default/images/logo.png" alt="">
+          <span>הוט קריות</span>
         </a>
         {% endif %}
         {% if can_access_nastia %}
@@ -171,10 +180,18 @@
             {% if can_access_pais %}
             <a class="menu-item" href="/pais-tickets"><img src="/picture/pais.png" alt=""><span>מפעל הפיס</span></a>
             {% endif %}
+            {% if can_access_hot %}
+            <a class="menu-item" href="/hot-kiryot-tickets"><img src="https://hot.nimbusip.com/themes/default/images/logo.png" alt=""><span>הוט קריות</span></a>
+            {% endif %}
           </div>
         </div>
         {% elif show_create_button %}
-        <button class="add-ticket-btn pais-btn" id="open-ticket-modal" type="button"><img src="/picture/pais.png" alt=""><span>Ticket חדש</span></button>
+        <button class="add-ticket-btn board-btn" id="open-ticket-modal" type="button">
+          {% if page_icon_path %}
+          <img src="{{ page_icon_path }}" alt="">
+          {% endif %}
+          <span>Ticket חדש</span>
+        </button>
         {% endif %}
       </header>
 
@@ -183,7 +200,7 @@
           <span>Status</span>
           <select id="status-filter">
             <option value="">All</option>
-            {% if ticket_board.slug == 'pais' %}
+            {% if ticket_board.workflow == 'coordination' %}
             <option value="ממתין">ממתין</option>
             <option value="ממתין לתאום">{% if page_mode == 'nastia' %}ממתין{% else %}ממתין לתאום{% endif %}</option>
             <option value="תואם">תואם</option>
@@ -225,7 +242,7 @@
         <label class="search-filter">
           <span>Search</span>
           <div class="search-input-wrap">
-            <input id="ticket-search" type="search" placeholder="{% if ticket_board.slug == 'pais' %}מסוף או כתובת{% else %}Search ticket, customer, text{% endif %}">
+            <input id="ticket-search" type="search" placeholder="{% if ticket_board.slug == 'pais' %}מסוף או כתובת{% elif ticket_board.slug == 'hot-kiryot' %}מספר קריאה, לקוח או כתובת{% else %}Search ticket, customer, text{% endif %}">
             <button class="icon-btn search-submit-btn" id="ticket-search-btn" type="submit" aria-label="Search tickets">
               <i class="fa-solid fa-magnifying-glass"></i>
             </button>
@@ -368,14 +385,14 @@
         <span>Solution</span>
         <textarea name="solution" rows="5"></textarea>
       </label>
-      {% else %}
+      {% elif ticket_board.slug == 'pais' %}
       <section class="detail-description paste-import-card">
         <h3>הדבקה מהירה</h3>
         <p>אפשר להדביק את כל הטקסט שקיבלתם, והמערכת תנסה למלא אוטומטית את השדות.</p>
-        <textarea id="pais-paste-source" rows="8" placeholder="מספר מסוף- 603884&#10;כתובת- שדרות אגם כנרת 6 נתניה&#10;כתובת סטטית- 10.63.129.49&#10;אלטורה- 10.222.19.0/28&#10;Loop back- 10.250.65.49/32&#10;איש קשר: מ.א ממתקים 0507500775&#10;פניית לקוח- ..."></textarea>
+        <textarea id="board-paste-source" rows="8" placeholder="מספר מסוף- 603884&#10;כתובת- שדרות אגם כנרת 6 נתניה&#10;כתובת סטטית- 10.63.129.49&#10;אלטורה- 10.222.19.0/28&#10;Loop back- 10.250.65.49/32&#10;איש קשר: מ.א ממתקים 0507500775&#10;פניית לקוח- ..."></textarea>
         <div class="detail-save-row">
-          <span id="pais-paste-message"></span>
-          <button class="create-ticket-btn" id="parse-pais-paste" type="button">מלא שדות</button>
+          <span id="board-paste-message"></span>
+          <button class="create-ticket-btn" id="parse-board-paste" type="button">מלא שדות</button>
         </div>
       </section>
       <div class="form-grid pais-grid">
@@ -426,6 +443,97 @@
       <label class="description-field">
         <span>פעולות__הערות</span>
         <textarea name="actions_taken" rows="4"></textarea>
+      </label>
+      {% else %}
+      <section class="detail-description paste-import-card">
+        <h3>הדבקה מהירה</h3>
+        <p>אפשר להדביק את כל גוף המייל, והמערכת תמלא את טופס הוט קריות.</p>
+        <textarea id="board-paste-source" rows="12" placeholder="טופס מילוי חובה לתאום טכנאי אינטגרציה / נימבוס&#10;שעה ותאריך פתיחת תקלה&#10;14:12 08.09&#10;מספר קריאה שהוקצה&#10;פניה - 275749117&#10;שם לקוח&#10;חיים&#10;כתובת לקוח&#10;האופה 1, נתניה&#10;מהות התקלה&#10;PANCODE לא עובד"></textarea>
+        <div class="detail-save-row">
+          <span id="board-paste-message"></span>
+          <button class="create-ticket-btn" id="parse-board-paste" type="button">מלא שדות</button>
+        </div>
+      </section>
+      <div class="form-grid pais-grid">
+        <label>
+          <span>שעה ותאריך פתיחת תקלה</span>
+          <input name="opened_at" type="text">
+        </label>
+        <label>
+          <span>מספר קריאה שהוקצה</span>
+          <input name="call_number" type="text" required>
+        </label>
+        <label>
+          <span>תומך במוקד שפתח פניה / טיפל בלקוח</span>
+          <input name="opened_by" type="text">
+        </label>
+        <label>
+          <span>ח.פ. / מס לקוח</span>
+          <input name="customer_id" type="text">
+        </label>
+        <label>
+          <span>שם לקוח</span>
+          <input name="customer_name" type="text" required>
+        </label>
+        <label>
+          <span>קוד קו / ID-LINK</span>
+          <input name="line_code" type="text">
+        </label>
+        <label>
+          <span>כתובת לקוח</span>
+          <input name="address" type="text" required>
+        </label>
+        <label>
+          <span>איש קשר במקום</span>
+          <input name="on_site_contact" type="text">
+        </label>
+        <label>
+          <span>איש קשר טכני מטעם הלקוח</span>
+          <input name="technical_contact" type="text">
+        </label>
+        <label>
+          <span>שעות פעילות / זמינות לקוח</span>
+          <input name="availability_hours" type="text">
+        </label>
+        <label>
+          <span>Assign</span>
+          <select name="assigned_to">
+            <option value="">Keep unassigned</option>
+            {% for user in support_users %}
+            <option value="{{ user }}">{{ user }}</option>
+            {% endfor %}
+          </select>
+        </label>
+      </div>
+
+      <label class="description-field">
+        <span>בדיקות שבוצעו מרחוק</span>
+        <textarea name="remote_checks" rows="3"></textarea>
+      </label>
+
+      <label class="description-field">
+        <span>מהות התקלה</span>
+        <textarea name="issue_summary" rows="3" required></textarea>
+      </label>
+
+      <label class="description-field">
+        <span>פעולות / בדיקות שטכנאי צריך לבצע</span>
+        <textarea name="technician_actions" rows="3"></textarea>
+      </label>
+
+      <label class="description-field">
+        <span>סוג ציוד קיים אצל הלקוח</span>
+        <textarea name="equipment_type" rows="2"></textarea>
+      </label>
+
+      <label class="description-field">
+        <span>הסכם שירות ואיזה ציוד באחריות הוט</span>
+        <textarea name="service_agreement" rows="2"></textarea>
+      </label>
+
+      <label class="description-field">
+        <span>פרטים טכניים נוספים שהטכנאי צריך להכיר</span>
+        <textarea name="technical_notes" rows="3"></textarea>
       </label>
       {% endif %}
 

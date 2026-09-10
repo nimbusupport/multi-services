@@ -57,6 +57,8 @@ async function loadDashboardData() {
     renderUsers("support_tickets", data?.support_tickets?.active_users);
     renderWaiting("pais_tickets", data?.pais_tickets?.waiting);
     renderUsers("pais_tickets", data?.pais_tickets?.active_users);
+    renderWaiting("hot_tickets", data?.hot_tickets?.waiting);
+    renderUsers("hot_tickets", data?.hot_tickets?.active_users);
     renderWaiting("nastia_tickets", data?.nastia_tickets?.waiting);
     renderUsers("nastia_tickets", data?.nastia_tickets?.active_users);
   } catch (err) {

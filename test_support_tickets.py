@@ -520,6 +520,122 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertEqual(payload["ticket"]["description"], "")
         self.assertEqual(payload["ticket"]["solution"], "")
 
+    def test_can_create_hot_kiryot_ticket_from_mail_fields(self):
+        self.login("admin@nimbusip.com")
+        response = self.client.post(
+            "/support-tickets-create",
+            data={
+                "board_slug": "hot-kiryot",
+                "opened_at": "14:12 08.09",
+                "call_number": "275749117",
+                "opened_by": "רוני",
+                "customer_id": "510571870",
+                "customer_name": "חיים",
+                "line_code": "887585-25018021",
+                "address": "האופה 1, נתניה",
+                "on_site_contact": "חיים 0524443593",
+                "technical_contact": "",
+                "availability_hours": "8:00-17:00",
+                "remote_checks": "בדיקות של מוקד נימבוס מול הלקוח",
+                "issue_summary": "PANCODE לא עובד",
+                "technician_actions": "בדיקות של מוקד נימבוס מול הלקוח",
+                "equipment_type": "-אינטרקום?",
+                "service_agreement": "",
+                "technical_notes": "",
+                "assigned_to": "גולן",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["ticket"]["board_slug"], "hot-kiryot")
+        self.assertEqual(payload["ticket"]["service_type"], "הוט קריות")
+        self.assertEqual(payload["ticket"]["status"], "ממתין")
+        self.assertEqual(payload["ticket"]["assigned_to"], "גולן")
+        self.assertEqual(payload["ticket"]["details"]["call_number"], "275749117")
+        self.assertEqual(payload["ticket"]["details"]["customer_name"], "חיים")
+        self.assertEqual(payload["ticket"]["details"]["issue_summary"], "PANCODE לא עובד")
+
+    def test_supabase_hot_ticket_creation_upserts_board_before_ticket_insert(self):
+        calls = []
+        original_request = self.app_module._supabase_request
+        self.app_module.SUPABASE_URL = "https://supabase.example"
+        self.app_module.SUPABASE_KEY = "service-key"
+
+        def fake_supabase_request(method, path, *, params=None, json_body=None, prefer=None):
+            calls.append({
+                "method": method,
+                "path": path,
+                "params": params,
+                "json_body": json_body,
+                "prefer": prefer,
+            })
+
+            class FakeResponse:
+                def __init__(self, payload):
+                    self._payload = payload
+
+                def json(self):
+                    return self._payload
+
+            if path == "ticket_boards":
+                return FakeResponse([])
+            if path == "support_tickets":
+                return FakeResponse([{
+                    "id": 22,
+                    "board_slug": "hot-kiryot",
+                    "created_at": "2026-07-08T09:00:00+03:00",
+                    "created_at_display": "08/07/2026 09:00",
+                    "creator": "Admin",
+                    "ticket_type": "שירות",
+                    "service_type": "הוט קריות",
+                    "domain": "",
+                    "priority": "Medium",
+                    "description": "",
+                    "solution": "",
+                    "status": "ממתין",
+                    "assigned_to": "גולן",
+                    "details": {
+                        "call_number": "275749117",
+                        "customer_name": "חיים",
+                        "address": "האופה 1, נתניה",
+                        "issue_summary": "PANCODE לא עובד",
+                    },
+                }])
+            raise AssertionError(f"Unexpected Supabase path: {path}")
+
+        self.app_module._supabase_request = fake_supabase_request
+        try:
+            ticket = self.app_module.create_support_ticket_record({
+                "created_at": "2026-07-08T09:00:00+03:00",
+                "created_at_display": "08/07/2026 09:00",
+                "creator": "Admin",
+                "board_slug": "hot-kiryot",
+                "ticket_type": "שירות",
+                "service_type": "הוט קריות",
+                "domain": "",
+                "priority": "Medium",
+                "description": "",
+                "solution": "",
+                "status": "ממתין",
+                "assigned_to": "גולן",
+                "details": {
+                    "call_number": "275749117",
+                    "customer_name": "חיים",
+                    "address": "האופה 1, נתניה",
+                    "issue_summary": "PANCODE לא עובד",
+                },
+            })
+        finally:
+            self.app_module._supabase_request = original_request
+
+        self.assertEqual(ticket["board_slug"], "hot-kiryot")
+        self.assertGreaterEqual(len(calls), 2)
+        self.assertEqual(calls[0]["path"], "ticket_boards")
+        self.assertEqual(calls[0]["json_body"][0]["slug"], "hot-kiryot")
+        self.assertEqual(calls[1]["path"], "support_tickets")
+
     def test_can_create_ticket_with_multiple_image_attachments(self):
         self.login("admin@nimbusip.com")
         response = self.client.post(
@@ -1039,6 +1155,50 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertIn("מוסטפה.א", self.app_module.TECHNICIAN_SUPPORT_USERS)
         self.assertIn("מוסטפה.ח", self.app_module.TECHNICIAN_SUPPORT_USERS)
 
+    def test_hot_search_uses_call_number_and_customer_name(self):
+        tickets = self.app_module.load_support_tickets()
+        tickets.append({
+            "id": 2,
+            "board_slug": "hot-kiryot",
+            "created_at": "2026-07-08T09:00:00+03:00",
+            "created_at_display": "08/07/2026 09:00",
+            "creator": "Admin",
+            "ticket_type": "שירות",
+            "service_type": "הוט קריות",
+            "domain": "",
+            "priority": "Medium",
+            "description": "",
+            "solution": "",
+            "status": "ממתין",
+            "assigned_to": "",
+            "details": {
+                "call_number": "275749117",
+                "customer_name": "חיים",
+                "address": "האופה 1, נתניה",
+                "issue_summary": "PANCODE לא עובד",
+            },
+            "attachments": [],
+            "updates": [],
+        })
+        self.app_module.save_support_tickets(tickets)
+
+        self.login("admin@nimbusip.com")
+        response = self.client.get("/support-tickets-data?board=hot-kiryot&search=275749117")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(len(payload["tickets"]), 1)
+        self.assertEqual(payload["tickets"][0]["details"]["customer_name"], "חיים")
+
+        response = self.client.get("/support-tickets-data?board=hot-kiryot&search=חיים")
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(len(payload["tickets"]), 1)
+
+    def test_normalize_allowed_pages_backfills_hot_ticket_access_for_existing_ticket_users(self):
+        normalized = self.app_module.normalize_allowed_pages(["support_tickets", "pais_tickets", "nastia_tickets"])
+        self.assertIn("hot_tickets", normalized)
+
     def test_limited_ticket_user_can_only_access_ticket_pages(self):
         response = self.login("nastya@nimbusip.com", "tygeydfuyw5t3g")
 
@@ -1534,6 +1694,68 @@ class SupportTicketsTestCase(unittest.TestCase):
 
         self.assertIsNotNone(calendar_link)
         self.assertIn("add=golan%40nimbusip.com", calendar_link)
+
+    def test_hot_coordination_changes_trigger_notification_email(self):
+        tickets = self.app_module.load_support_tickets()
+        tickets.append({
+            "id": 2,
+            "board_slug": "hot-kiryot",
+            "created_at": "2026-07-08T09:00:00+03:00",
+            "created_at_display": "08/07/2026 09:00",
+            "creator": "Admin",
+            "ticket_type": "שירות",
+            "service_type": "הוט קריות",
+            "domain": "",
+            "priority": "Medium",
+            "description": "",
+            "solution": "",
+            "status": "ממתין לתאום",
+            "assigned_to": "נסטיה",
+            "details": {
+                "call_number": "275749117",
+                "customer_name": "חיים",
+                "address": "האופה 1, נתניה",
+                "issue_summary": "PANCODE לא עובד",
+                "technician_actions": "בדיקות",
+                "coordinated_worker": "",
+                "visit_date": "",
+                "visit_hour_from": "",
+                "visit_hour_to": "",
+                "failure_notes": "",
+            },
+            "attachments": [],
+            "updates": [],
+        })
+        self.app_module.save_support_tickets(tickets)
+        sent_tickets = []
+        self.app_module.send_nastia_ticket_email = lambda ticket: sent_tickets.append(ticket)
+
+        self.login("nastia@nimbusip.com", password="tygeydfuyw5t3g")
+        response = self.client.post(
+            "/support-tickets-update",
+            json={
+                "ticket_id": 2,
+                "source_page_mode": "nastia",
+                "source_ticket_queue": "nastia",
+                "status": "תואם",
+                "details": {
+                    "technician_actions": "בדיקות",
+                    "coordinated_worker": "אסף",
+                    "visit_date": "2026-07-09",
+                    "visit_hour_from": "09:00",
+                    "visit_hour_to": "10:00",
+                    "failure_notes": "",
+                },
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["ticket"]["status"], "תואם")
+        self.assertTrue(payload["ticket"]["notification_attempted"])
+        self.assertTrue(payload["ticket"]["notification_sent"])
+        self.assertEqual(len(sent_tickets), 1)
+        self.assertEqual(sent_tickets[0]["details"]["call_number"], "275749117")
 
 if __name__ == "__main__":
     unittest.main()

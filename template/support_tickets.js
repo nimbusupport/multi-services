@@ -25,6 +25,32 @@ const paisStatuses = Array.isArray(supportTicketsContext.paisStatuses) ? support
 const pageMode = String(supportTicketsContext.pageMode || "board");
 const ticketQueue = String(supportTicketsContext.ticketQueue || "");
 const isNastyaQueuePage = pageMode === "nastia" || ticketQueue === "nastia";
+const ticketBoards = Array.isArray(supportTicketsContext.ticketBoards) ? supportTicketsContext.ticketBoards : [];
+const ticketBoardsBySlug = new Map(ticketBoards.map((board) => [String(board?.slug || ""), board || {}]));
+
+function boardConfig(boardSlugValue) {
+  return ticketBoardsBySlug.get(String(boardSlugValue || "")) || {};
+}
+
+function boardDisplayName(boardSlugValue) {
+  return String(boardConfig(boardSlugValue).name || (boardSlugValue === "support" ? "Support Tickets" : ""));
+}
+
+function boardSupportsCoordination(boardSlugValue) {
+  return String(boardConfig(boardSlugValue).workflow || "") === "coordination";
+}
+
+function isCoordinationTicket(ticket) {
+  return boardSupportsCoordination(ticket?.board_slug);
+}
+
+function isPaisTicket(ticket) {
+  return ticket?.board_slug === "pais";
+}
+
+function isHotTicket(ticket) {
+  return ticket?.board_slug === "hot-kiryot";
+}
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -1366,6 +1392,709 @@ async function submitTicket(event) {
   }
 }
 
+function displayTicketStatus(ticket) {
+  if (pageMode === "nastia" && isCoordinationTicket(ticket) && ticket?.status === "ממתין לתאום") {
+    return "ממתין";
+  }
+  return ticket?.status || "";
+}
+
+function statusOptionsForTicket(ticket) {
+  if (isCoordinationTicket(ticket) && isNastyaQueuePage && NASTYA_EDITABLE_STATUSES.includes(ticket.status)) {
+    const options = [
+      { value: ticket.status, label: displayTicketStatus(ticket) },
+      ...NASTYA_FINAL_STATUSES
+        .filter((status) => status !== ticket.status)
+        .map((status) => ({ value: status, label: status })),
+    ];
+    return options.map(({ value, label }) => `
+      <option value="${escapeHtml(value)}" ${ticket.status === value ? "selected" : ""}>${escapeHtml(label)}</option>
+    `).join("");
+  }
+  const options = isCoordinationTicket(ticket) ? paisStatuses : supportStatuses;
+  return options.map((status) => `
+    <option value="${escapeHtml(status)}" ${ticket.status === status ? "selected" : ""}>${escapeHtml(status)}</option>
+  `).join("");
+}
+
+function canNastyaEditPaisInlineStatus(ticket) {
+  return isCoordinationTicket(ticket) && isNastyaQueuePage && NASTYA_EDITABLE_STATUSES.includes(ticket.status);
+}
+
+function ticketHeadline(ticket) {
+  const details = ticketDetails(ticket);
+  if (isPaisTicket(ticket)) {
+    const terminal = details.terminal_number ? `מסוף ${details.terminal_number}` : (boardDisplayName(ticket.board_slug) || boardName);
+    const address = details.address ? ` / ${details.address}` : "";
+    return `${terminal}${address}`;
+  }
+  if (isHotTicket(ticket)) {
+    const callNumber = details.call_number ? `פניה ${details.call_number}` : (boardDisplayName(ticket.board_slug) || boardName);
+    const customerName = details.customer_name ? ` / ${details.customer_name}` : "";
+    const address = details.address ? ` / ${details.address}` : "";
+    return `${callNumber}${customerName}${address}`;
+  }
+  return `${ticket.service_type || "General"}${ticket.domain ? ` / ${ticket.domain}` : ""}`;
+}
+
+function ticketSnippet(ticket) {
+  const details = ticketDetails(ticket);
+  if (isPaisTicket(ticket)) {
+    const parts = [details.customer_request || details.actions_taken || ""];
+    if (ticket.assigned_to) parts.push(`נציג: ${ticket.assigned_to}`);
+    if (details.coordinated_worker) parts.push(`תואם: ${details.coordinated_worker}`);
+    if (details.visit_date) {
+      const hourRange = [details.visit_hour_from, details.visit_hour_to].filter(Boolean).join(" - ");
+      parts.push(`ביקור: ${details.visit_date}${hourRange ? ` ${hourRange}` : ""}`);
+    }
+    return parts.filter(Boolean).join(" | ");
+  }
+  if (isHotTicket(ticket)) {
+    const parts = [details.issue_summary || details.technician_actions || ""];
+    if (ticket.assigned_to) parts.push(`נציג: ${ticket.assigned_to}`);
+    if (details.coordinated_worker) parts.push(`תואם: ${details.coordinated_worker}`);
+    if (details.visit_date) {
+      const hourRange = [details.visit_hour_from, details.visit_hour_to].filter(Boolean).join(" - ");
+      parts.push(`ביקור: ${details.visit_date}${hourRange ? ` ${hourRange}` : ""}`);
+    }
+    return parts.filter(Boolean).join(" | ");
+  }
+  return ticket.description || "";
+}
+
+function ticketTypeLabel(ticket) {
+  if (isCoordinationTicket(ticket)) {
+    return boardDisplayName(ticket.board_slug) || ticket.service_type || "";
+  }
+  return ticket.ticket_type || "";
+}
+
+function ticketCopyText(ticket) {
+  const details = ticketDetails(ticket);
+  const lines = [];
+
+  pushCopyLine(lines, "Ticket", ticket.ticket_id || `#${String(ticket.id || "").padStart(4, "0")}`);
+  pushCopyLine(lines, "Board", isCoordinationTicket(ticket) ? (boardDisplayName(ticket.board_slug) || ticket.service_type || "") : "Support Tickets");
+  if (!isCoordinationTicket(ticket)) {
+    pushCopyLine(lines, "Ticket Type", ticket.ticket_type);
+    pushCopyLine(lines, "Service Type", ticket.service_type);
+    pushCopyLine(lines, "Domain", ticket.domain);
+  }
+  pushCopyLine(lines, "Status", displayTicketStatus(ticket));
+  pushCopyLine(lines, "Priority", ticket.priority || "Medium");
+  pushCopyLine(lines, "Assigned To", ticket.assigned_to || "Unassigned");
+  pushCopyLine(lines, "Creator", ticket.creator);
+  pushCopyLine(lines, "Created", ticket.created_at_display);
+  pushCopyLine(lines, "Last Edited", ticket.last_edited_at_display);
+  pushCopyLine(lines, "Internal ID", ticket.id);
+  lines.push("");
+  lines.push("Details");
+
+  if (isPaisTicket(ticket)) {
+    pushCopyLine(lines, "Terminal Number", details.terminal_number);
+    pushCopyLine(lines, "Address", details.address);
+    pushCopyLine(lines, "Static IP", details.static_ip);
+    pushCopyLine(lines, "Altura", details.altura);
+    pushCopyLine(lines, "Loop Back", details.look_back);
+    pushCopyLine(lines, "Contact Name", details.contact_name);
+    pushCopyLine(lines, "Contact Phone", details.contact_phone);
+    pushCopyLine(lines, "Customer Request", details.customer_request);
+    pushCopyLine(lines, "Actions Taken", details.actions_taken);
+    pushCopyLine(lines, "Coordinated Worker", details.coordinated_worker);
+    pushCopyLine(lines, "Visit Date", details.visit_date);
+    pushCopyLine(lines, "Visit Hours", [details.visit_hour_from, details.visit_hour_to].filter(Boolean).join(" - "));
+    pushCopyLine(lines, "Failure Notes", details.failure_notes);
+  } else if (isHotTicket(ticket)) {
+    pushCopyLine(lines, "Opened At", details.opened_at);
+    pushCopyLine(lines, "Call Number", details.call_number);
+    pushCopyLine(lines, "Opened By", details.opened_by);
+    pushCopyLine(lines, "Customer ID", details.customer_id);
+    pushCopyLine(lines, "Customer Name", details.customer_name);
+    pushCopyLine(lines, "Line Code", details.line_code);
+    pushCopyLine(lines, "Address", details.address);
+    pushCopyLine(lines, "On-site Contact", details.on_site_contact);
+    pushCopyLine(lines, "Technical Contact", details.technical_contact);
+    pushCopyLine(lines, "Availability", details.availability_hours);
+    pushCopyLine(lines, "Remote Checks", details.remote_checks);
+    pushCopyLine(lines, "Issue Summary", details.issue_summary);
+    pushCopyLine(lines, "Technician Actions", details.technician_actions);
+    pushCopyLine(lines, "Equipment Type", details.equipment_type);
+    pushCopyLine(lines, "Service Agreement", details.service_agreement);
+    pushCopyLine(lines, "Technical Notes", details.technical_notes);
+    pushCopyLine(lines, "Coordinated Worker", details.coordinated_worker);
+    pushCopyLine(lines, "Visit Date", details.visit_date);
+    pushCopyLine(lines, "Visit Hours", [details.visit_hour_from, details.visit_hour_to].filter(Boolean).join(" - "));
+    pushCopyLine(lines, "Failure Notes", details.failure_notes);
+  } else {
+    pushCopyLine(lines, "Description", ticket.description);
+    pushCopyLine(lines, "Solution", ticket.solution);
+  }
+
+  const attachments = Array.isArray(ticket.attachments) ? ticket.attachments : [];
+  lines.push("");
+  lines.push("Attachments");
+  if (attachments.length === 0) {
+    lines.push("None");
+  } else {
+    attachments.forEach((file, index) => {
+      const label = file?.original_name || file?.saved_name || `Image ${index + 1}`;
+      const url = String(file?.url || "").trim();
+      lines.push(`${index + 1}. ${label}${url ? ` - ${url}` : ""}`);
+    });
+  }
+
+  return lines.join("\n");
+}
+
+function renderTickets(tickets, users) {
+  const list = document.getElementById("ticket-list");
+  const empty = document.getElementById("tickets-empty");
+  lastTickets = Array.isArray(tickets) ? tickets : [];
+  list.innerHTML = "";
+
+  if (!Array.isArray(tickets) || tickets.length === 0) {
+    empty.style.display = "block";
+    return;
+  }
+
+  empty.style.display = "none";
+  tickets.forEach((ticket) => {
+    const row = document.createElement("article");
+    row.className = `ticket-row ${isCoordinationTicket(ticket) ? "pais-row" : ""}`;
+    row.dataset.ticketId = ticket.id;
+    const assigneeOptions = ['<option value="">Unassigned</option>']
+      .concat((users || []).map((user) => `<option value="${escapeHtml(user)}" ${ticket.assigned_to === user ? "selected" : ""}>${escapeHtml(user)}</option>`))
+      .join("");
+    const firstAttachment = Array.isArray(ticket.attachments) ? ticket.attachments[0] : null;
+    const attachmentCount = Array.isArray(ticket.attachments) ? ticket.attachments.length : 0;
+    const statusClass = statusClassName(ticket.status);
+    const coordinationText = coordinationSummary(ticket);
+
+    row.innerHTML = `
+      <div class="ticket-id">${escapeHtml(ticket.ticket_id)}</div>
+      <div class="ticket-main">
+        <h3>${escapeHtml(ticketHeadline(ticket))}</h3>
+        <p>${escapeHtml(ticketSnippet(ticket))}</p>
+      </div>
+      <div class="ticket-extra">
+        ${firstAttachment ? `
+          <button
+            class="ticket-attachment-indicator"
+            type="button"
+            data-image-url="${escapeHtml(firstAttachment.url)}"
+            title="${attachmentCount > 1 ? `${attachmentCount} images attached` : "1 image attached"}"
+            aria-label="${attachmentCount > 1 ? `${attachmentCount} images attached` : "1 image attached"}"
+          >
+            <i class="fa-regular fa-image"></i>
+            <span>${escapeHtml(attachmentCount)}</span>
+          </button>
+        ` : ""}
+      </div>
+      <div class="ticket-meta">
+        <strong>${escapeHtml(ticketTypeLabel(ticket))}</strong><br>
+        ${escapeHtml(ticket.creator)}<br>${escapeHtml(ticketListTimestamp(ticket))}
+        ${coordinationText ? `<div class="ticket-meta-note">${escapeHtml(coordinationText)}</div>` : ""}
+      </div>
+      <select class="assignee-select" data-ticket-id="${ticket.id}" ${isNastyaQueuePage && isCoordinationTicket(ticket) ? "disabled" : ""}>${assigneeOptions}</select>
+      <select class="status-select" data-ticket-id="${ticket.id}" ${(isNastyaQueuePage && isCoordinationTicket(ticket) && !canNastyaEditPaisInlineStatus(ticket)) ? "disabled" : ""}>${statusOptionsForTicket(ticket)}</select>
+      <div class="ticket-actions">
+        <span class="pill ${statusClass}">${escapeHtml(displayTicketStatus(ticket))}</span>
+        <span class="pill ${priorityClass(ticket.priority || "Medium")}">${escapeHtml(ticket.priority || "Medium")}</span>
+        <button class="copy-ticket-btn" type="button" data-ticket-id="${ticket.id}" title="Copy ticket details" aria-label="Copy ticket details"><i class="fa-regular fa-copy"></i></button>
+        ${isAdmin ? `<button class="delete-ticket-btn" type="button" data-ticket-id="${ticket.id}" title="Delete ticket"><i class="fa-solid fa-trash"></i></button>` : ""}
+      </div>
+    `;
+    row.addEventListener("click", (event) => {
+      if (event.target.closest("select, button, a, input, textarea")) return;
+      openTicketDetail(ticket.id);
+    });
+    list.appendChild(row);
+  });
+
+  document.querySelectorAll(".assignee-select").forEach((select) => {
+    if (select.disabled) return;
+    select.addEventListener("change", () => updateTicket(select.dataset.ticketId, { assigned_to: select.value }));
+  });
+  document.querySelectorAll(".status-select").forEach((select) => {
+    if (select.disabled) return;
+    select.addEventListener("change", () => updateTicket(select.dataset.ticketId, { status: select.value }));
+  });
+  document.querySelectorAll(".ticket-attachment-indicator").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      openImagePreview(button.dataset.imageUrl || "");
+    });
+  });
+  document.querySelectorAll(".delete-ticket-btn").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      deleteTicket(button.dataset.ticketId);
+    });
+  });
+  document.querySelectorAll(".copy-ticket-btn").forEach((button) => {
+    button.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      await copyTicketDetails(button.dataset.ticketId, button);
+    });
+  });
+}
+
+function coordinationStatusEditor(ticket) {
+  const isCoordinatorView = isNastyaQueuePage;
+  const showCoordinatorStatus = isCoordinatorView && NASTYA_EDITABLE_STATUSES.includes(ticket.status);
+  const coordinatorStatusOptions = [
+    { value: ticket.status, label: displayTicketStatus(ticket) },
+    ...NASTYA_FINAL_STATUSES
+      .filter((status) => status !== ticket.status)
+      .map((status) => ({ value: status, label: status })),
+  ]
+    .map(({ value, label }) => `<option value="${escapeHtml(value)}" ${ticket.status === value ? "selected" : ""}>${escapeHtml(label)}</option>`)
+    .join("");
+
+  if (showCoordinatorStatus) {
+    return `
+    <section class="detail-description detail-edit-card">
+      <h3>סטטוס</h3>
+      <select id="detail-status-select">
+        ${coordinatorStatusOptions}
+      </select>
+    </section>`;
+  }
+  if (!isCoordinatorView) {
+    return `
+    <section class="detail-description detail-edit-card">
+      <h3>סטטוס</h3>
+      <select id="detail-status-select">
+        ${paisStatuses.map((status) => `<option value="${escapeHtml(status)}" ${ticket.status === status ? "selected" : ""}>${escapeHtml(status)}</option>`).join("")}
+      </select>
+    </section>`;
+  }
+  return "";
+}
+
+function coordinationSchedulingEditor(ticket, details) {
+  const isCoordinatorView = isNastyaQueuePage;
+  const technicianOptions = ['<option value="">בחר עובד</option>']
+    .concat(technicianUsers.map((user) => `<option value="${escapeHtml(user)}" ${details.coordinated_worker === user ? "selected" : ""}>${escapeHtml(user)}</option>`))
+    .join("");
+  const showCoordination = isCoordinatorView || ticket.status === "ממתין לתאום" || Boolean(details.coordinated_worker || details.visit_date || details.visit_hour_from || details.visit_hour_to);
+  if (!showCoordination) return "";
+  return `
+    <section class="detail-description detail-edit-card">
+      <h3>לאחר טיפול נציג</h3>
+      <div class="detail-form-grid">
+        <label>
+          <span>טכנאי מתואם</span>
+          <select id="detail-coordinated-worker">${technicianOptions}</select>
+        </label>
+        <label>
+          <span>תאריך ביקור טכנאי</span>
+          <input id="detail-visit-date" type="date" value="${escapeHtml(details.visit_date || "")}">
+        </label>
+        <label>
+          <span>משעה</span>
+          <select id="detail-visit-hour-from">${hourOptions(9, 17, details.visit_hour_from || "")}</select>
+        </label>
+        <label>
+          <span>עד שעה</span>
+          <select id="detail-visit-hour-to">${hourOptions(10, 18, details.visit_hour_to || "")}</select>
+        </label>
+      </div>
+      <p class="detail-hint">חלונות התיאום הם של שעה אחת, החל מ-09:00.</p>
+    </section>`;
+}
+
+function renderHotDetailSections(ticket) {
+  const details = ticketDetails(ticket);
+  const showFailureNotes = ticket.status === "נכשל";
+  return `
+    ${detailSection("מהות התקלה", details.issue_summary)}
+    ${detailSection("בדיקות שבוצעו מרחוק", details.remote_checks)}
+    <section class="detail-description detail-edit-card">
+      <h3>פעולות / בדיקות שטכנאי צריך לבצע</h3>
+      <textarea id="detail-technician-actions" rows="4">${escapeHtml(details.technician_actions || "")}</textarea>
+    </section>
+    ${details.equipment_type ? detailSection("סוג ציוד קיים אצל הלקוח", details.equipment_type) : ""}
+    ${details.service_agreement ? detailSection("הסכם שירות ואיזה ציוד באחריות הוט", details.service_agreement) : ""}
+    ${details.technical_notes ? detailSection("פרטים טכניים נוספים", details.technical_notes) : ""}
+    ${coordinationStatusEditor(ticket)}
+    ${coordinationSchedulingEditor(ticket, details)}
+    <section class="detail-description detail-edit-card ${showFailureNotes ? "" : "hidden"}" id="detail-failure-notes-wrap">
+      <h3>הערות</h3>
+      <textarea id="detail-failure-notes" rows="4">${escapeHtml(details.failure_notes || "")}</textarea>
+    </section>
+    <div class="detail-save-row">
+      <span id="detail-save-message"></span>
+      <button class="create-ticket-btn" id="detail-save-btn" type="button">שמור</button>
+    </div>
+  `;
+}
+
+function renderDetailSections(ticket) {
+  if (isPaisTicket(ticket)) {
+    return renderPaisDetailSections(ticket);
+  }
+  if (isHotTicket(ticket)) {
+    return renderHotDetailSections(ticket);
+  }
+  return [
+    detailSection("Description", ticket.description),
+    detailSection("Solution", ticket.solution),
+  ].join("");
+}
+
+async function savePaisDetail(ticketId) {
+  const currentTicket = getTicket(ticketId);
+  const currentDetails = ticketDetails(currentTicket);
+  const coordinatedWorkerField = document.getElementById("detail-coordinated-worker");
+  const visitDateField = document.getElementById("detail-visit-date");
+  const visitHourFromField = document.getElementById("detail-visit-hour-from");
+  const visitHourToField = document.getElementById("detail-visit-hour-to");
+  const statusSelect = document.getElementById("detail-status-select");
+  const detailFieldName = isHotTicket(currentTicket) ? "technician_actions" : "actions_taken";
+  const detailFieldElement = document.getElementById(isHotTicket(currentTicket) ? "detail-technician-actions" : "detail-actions-taken");
+  const coordinationPayload = {
+    coordinated_worker: coordinatedWorkerField?.value || "",
+    visit_date: visitDateField?.value || "",
+    visit_hour_from: visitHourFromField?.value || "",
+    visit_hour_to: visitHourToField?.value || "",
+  };
+  const selectedStatus = statusSelect?.value || "";
+  const shouldMarkCoordinated = Object.values(coordinationPayload).every(Boolean);
+  let nextStatus = selectedStatus;
+  if (shouldMarkCoordinated && (!selectedStatus || selectedStatus === "ממתין לתאום" || selectedStatus === "תואם")) {
+    nextStatus = "תואם";
+  }
+  const isFinalStatus = NASTYA_FINAL_STATUSES.includes(selectedStatus);
+  const payload = {
+    ticket_id: ticketId,
+    source_page_mode: pageMode,
+    source_ticket_queue: ticketQueue,
+    status: nextStatus,
+    details: {
+      [detailFieldName]: detailFieldElement?.value || "",
+      coordinated_worker: coordinationPayload.coordinated_worker,
+      visit_date: coordinationPayload.visit_date,
+      visit_hour_from: coordinationPayload.visit_hour_from,
+      visit_hour_to: coordinationPayload.visit_hour_to,
+      failure_notes: document.getElementById("detail-failure-notes")?.value || "",
+    },
+  };
+  const message = document.getElementById("detail-save-message");
+  const button = document.getElementById("detail-save-btn");
+  if (message) message.textContent = "";
+  clearCoordinationValidation();
+  if (button) button.disabled = true;
+
+  if (isNastyaQueuePage && !isFinalStatus) {
+    if (!coordinationPayload.coordinated_worker) {
+      setFieldInvalid(coordinatedWorkerField, true);
+      if (message) message.textContent = "לא נבחר טכנאי מטפל";
+      if (button) button.disabled = false;
+      return;
+    }
+    if (!coordinationPayload.visit_date) {
+      setFieldInvalid(visitDateField, true);
+      if (message) message.textContent = "לא נבחר תאריך ביקור";
+      if (button) button.disabled = false;
+      return;
+    }
+    if (!coordinationPayload.visit_hour_from) {
+      setFieldInvalid(visitHourFromField, true);
+      if (message) message.textContent = "לא נבחרה שעת התחלה";
+      if (button) button.disabled = false;
+      return;
+    }
+    if (!coordinationPayload.visit_hour_to) {
+      setFieldInvalid(visitHourToField, true);
+      if (message) message.textContent = "לא נבחרה שעת סיום";
+      if (button) button.disabled = false;
+      return;
+    }
+  }
+
+  const coordinationChanged = ["coordinated_worker", "visit_date", "visit_hour_from", "visit_hour_to"]
+    .some((fieldName) => String(currentDetails?.[fieldName] || "") !== String(coordinationPayload[fieldName] || ""));
+  if (isNastyaQueuePage && shouldMarkCoordinated && coordinationChanged) {
+    payload.send_nastia_notification = true;
+  }
+
+  try {
+    const res = await fetch("/support-tickets-update", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) {
+      throw new Error(data.message || "Save failed");
+    }
+    if (data?.ticket?.notification_error) {
+      openNotificationErrorModal(`הסטטוס עודכן אבל שליחת המייל נכשלה: ${data.ticket.notification_error}`);
+    } else if (data?.ticket?.notification_sent === true) {
+      showSendSuccessToast();
+    } else if (payload.send_nastia_notification === true) {
+      openNotificationErrorModal("הסטטוס עודכן אבל טריגר המייל לא הופעל.");
+    }
+    closeTicketDetail();
+    await loadTickets();
+    await loadPaisReport();
+  } catch (err) {
+    openNotificationErrorModal(err.message || "Save failed");
+    if (message) message.textContent = err.message;
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+function openTicketDetail(ticketId) {
+  const ticket = getTicket(ticketId);
+  if (!ticket) return;
+
+  const details = ticketDetails(ticket);
+  document.getElementById("detail-kicker").textContent = isCoordinationTicket(ticket) ? (boardDisplayName(ticket.board_slug) || ticket.service_type || "Ticket") : (ticket.service_type || "Ticket");
+  document.getElementById("detail-title").textContent = ticket.ticket_id || `#${String(ticket.id).padStart(4, "0")}`;
+
+  const gridItems = [
+    detailItem("Board", isCoordinationTicket(ticket) ? (boardDisplayName(ticket.board_slug) || ticket.service_type || "") : "Support Tickets"),
+    detailItem("Status", displayTicketStatus(ticket)),
+    detailItem("Assigned To", ticket.assigned_to || "Unassigned"),
+    detailItem("Creator", ticket.creator),
+    detailItem("Created", ticket.created_at_display),
+    detailItem("Last Edited", ticket.last_edited_at_display || "—"),
+    detailItem("Internal ID", ticket.id),
+  ];
+
+  if (isPaisTicket(ticket)) {
+    gridItems.splice(1, 0,
+      detailItem("מספר מסוף", details.terminal_number),
+      detailItemHtml("כתובת", renderAddressValue(details.address)),
+      detailItem("כתובת IP סטטית", details.static_ip),
+      detailItem("אלטורה", details.altura),
+      detailItem("loop back", details.look_back),
+      detailItem("נציג מטפל", ticket.assigned_to || "—"),
+      detailItem("טכנאי מתואם", details.coordinated_worker || "—"),
+      detailItem("תאריך ביקור", details.visit_date || "—"),
+      detailItem("שעות ביקור", [details.visit_hour_from, details.visit_hour_to].filter(Boolean).join(" - ") || "—"),
+      detailItem("איש קשר - שם", details.contact_name),
+      detailItemHtml("איש קשר - מספר", renderPhoneValue(details.contact_phone)),
+    );
+  } else if (isHotTicket(ticket)) {
+    gridItems.splice(1, 0,
+      detailItem("מספר קריאה", details.call_number),
+      detailItem("שם לקוח", details.customer_name),
+      detailItem("ח.פ. / מס לקוח", details.customer_id),
+      detailItem("קוד קו / ID-LINK", details.line_code),
+      detailItemHtml("כתובת", renderAddressValue(details.address)),
+      detailItem("שעת פתיחת תקלה", details.opened_at),
+      detailItem("נציג מטפל", ticket.assigned_to || "—"),
+      detailItem("תומך במוקד", details.opened_by),
+      detailItem("איש קשר במקום", details.on_site_contact),
+      detailItem("איש קשר טכני", details.technical_contact),
+      detailItem("זמינות לקוח", details.availability_hours),
+      detailItem("טכנאי מתואם", details.coordinated_worker || "—"),
+      detailItem("תאריך ביקור", details.visit_date || "—"),
+      detailItem("שעות ביקור", [details.visit_hour_from, details.visit_hour_to].filter(Boolean).join(" - ") || "—"),
+    );
+  } else {
+    gridItems.splice(1, 0,
+      detailItem("Ticket Type", ticket.ticket_type),
+      detailItem("Service Type", ticket.service_type),
+      detailItem("Domain", ticket.domain),
+      detailItem("Priority", ticket.priority),
+    );
+  }
+
+  document.getElementById("detail-grid").innerHTML = gridItems.join("");
+  document.getElementById("detail-sections").innerHTML = renderDetailSections(ticket);
+  const detailCopyButton = document.getElementById("detail-copy-btn");
+  if (detailCopyButton) {
+    detailCopyButton.dataset.ticketId = ticket.id;
+  }
+  document.getElementById("detail-upload-ticket-id").value = ticket.id;
+  document.getElementById("detail-upload-form")?.reset();
+  document.getElementById("detail-upload-message").textContent = "";
+  syncDetailAttachmentInputState();
+  if (isCoordinationTicket(ticket)) {
+    clearCoordinationValidation();
+    document.getElementById("detail-status-select")?.addEventListener("change", syncPaisDetailStatusFields);
+    document.getElementById("detail-visit-hour-from")?.addEventListener("change", syncPaisDetailVisitRange);
+    document.getElementById("detail-coordinated-worker")?.addEventListener("change", () => setFieldInvalid(document.getElementById("detail-coordinated-worker"), false));
+    document.getElementById("detail-visit-date")?.addEventListener("input", () => setFieldInvalid(document.getElementById("detail-visit-date"), false));
+    document.getElementById("detail-visit-hour-from")?.addEventListener("change", () => setFieldInvalid(document.getElementById("detail-visit-hour-from"), false));
+    document.getElementById("detail-visit-hour-to")?.addEventListener("change", () => setFieldInvalid(document.getElementById("detail-visit-hour-to"), false));
+    document.getElementById("detail-save-btn")?.addEventListener("click", () => savePaisDetail(ticket.id));
+    syncPaisDetailStatusFields();
+    syncPaisDetailVisitRange();
+  }
+
+  const attachments = Array.isArray(ticket.attachments) ? ticket.attachments : [];
+  const attachmentHost = document.getElementById("detail-attachments");
+  attachmentHost.innerHTML = attachments.length
+    ? attachments.map((file, index) => `
+        <div class="detail-attachment-item">
+          <button class="detail-image-btn" type="button" data-image-url="${escapeHtml(file.url)}">
+            <i class="fa-regular fa-image"></i>
+            <span>Image ${index + 1}</span>
+          </button>
+          <button
+            class="detail-attachment-delete"
+            type="button"
+            data-ticket-id="${escapeHtml(ticket.id)}"
+            data-folder="${escapeHtml(file.folder || "")}"
+            data-saved-name="${escapeHtml(file.saved_name || "")}"
+            title="Delete image"
+          >
+            <i class="fa-solid fa-trash"></i>
+          </button>
+        </div>
+      `).join("")
+    : "";
+  attachmentHost.querySelectorAll(".detail-image-btn").forEach((button) => {
+    button.addEventListener("click", () => openImagePreview(button.dataset.imageUrl || ""));
+  });
+  attachmentHost.querySelectorAll(".detail-attachment-delete").forEach((button) => {
+    button.addEventListener("click", () => deleteDetailAttachment(
+      button.dataset.ticketId || "",
+      button.dataset.folder || "",
+      button.dataset.savedName || "",
+    ));
+  });
+
+  const modal = document.getElementById("ticket-detail-modal");
+  modal.classList.add("open");
+  modal.setAttribute("aria-hidden", "false");
+}
+
+function normalizeHotPasteLine(line) {
+  return String(line || "")
+    .replace(/\*\*/g, "")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/\u00a0/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function hotPasteLabelKey(line) {
+  const normalized = normalizeHotPasteLine(line).replace(/[\\/]/g, "/");
+  const labels = [
+    ["שעה ותאריך פתיחת תקלה", "opened_at"],
+    ["מספר קריאה שהוקצה", "call_number"],
+    ["תומך במוקד שפתח פניה / טיפל בלקוח", "opened_by"],
+    ["ח.פ. / מס לקוח", "customer_id"],
+    ["שם לקוח", "customer_name"],
+    ["קוד קו / ID-LINK", "line_code"],
+    ["כתובת לקוח", "address"],
+    ["איש קשר במקום", "on_site_contact"],
+    ["איש קשר טכני מטעם הלקוח", "technical_contact"],
+    ["שעות פעילות / זמינות לקוח", "availability_hours"],
+    ["בדיקות שבוצעו מרחוק", "remote_checks"],
+    ["מהות התקלה", "issue_summary"],
+    ["פעולות / בדיקות שטכנאי צריך לבצע", "technician_actions"],
+    ["סוג ציוד קיים אצל הלקוח", "equipment_type"],
+    ["הסכם שירות ואיזה ציוד באחריות הוט", "service_agreement"],
+    ["פרטים טכניים נוספים שהטכנאי צריך להכיר ( יוזר / סיסמא / קונפיגורציה / גיבויים )", "technical_notes"],
+    ["פרטים טכניים נוספים שהטכנאי צריך להכיר", "technical_notes"],
+  ];
+  const match = labels.find(([label]) => normalized === label);
+  return match?.[1] || "";
+}
+
+function parseHotPasteText(rawText) {
+  const lines = String(rawText || "")
+    .replace(/\r/g, "")
+    .split("\n")
+    .map(normalizeHotPasteLine)
+    .filter((line) => line && !/^\|(?:\s*-\s*\|?)*$/.test(line));
+  const result = {
+    opened_at: "",
+    call_number: "",
+    opened_by: "",
+    customer_id: "",
+    customer_name: "",
+    line_code: "",
+    address: "",
+    on_site_contact: "",
+    technical_contact: "",
+    availability_hours: "",
+    remote_checks: "",
+    issue_summary: "",
+    technician_actions: "",
+    equipment_type: "",
+    service_agreement: "",
+    technical_notes: "",
+  };
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const key = hotPasteLabelKey(lines[index]);
+    if (!key) continue;
+    const values = [];
+    for (let cursor = index + 1; cursor < lines.length; cursor += 1) {
+      if (hotPasteLabelKey(lines[cursor])) {
+        index = cursor - 1;
+        break;
+      }
+      values.push(lines[cursor]);
+      if (cursor === lines.length - 1) {
+        index = cursor;
+      }
+    }
+    result[key] = values.join("\n").trim();
+  }
+
+  result.call_number = result.call_number.replace(/^פניה\s*[-:]\s*/i, "").trim();
+  return result;
+}
+
+function fillBoardFieldsFromPaste() {
+  const source = document.getElementById("board-paste-source");
+  const message = document.getElementById("board-paste-message");
+  if (!source) return;
+
+  const parsed = boardSlug === "hot-kiryot" ? parseHotPasteText(source.value) : parsePaisPasteText(source.value);
+  const mapping = boardSlug === "hot-kiryot"
+    ? {
+        opened_at: 'input[name="opened_at"]',
+        call_number: 'input[name="call_number"]',
+        opened_by: 'input[name="opened_by"]',
+        customer_id: 'input[name="customer_id"]',
+        customer_name: 'input[name="customer_name"]',
+        line_code: 'input[name="line_code"]',
+        address: 'input[name="address"]',
+        on_site_contact: 'input[name="on_site_contact"]',
+        technical_contact: 'input[name="technical_contact"]',
+        availability_hours: 'input[name="availability_hours"]',
+        remote_checks: 'textarea[name="remote_checks"]',
+        issue_summary: 'textarea[name="issue_summary"]',
+        technician_actions: 'textarea[name="technician_actions"]',
+        equipment_type: 'textarea[name="equipment_type"]',
+        service_agreement: 'textarea[name="service_agreement"]',
+        technical_notes: 'textarea[name="technical_notes"]',
+      }
+    : {
+        terminal_number: 'input[name="terminal_number"]',
+        address: 'input[name="address"]',
+        static_ip: 'input[name="static_ip"]',
+        altura: 'input[name="altura"]',
+        look_back: 'input[name="look_back"]',
+        contact_name: 'input[name="contact_name"]',
+        contact_phone: 'input[name="contact_phone"]',
+        customer_request: 'textarea[name="customer_request"]',
+      };
+
+  let filledCount = 0;
+  Object.entries(mapping).forEach(([key, selector]) => {
+    const element = document.querySelector(selector);
+    if (!element || !parsed[key]) return;
+    element.value = parsed[key];
+    filledCount += 1;
+  });
+
+  if (message) {
+    message.textContent = filledCount > 0 ? `מולאו ${filledCount} שדות` : "לא זוהו שדות למילוי";
+  }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   const portalToggle = document.querySelector(".portal-toggle");
   if (portalToggle) {
@@ -1480,7 +2209,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("ticket-form").addEventListener("submit", submitTicket);
   document.getElementById("detail-upload-form")?.addEventListener("submit", uploadDetailAttachments);
-  document.getElementById("parse-pais-paste")?.addEventListener("click", fillPaisFieldsFromPaste);
+  document.getElementById("parse-board-paste")?.addEventListener("click", fillBoardFieldsFromPaste);
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) {
       runAutoRefresh();
