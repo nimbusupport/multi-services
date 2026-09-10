@@ -621,7 +621,10 @@ body.dashboard-page .guide-panel {
   }
 
   body.dashboard-page .site-nav {
-    position: sticky;
+    position: fixed;
+    top: 0;
+    right: 0;
+    left: 0;
     height: var(--dashboard-nav-height);
   }
 
