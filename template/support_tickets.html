@@ -647,60 +647,144 @@
 
   <div class="ticket-modal" id="field-report-modal" aria-hidden="true">
     <form class="ticket-detail-card field-report-card" id="field-report-form">
-      <header>
-        <div>
-          <p>הוט קריאות</p>
-          <h2>החתמת לקוח</h2>
+      <div class="field-report-loading" id="field-report-loading" hidden>
+        <span class="field-report-loading-spinner" aria-hidden="true"></span>
+        <strong>שומר ושולח טופס...</strong>
+      </div>
+      <header class="field-report-form-header">
+        <div class="field-report-branding">
+          <img src="/brand/nimbus-logo-pdf.png" alt="Nimbus">
+          <div>
+            <p>Nimbus Telecom</p>
+            <h2>טופס אישור קבלת ציוד והתקנה</h2>
+          </div>
         </div>
         <div class="detail-header-actions">
           <button class="icon-btn" id="close-field-report-modal" type="button" title="Close"><i class="fa-solid fa-xmark"></i></button>
         </div>
       </header>
       <input type="hidden" id="field-report-ticket-id" name="ticket_id" value="">
-      <input type="hidden" id="field-report-signature-data" name="signature_data_url" value="">
-      <div class="detail-form-grid field-report-grid">
-        <label>
-          <span>נחתם על ידי</span>
-          <input id="field-report-signed-by" name="signed_by" type="text" required>
+      <input type="hidden" id="field-report-technician-signature-data" name="technician_signature_data_url" value="">
+      <input type="hidden" id="field-report-customer-signature-data" name="customer_signature_data_url" value="">
+
+      <section class="field-report-sheet">
+        <div class="field-report-ticket-meta">
+          <span id="field-report-ticket-label">#0000</span>
+          <span id="field-report-call-number-label">מספר קריאה: -</span>
+        </div>
+
+        <label class="field-report-full-width">
+          <span>שם הלקוח בנימבוס</span>
+          <input id="field-report-nimbus-customer-name" name="nimbus_customer_name" type="text" required>
         </label>
-        <label>
-          <span>נייד מספרים בלבד</span>
-          <input id="field-report-mobile-number" name="mobile_number" type="text" inputmode="numeric" required>
+
+        <p class="field-report-section-title">למילוי ע"י נציג / הלקוח</p>
+        <div class="detail-form-grid field-report-grid field-report-grid-identity">
+          <label>
+            <span>שם פרטי</span>
+            <input id="field-report-contact-first-name" name="contact_first_name" type="text" required>
+          </label>
+          <label>
+            <span>שם משפחה</span>
+            <input id="field-report-contact-last-name" name="contact_last_name" type="text">
+          </label>
+          <label>
+            <span>תפקיד</span>
+            <input id="field-report-role" name="role" type="text">
+          </label>
+          <label class="field-report-full-width">
+            <span>כתובת ההתקנה</span>
+            <input id="field-report-installation-address" name="installation_address" type="text" required>
+          </label>
+          <label>
+            <span>טלפון</span>
+            <input id="field-report-phone" name="phone" type="text" inputmode="tel" required>
+          </label>
+          <label>
+            <span>הערות</span>
+            <input id="field-report-customer-notes" name="customer_notes" type="text">
+          </label>
+        </div>
+
+        <p class="field-report-intro">
+          הנני מאשר בזאת כי נמסר לידי הציוד המפורט להלן, ובוצעה התקנתו ע"י טכנאי מטעם נימבוס:
+        </p>
+
+        <div class="field-report-table-wrap">
+          <table class="field-report-table">
+            <thead>
+              <tr>
+                <th>שם פריט</th>
+                <th>כמות</th>
+                <th>הערות</th>
+              </tr>
+            </thead>
+            <tbody id="field-report-line-items">
+              {% for row in range(5) %}
+              <tr>
+                <td><input id="field-report-item-name-{{ row }}" type="text" data-line-item="item_name" data-index="{{ row }}"></td>
+                <td><input id="field-report-item-quantity-{{ row }}" type="text" inputmode="numeric" data-line-item="quantity" data-index="{{ row }}"></td>
+                <td><input id="field-report-item-notes-{{ row }}" type="text" data-line-item="notes" data-index="{{ row }}"></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        <label class="description-field field-report-full-width">
+          <span>הערות נוספות</span>
+          <textarea id="field-report-additional-notes" name="additional_notes" rows="4"></textarea>
         </label>
-        <label>
-          <span>שעת תחילת עבודה</span>
-          <input id="field-report-work-start" name="work_start" type="time" step="1800" required>
-        </label>
-        <label>
-          <span>שעת סיום עבודה</span>
-          <input id="field-report-work-end" name="work_end" type="time" step="1800" required>
-        </label>
-        <label>
-          <span>סה"כ שעות</span>
-          <input id="field-report-total-hours" name="total_hours_preview" type="text" readonly>
-        </label>
-      </div>
-      <label class="description-field">
-        <span>סיכום</span>
-        <textarea id="field-report-summary" name="summary" rows="4" required></textarea>
-      </label>
-      <label class="description-field">
-        <span>הערות</span>
-        <textarea id="field-report-notes" name="notes" rows="3"></textarea>
-      </label>
-      <section class="detail-description detail-edit-card">
-        <h3>חתימת לקוח</h3>
-        <div class="signature-launch-row">
-          <button class="create-ticket-btn" id="open-signature-modal" type="button">
-            <i class="fa-solid fa-signature"></i><span>חתימה</span>
-          </button>
-          <span class="signature-status" id="field-report-signature-status">לא נוספה חתימה</span>
+
+        <section class="detail-description detail-edit-card field-report-photo-card">
+          <h3>צילום אזור עבודה</h3>
+          <div class="field-report-photo-stack">
+            <div class="field-report-photo-list" id="field-report-existing-photos"></div>
+            <label class="field-report-photo-upload">
+              <span>הוסף תמונות</span>
+              <input id="field-report-area-photos" name="area_photos" type="file" accept="image/*" multiple>
+            </label>
+            <div class="field-report-photo-list pending" id="field-report-pending-photos"></div>
+          </div>
+        </section>
+
+        <div class="field-report-signatures-grid">
+          <section class="detail-description detail-edit-card">
+            <h3>חתימת טכנאי</h3>
+            <div class="signature-launch-row">
+              <button class="create-ticket-btn field-report-signature-btn" type="button" data-signature-target="technician">
+                <i class="fa-solid fa-pen-nib"></i><span>חתימת טכנאי</span>
+              </button>
+              <span class="signature-status" id="field-report-technician-signature-status">לא נוספה חתימה</span>
+            </div>
+          </section>
+          <section class="detail-description detail-edit-card">
+            <h3>חתימת לקוח</h3>
+            <div class="signature-launch-row">
+              <button class="create-ticket-btn field-report-signature-btn" type="button" data-signature-target="customer">
+                <i class="fa-solid fa-signature"></i><span>חתימת לקוח</span>
+              </button>
+              <span class="signature-status" id="field-report-customer-signature-status">לא נוספה חתימה</span>
+            </div>
+          </section>
+        </div>
+
+        <div class="detail-form-grid field-report-grid field-report-grid-technician">
+          <label>
+            <span>מועד התקנה</span>
+            <input id="field-report-installation-date" name="installation_date" type="text" placeholder="dd/mm/yyyy" required>
+          </label>
+          <label>
+            <span>טכנאי מבצע - שם מלא</span>
+            <input id="field-report-technician-name" name="technician_name" type="text" required>
+          </label>
         </div>
       </section>
-      <div class="detail-save-row">
-        <span id="field-report-message"></span>
+
+      <div class="detail-save-row field-report-save-row">
+        <span id="field-report-message" class="field-report-message"></span>
         <button class="create-ticket-btn" id="field-report-save-btn" type="submit">
-          <i class="fa-solid fa-file-signature"></i><span>שמור דוח</span>
+          <i class="fa-solid fa-paper-plane"></i><span>שמור ושלח</span>
         </button>
       </div>
     </form>
@@ -710,8 +794,8 @@
     <section class="signature-card">
       <header>
         <div>
-          <p>Signature</p>
-          <h2>חתימה</h2>
+          <p id="signature-modal-kicker">Signature</p>
+          <h2 id="signature-modal-title">חתימה</h2>
         </div>
         <div class="detail-header-actions">
           <button class="icon-btn" id="close-signature-modal" type="button" title="Close"><i class="fa-solid fa-xmark"></i></button>

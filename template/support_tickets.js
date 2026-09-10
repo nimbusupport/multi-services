@@ -9,8 +9,10 @@ let leaderboardWorkersVisible = false;
 let imagePreviewScale = 1;
 let sendSuccessToastTimer = null;
 let signaturePadDirty = false;
+let activeFieldReportSignatureTarget = "customer";
 
 const AUTO_REFRESH_INTERVAL_MS = 10000;
+const FIELD_REPORT_LINE_ITEM_ROWS = 5;
 const NASTYA_EDITABLE_STATUSES = ["ממתין לתיאום", "תואם", "בוצע", "נכשל"];
 const NASTYA_FINAL_STATUSES = ["בוצע", "נכשל"];
 
@@ -668,24 +670,84 @@ function detailSectionHtml(title, html) {
   `;
 }
 
+function todayIsraelDate() {
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Jerusalem",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
+function splitContactName(rawValue) {
+  const cleanValue = String(rawValue || "").replace(/\s+/g, " ").trim();
+  if (!cleanValue) {
+    return { firstName: "", lastName: "" };
+  }
+  const withoutPhone = extractPhoneNumber(cleanValue)
+    ? cleanValue.replace(extractPhoneNumber(cleanValue), "").replace(/\s+/g, " ").trim()
+    : cleanValue;
+  const [firstName = "", ...rest] = withoutPhone.split(" ").filter(Boolean);
+  return {
+    firstName,
+    lastName: rest.join(" "),
+  };
+}
+
+function fieldReportLineItemsWithPadding(items) {
+  const rows = Array.isArray(items) ? items.filter((row) => row && typeof row === "object") : [];
+  const padded = [];
+  for (let index = 0; index < FIELD_REPORT_LINE_ITEM_ROWS; index += 1) {
+    padded.push({
+      item_name: String(rows[index]?.item_name || ""),
+      quantity: String(rows[index]?.quantity || ""),
+      notes: String(rows[index]?.notes || ""),
+    });
+  }
+  return padded;
+}
+
+function renderFieldReportPhotoList(attachments, hostId, emptyLabel) {
+  const host = document.getElementById(hostId);
+  if (!host) return;
+  const files = Array.isArray(attachments) ? attachments : [];
+  host.innerHTML = files.length
+    ? files.map((file, index) => {
+      const label = file?.original_name || file?.saved_name || `Photo ${index + 1}`;
+      const href = String(file?.url || "").trim();
+      return href
+        ? `<a class="detail-file-btn field-report-photo-chip" href="${escapeHtml(href)}" download><i class="fa-regular fa-image"></i><span>${escapeHtml(label)}</span></a>`
+        : `<span class="field-report-photo-chip"><i class="fa-regular fa-image"></i><span>${escapeHtml(label)}</span></span>`;
+    }).join("")
+    : `<span class="field-report-empty">${escapeHtml(emptyLabel)}</span>`;
+}
+
+function technicianDisplayName() {
+  return String(currentSupportUser || "").trim() || "טכנאי";
+}
+
 function fieldReportSummaryCard(ticket, allowEdit = false) {
   const report = ticketDetails(ticket).field_report;
   if (!report || typeof report !== "object") return "";
   const pdfUrl = String(report?.pdf_attachment?.url || "").trim();
+  const photoCount = Array.isArray(report.area_photo_attachments) ? report.area_photo_attachments.length : 0;
+  const contactName = [report.contact_first_name, report.contact_last_name].filter(Boolean).join(" ");
   return `
     <section class="detail-description detail-edit-card">
-      <h3>דוח החתמת לקוח</h3>
+      <h3>טופס אישור קבלת ציוד והתקנה</h3>
       <div class="field-report-summary">
-        <div><strong>נחתם על ידי:</strong> ${escapeHtml(report.signed_by || "-")}</div>
-        <div><strong>נייד:</strong> ${escapeHtml(report.mobile_number || "-")}</div>
-        <div><strong>שעות עבודה:</strong> ${escapeHtml(report.work_start || "-")} - ${escapeHtml(report.work_end || "-")} (${escapeHtml(report.total_hours || "-")})</div>
-        <div><strong>סיכום:</strong> ${escapeHtml(report.summary || "-")}</div>
-        ${report.notes ? `<div><strong>הערות:</strong> ${escapeHtml(report.notes)}</div>` : ""}
+        <div><strong>שם הלקוח:</strong> ${escapeHtml(report.nimbus_customer_name || "-")}</div>
+        <div><strong>נציג / לקוח:</strong> ${escapeHtml(contactName || "-")}</div>
+        <div><strong>טלפון:</strong> ${escapeHtml(report.phone || "-")}</div>
+        <div><strong>טכנאי מבצע:</strong> ${escapeHtml(report.technician_name || report.submitted_by || "-")}</div>
+        <div><strong>מועד התקנה:</strong> ${escapeHtml(report.installation_date || "-")}</div>
+        <div><strong>צילומים:</strong> ${escapeHtml(photoCount ? String(photoCount) : "0")}</div>
+        ${report.additional_notes ? `<div><strong>הערות נוספות:</strong> ${escapeHtml(report.additional_notes)}</div>` : ""}
         ${report.submitted_at_display ? `<div><strong>נשמר:</strong> ${escapeHtml(report.submitted_at_display)}</div>` : ""}
       </div>
       <div class="field-report-actions">
         ${allowEdit ? `<button class="create-ticket-btn open-field-report-btn" type="button" data-ticket-id="${escapeHtml(ticket.id)}">
-          <i class="fa-solid fa-file-signature"></i><span>${pdfUrl ? "עדכן החתמה" : "החתמת לקוח"}</span>
+          <i class="fa-solid fa-file-signature"></i><span>${pdfUrl ? "עדכן טופס" : "החתמת לקוח"}</span>
         </button>` : ""}
         ${pdfUrl ? `<a class="secondary-btn field-report-download-btn" href="${escapeHtml(pdfUrl)}" download>הורד PDF</a>` : ""}
       </div>
@@ -1627,40 +1689,62 @@ async function submitTicket(event) {
   }
 }
 
-function computeFieldReportTotalHours() {
-  const startValue = document.getElementById("field-report-work-start")?.value || "";
-  const endValue = document.getElementById("field-report-work-end")?.value || "";
-  const totalField = document.getElementById("field-report-total-hours");
-  if (!totalField) return "";
-  if (!startValue || !endValue) {
-    totalField.value = "";
-    return "";
-  }
-  const parseMinutes = (value) => {
-    const [hours, minutes] = String(value || "").split(":").map((part) => Number(part));
-    if (!Number.isInteger(hours) || !Number.isInteger(minutes)) return NaN;
-    return (hours * 60) + minutes;
-  };
-  const startMinutes = parseMinutes(startValue);
-  const endMinutes = parseMinutes(endValue);
-  if (!Number.isFinite(startMinutes) || !Number.isFinite(endMinutes) || endMinutes <= startMinutes) {
-    totalField.value = "";
-    return "";
-  }
-  const diff = endMinutes - startMinutes;
-  totalField.value = `${Math.floor(diff / 60)}:${String(diff % 60).padStart(2, "0")}`;
-  return totalField.value;
+function fieldReportSignatureFieldId(target) {
+  return target === "technician"
+    ? "field-report-technician-signature-data"
+    : "field-report-customer-signature-data";
 }
 
-function fieldReportSignatureStatusText() {
-  return document.getElementById("field-report-signature-data")?.value ? "חתימה נוספה" : "לא נוספה חתימה";
+function fieldReportSignatureStatusId(target) {
+  return target === "technician"
+    ? "field-report-technician-signature-status"
+    : "field-report-customer-signature-status";
 }
 
-function syncFieldReportSignatureStatus() {
-  const status = document.getElementById("field-report-signature-status");
-  if (status) {
-    status.textContent = fieldReportSignatureStatusText();
-    status.classList.toggle("ready", Boolean(document.getElementById("field-report-signature-data")?.value));
+function fieldReportSignatureStatusText(target) {
+  const dataValue = document.getElementById(fieldReportSignatureFieldId(target))?.value || "";
+  const label = target === "technician" ? "חתימת טכנאי" : "חתימת לקוח";
+  return dataValue ? `${label} נוספה` : `לא נוספה ${label}`;
+}
+
+function syncFieldReportSignatureStatuses() {
+  ["customer", "technician"].forEach((target) => {
+    const status = document.getElementById(fieldReportSignatureStatusId(target));
+    const hasValue = Boolean(document.getElementById(fieldReportSignatureFieldId(target))?.value);
+    if (!status) return;
+    status.textContent = fieldReportSignatureStatusText(target);
+    status.classList.toggle("ready", hasValue);
+  });
+}
+
+function setFieldReportMessage(text, kind = "") {
+  const message = document.getElementById("field-report-message");
+  if (!message) return;
+  message.textContent = text || "";
+  message.classList.remove("success", "error");
+  if (kind) {
+    message.classList.add(kind);
+  }
+}
+
+function setFieldReportLoading(isLoading) {
+  const form = document.getElementById("field-report-form");
+  const overlay = document.getElementById("field-report-loading");
+  const button = document.getElementById("field-report-save-btn");
+  if (form) {
+    form.classList.toggle("is-loading", Boolean(isLoading));
+  }
+  if (overlay) {
+    overlay.hidden = !isLoading;
+  }
+  if (button) {
+    button.disabled = Boolean(isLoading);
+    if (!button.dataset.defaultHtml) {
+      button.dataset.defaultHtml = button.innerHTML;
+    }
+    button.innerHTML = isLoading
+      ? '<i class="fa-solid fa-spinner fa-spin"></i><span>שומר ושולח...</span>'
+      : button.dataset.defaultHtml;
   }
 }
 
@@ -1695,6 +1779,14 @@ function clearSignatureCanvas() {
 
 function openSignatureModal() {
   const modal = document.getElementById("signature-modal");
+  const title = document.getElementById("signature-modal-title");
+  const kicker = document.getElementById("signature-modal-kicker");
+  if (title) {
+    title.textContent = activeFieldReportSignatureTarget === "technician" ? "חתימת טכנאי" : "חתימת לקוח";
+  }
+  if (kicker) {
+    kicker.textContent = activeFieldReportSignatureTarget === "technician" ? "Technician Signature" : "Customer Signature";
+  }
   modal?.classList.add("open");
   modal?.setAttribute("aria-hidden", "false");
   window.setTimeout(clearSignatureCanvas, 0);
@@ -1712,11 +1804,11 @@ function saveSignatureToFieldReport() {
     openNotificationErrorModal("יש להוסיף חתימה לפני שמירה");
     return;
   }
-  const dataField = document.getElementById("field-report-signature-data");
+  const dataField = document.getElementById(fieldReportSignatureFieldId(activeFieldReportSignatureTarget));
   if (dataField) {
     dataField.value = canvas.toDataURL("image/png");
   }
-  syncFieldReportSignatureStatus();
+  syncFieldReportSignatureStatuses();
   closeSignatureModal();
 }
 
@@ -1763,17 +1855,41 @@ function openFieldReportModal(ticketId) {
   const ticket = getTicket(ticketId);
   if (!ticket) return;
   const report = ticketDetails(ticket).field_report || {};
+  const details = ticketDetails(ticket);
+  const contactPhone = extractPhoneNumber(details.on_site_contact || details.technical_contact || "");
+  const nameParts = splitContactName(report.contact_first_name || report.contact_last_name
+    ? `${report.contact_first_name || ""} ${report.contact_last_name || ""}`.trim()
+    : (details.on_site_contact || ""));
+  const itemRows = fieldReportLineItemsWithPadding(report.line_items);
   document.getElementById("field-report-ticket-id").value = ticket.id;
-  document.getElementById("field-report-signed-by").value = report.signed_by || "";
-  document.getElementById("field-report-mobile-number").value = report.mobile_number || "";
-  document.getElementById("field-report-work-start").value = report.work_start || "";
-  document.getElementById("field-report-work-end").value = report.work_end || "";
-  document.getElementById("field-report-summary").value = report.summary || "";
-  document.getElementById("field-report-notes").value = report.notes || "";
-  document.getElementById("field-report-signature-data").value = "";
-  document.getElementById("field-report-message").textContent = "";
-  computeFieldReportTotalHours();
-  syncFieldReportSignatureStatus();
+  document.getElementById("field-report-ticket-label").textContent = ticket.ticket_id || `#${String(ticket.id).padStart(4, "0")}`;
+  document.getElementById("field-report-call-number-label").textContent = `מספר קריאה: ${details.call_number || "-"}`;
+  document.getElementById("field-report-nimbus-customer-name").value = report.nimbus_customer_name || details.customer_name || details.call_number || "";
+  document.getElementById("field-report-contact-first-name").value = report.contact_first_name || nameParts.firstName || "";
+  document.getElementById("field-report-contact-last-name").value = report.contact_last_name || nameParts.lastName || "";
+  document.getElementById("field-report-role").value = report.role || "";
+  document.getElementById("field-report-installation-address").value = report.installation_address || details.address || "";
+  document.getElementById("field-report-phone").value = report.phone || contactPhone || "";
+  document.getElementById("field-report-customer-notes").value = report.customer_notes || "";
+  document.getElementById("field-report-additional-notes").value = report.additional_notes || "";
+  document.getElementById("field-report-installation-date").value = report.installation_date || todayIsraelDate();
+  document.getElementById("field-report-technician-name").value = report.technician_name || technicianDisplayName();
+  document.getElementById("field-report-technician-signature-data").value = report.technician_signature_data_url || "";
+  document.getElementById("field-report-customer-signature-data").value = report.customer_signature_data_url || "";
+  document.getElementById("field-report-area-photos").value = "";
+  itemRows.forEach((row, index) => {
+    const itemName = document.getElementById(`field-report-item-name-${index}`);
+    const quantity = document.getElementById(`field-report-item-quantity-${index}`);
+    const notes = document.getElementById(`field-report-item-notes-${index}`);
+    if (itemName) itemName.value = row.item_name || "";
+    if (quantity) quantity.value = row.quantity || "";
+    if (notes) notes.value = row.notes || "";
+  });
+  renderFieldReportPhotoList(report.area_photo_attachments || [], "field-report-existing-photos", "עדיין לא נוספו צילומים");
+  renderFieldReportPhotoList([], "field-report-pending-photos", "לא נבחרו קבצים חדשים");
+  setFieldReportMessage("", "");
+  setFieldReportLoading(false);
+  syncFieldReportSignatureStatuses();
   document.getElementById("field-report-modal")?.classList.add("open");
   document.getElementById("field-report-modal")?.setAttribute("aria-hidden", "false");
 }
@@ -1785,53 +1901,77 @@ function closeFieldReportModal() {
 
 async function submitFieldReport(event) {
   event.preventDefault();
-  const form = event.currentTarget;
-  const message = document.getElementById("field-report-message");
-  const button = document.getElementById("field-report-save-btn");
-  if (message) message.textContent = "";
-  if (button) button.disabled = true;
-  computeFieldReportTotalHours();
+  setFieldReportMessage("", "");
+  setFieldReportLoading(true);
+
+  const lineItems = Array.from({ length: FIELD_REPORT_LINE_ITEM_ROWS }, (_, index) => ({
+    item_name: document.getElementById(`field-report-item-name-${index}`)?.value || "",
+    quantity: document.getElementById(`field-report-item-quantity-${index}`)?.value || "",
+    notes: document.getElementById(`field-report-item-notes-${index}`)?.value || "",
+  })).filter((row) => Object.values(row).some((value) => String(value || "").trim()));
 
   const payload = {
     ticket_id: document.getElementById("field-report-ticket-id")?.value || "",
-    signed_by: document.getElementById("field-report-signed-by")?.value || "",
-    mobile_number: document.getElementById("field-report-mobile-number")?.value || "",
-    work_start: document.getElementById("field-report-work-start")?.value || "",
-    work_end: document.getElementById("field-report-work-end")?.value || "",
-    summary: document.getElementById("field-report-summary")?.value || "",
-    notes: document.getElementById("field-report-notes")?.value || "",
-    signature_data_url: document.getElementById("field-report-signature-data")?.value || "",
+    nimbus_customer_name: document.getElementById("field-report-nimbus-customer-name")?.value || "",
+    contact_first_name: document.getElementById("field-report-contact-first-name")?.value || "",
+    contact_last_name: document.getElementById("field-report-contact-last-name")?.value || "",
+    role: document.getElementById("field-report-role")?.value || "",
+    installation_address: document.getElementById("field-report-installation-address")?.value || "",
+    phone: document.getElementById("field-report-phone")?.value || "",
+    customer_notes: document.getElementById("field-report-customer-notes")?.value || "",
+    additional_notes: document.getElementById("field-report-additional-notes")?.value || "",
+    line_items: lineItems,
+    installation_date: document.getElementById("field-report-installation-date")?.value || "",
+    technician_name: document.getElementById("field-report-technician-name")?.value || "",
+    technician_signature_data_url: document.getElementById("field-report-technician-signature-data")?.value || "",
+    customer_signature_data_url: document.getElementById("field-report-customer-signature-data")?.value || "",
   };
+  const areaPhotoInput = document.getElementById("field-report-area-photos");
+  const selectedPhotos = Array.from(areaPhotoInput?.files || []);
 
-  if (!payload.signature_data_url) {
-    if (message) message.textContent = "יש להוסיף חתימת לקוח";
-    if (button) button.disabled = false;
+  if (!payload.technician_signature_data_url) {
+    setFieldReportMessage("יש להוסיף חתימת טכנאי", "error");
+    setFieldReportLoading(false);
+    return;
+  }
+  if (!payload.customer_signature_data_url) {
+    setFieldReportMessage("יש להוסיף חתימת לקוח", "error");
+    setFieldReportLoading(false);
     return;
   }
 
   try {
+    const formData = new FormData();
+    formData.append("payload", JSON.stringify(payload));
+    selectedPhotos.forEach((file) => {
+      formData.append("area_photos", file);
+    });
     const res = await fetch("/support-tickets-field-report", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: formData,
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok || !data.ok) {
       throw new Error(data.message || "Save failed");
     }
     if (data?.ticket?.field_report_error) {
-      openNotificationErrorModal(`הדוח נשמר אך שליחת המייל נכשלה: ${data.ticket.field_report_error}`);
+      setFieldReportMessage(`הטופס נשמר, אך שליחת המייל נכשלה: ${data.ticket.field_report_error}`, "error");
+      closeSignatureModal();
+      closeFieldReportModal();
+      closeTicketDetail();
+      await loadTickets();
+      openNotificationErrorModal(`הטופס נשמר, אך שליחת המייל נכשלה: ${data.ticket.field_report_error}`);
     } else {
       showSendSuccessToast();
+      closeSignatureModal();
+      closeFieldReportModal();
+      closeTicketDetail();
+      await loadTickets();
     }
-    closeSignatureModal();
-    closeFieldReportModal();
-    await loadTickets();
-    openTicketDetail(payload.ticket_id);
   } catch (err) {
-    if (message) message.textContent = err.message || "Save failed";
+    setFieldReportMessage(err.message || "Save failed", "error");
   } finally {
-    if (button) button.disabled = false;
+    setFieldReportLoading(false);
   }
 }
 
@@ -2868,7 +3008,12 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("cancel-signature-btn")?.addEventListener("click", closeSignatureModal);
   document.getElementById("clear-signature-btn")?.addEventListener("click", clearSignatureCanvas);
   document.getElementById("save-signature-btn")?.addEventListener("click", saveSignatureToFieldReport);
-  document.getElementById("open-signature-modal")?.addEventListener("click", openSignatureModal);
+  document.querySelectorAll(".field-report-signature-btn").forEach((button) => {
+    button.addEventListener("click", () => {
+      activeFieldReportSignatureTarget = button.dataset.signatureTarget === "technician" ? "technician" : "customer";
+      openSignatureModal();
+    });
+  });
   document.getElementById("signature-modal")?.addEventListener("click", (event) => {
     if (event.target.id === "signature-modal") closeSignatureModal();
   });
@@ -2913,14 +3058,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("attachment-input")?.addEventListener("change", syncAttachmentInputState);
   document.getElementById("detail-attachment-input")?.addEventListener("change", syncDetailAttachmentInputState);
-  document.getElementById("field-report-work-start")?.addEventListener("change", computeFieldReportTotalHours);
-  document.getElementById("field-report-work-end")?.addEventListener("change", computeFieldReportTotalHours);
-  document.getElementById("field-report-mobile-number")?.addEventListener("input", (event) => {
-    event.currentTarget.value = String(event.currentTarget.value || "").replace(/\D+/g, "");
+  document.getElementById("field-report-phone")?.addEventListener("input", (event) => {
+    event.currentTarget.value = String(event.currentTarget.value || "").replace(/[^\d+]/g, "");
+  });
+  document.getElementById("field-report-area-photos")?.addEventListener("change", (event) => {
+    const files = Array.from(event.currentTarget?.files || []).map((file) => ({ original_name: file.name }));
+    renderFieldReportPhotoList(files, "field-report-pending-photos", "לא נבחרו קבצים חדשים");
   });
   syncAttachmentInputState();
   syncDetailAttachmentInputState();
-  syncFieldReportSignatureStatus();
+  syncFieldReportSignatureStatuses();
+  renderFieldReportPhotoList([], "field-report-existing-photos", "עדיין לא נוספו צילומים");
+  renderFieldReportPhotoList([], "field-report-pending-photos", "לא נבחרו קבצים חדשים");
   bindSignaturePad();
 
   document.getElementById("ticket-form").addEventListener("submit", submitTicket);

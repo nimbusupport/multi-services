@@ -1,5 +1,6 @@
 import importlib
 import io
+import json
 import os
 import sys
 import tempfile
@@ -1571,7 +1572,7 @@ class SupportTicketsTestCase(unittest.TestCase):
             "updates": [],
         })
         self.app_module.save_support_tickets(tickets)
-        self.app_module.build_hot_field_report_pdf = lambda ticket, report, signature: b"%PDF-1.4 fake"
+        self.app_module.build_hot_field_report_pdf = lambda ticket, report, technician_signature, customer_signature: b"%PDF-1.4 fake"
         captured = {}
 
         def fake_send_plain_email(to_address, subject, body, from_address=None, html_body=None, attachments=None):
@@ -1584,26 +1585,39 @@ class SupportTicketsTestCase(unittest.TestCase):
 
         response = self.client.post(
             "/support-tickets-field-report",
-            json={
-                "ticket_id": 2,
-                "signed_by": "חיים",
-                "mobile_number": "0524443593",
-                "work_start": "09:00",
-                "work_end": "11:30",
-                "summary": "העבודה הושלמה",
-                "notes": "הותקן בהצלחה",
-                "signature_data_url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4////fwAJ+wP9KobjigAAAABJRU5ErkJggg==",
+            data={
+                "payload": json.dumps({
+                    "ticket_id": 2,
+                    "nimbus_customer_name": "חיים",
+                    "contact_first_name": "חיים",
+                    "contact_last_name": "כהן",
+                    "role": "מנהל",
+                    "installation_address": "האופה 1, נתניה",
+                    "phone": "0524443593",
+                    "customer_notes": "בדיקה מול לקוח",
+                    "additional_notes": "הותקן בהצלחה",
+                    "installation_date": "10/09/2026",
+                    "technician_name": "גולן",
+                    "line_items": [
+                        {"item_name": "פאנל אינטרקום", "quantity": "1", "notes": "הותקן"},
+                    ],
+                    "technician_signature_data_url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4////fwAJ+wP9KobjigAAAABJRU5ErkJggg==",
+                    "customer_signature_data_url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4////fwAJ+wP9KobjigAAAABJRU5ErkJggg==",
+                }, ensure_ascii=False),
+                "area_photos": [(io.BytesIO(b"jpg"), "field.jpg")],
             },
+            content_type="multipart/form-data",
         )
 
         self.assertEqual(response.status_code, 200)
         payload = response.get_json()
         self.assertTrue(payload["ok"])
         self.assertTrue(payload["ticket"]["field_report_sent"])
-        self.assertEqual(payload["ticket"]["details"]["field_report"]["signed_by"], "חיים")
-        self.assertEqual(payload["ticket"]["details"]["field_report"]["total_hours"], "2:30")
-        self.assertEqual(len(payload["ticket"]["attachments"]), 1)
-        self.assertTrue(payload["ticket"]["attachments"][0]["original_name"].endswith(".pdf"))
+        self.assertEqual(payload["ticket"]["details"]["field_report"]["contact_first_name"], "חיים")
+        self.assertEqual(payload["ticket"]["details"]["field_report"]["technician_name"], "גולן")
+        self.assertEqual(len(payload["ticket"]["details"]["field_report"]["area_photo_attachments"]), 1)
+        self.assertEqual(len(payload["ticket"]["attachments"]), 2)
+        self.assertTrue(any(str(item["original_name"]).endswith(".pdf") for item in payload["ticket"]["attachments"]))
         self.assertEqual(captured["to_address"], self.app_module.HOT_FIELD_REPORT_CUSTOMER_EMAIL)
         self.assertEqual(captured["attachments"][0]["subtype"], "pdf")
 
@@ -1640,12 +1654,13 @@ class SupportTicketsTestCase(unittest.TestCase):
             "/support-tickets-field-report",
             json={
                 "ticket_id": 2,
-                "signed_by": "לקוח",
-                "mobile_number": "0501234567",
-                "work_start": "09:00",
-                "work_end": "10:00",
-                "summary": "Done",
-                "signature_data_url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4////fwAJ+wP9KobjigAAAABJRU5ErkJggg==",
+                "nimbus_customer_name": "לקוח",
+                "contact_first_name": "לקוח",
+                "installation_address": "רחוב 1",
+                "phone": "0501234567",
+                "technician_name": "גולן",
+                "technician_signature_data_url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4////fwAJ+wP9KobjigAAAABJRU5ErkJggg==",
+                "customer_signature_data_url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4////fwAJ+wP9KobjigAAAABJRU5ErkJggg==",
             },
         )
 

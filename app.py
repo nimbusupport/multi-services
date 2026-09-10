@@ -335,6 +335,13 @@ SUPABASE_BUCKET_SECRET_KEY = (os.environ.get("SUPABASE_BUCKET_SECRET_KEY") or ""
 NASTIA_NOTIFICATION_EMAIL = (os.environ.get("NASTIA_NOTIFICATION_EMAIL") or "nastya@nimbusip.com").strip()
 RACHELI_NOTIFICATION_EMAIL = (os.environ.get("RACHELI_NOTIFICATION_EMAIL") or "racheli@nimbusip.com").strip()
 HOT_FIELD_REPORT_CUSTOMER_EMAIL = (os.environ.get("HOT_FIELD_REPORT_CUSTOMER_EMAIL") or NASTIA_NOTIFICATION_EMAIL).strip()
+NIMBUS_LOGO_PATH = next((
+    path for path in [
+        os.path.join(app.static_folder or "template", "brand", "nimbus-logo-pdf.png"),
+        os.path.join(app.static_folder or "template", "brand", "nimbus-logo.png"),
+    ]
+    if os.path.exists(path)
+), os.path.join(app.static_folder or "template", "brand", "nimbus-logo.png"))
 PAIS_NOTIFICATION_FROM = (
     os.environ.get("PAIS_NOTIFICATION_FROM")
     or os.environ.get("NASTIA_NOTIFICATION_FROM")
@@ -1565,18 +1572,18 @@ def save_generated_support_attachment(content, filename, ticket_number, content_
     return save_support_attachment(generated_file, ticket_number, allowed_extensions=SUPPORT_ATTACHMENT_EXTENSIONS | {".pdf"})
 
 
-def parse_signature_data_url(signature_data_url):
+def parse_signature_data_url(signature_data_url, label="חתימה"):
     raw_value = str(signature_data_url or "").strip()
     match = re.fullmatch(r"data:image/(?P<subtype>png|jpeg|jpg);base64,(?P<data>[A-Za-z0-9+/=\s]+)", raw_value, re.IGNORECASE)
     if not match:
-        raise ValueError("חתימת הלקוח אינה תקינה")
+        raise ValueError(f"{label} אינה תקינה")
     subtype = match.group("subtype").lower().replace("jpg", "jpeg")
     try:
         image_bytes = base64.b64decode(match.group("data"), validate=True)
     except Exception as exc:
-        raise ValueError("חתימת הלקוח אינה תקינה") from exc
+        raise ValueError(f"{label} אינה תקינה") from exc
     if not image_bytes:
-        raise ValueError("חתימת הלקוח אינה תקינה")
+        raise ValueError(f"{label} אינה תקינה")
     return image_bytes, subtype
 
 
@@ -1606,7 +1613,44 @@ def hot_field_report_attachment_label(ticket, report):
     return f"hot-field-report-{ticket_label}-{customer_name}-{report_stamp}.pdf"
 
 
-def build_hot_field_report_pdf(ticket, report, signature_bytes):
+def normalize_hot_field_report_line_items(items):
+    normalized_items = []
+    if isinstance(items, str):
+        try:
+            items = json.loads(items)
+        except json.JSONDecodeError:
+            items = []
+    if not isinstance(items, list):
+        items = []
+    for row in items[:5]:
+        if not isinstance(row, dict):
+            continue
+        item_name = str(row.get("item_name") or "").strip()
+        quantity = str(row.get("quantity") or "").strip()
+        notes = str(row.get("notes") or "").strip()
+        if not any([item_name, quantity, notes]):
+            continue
+        normalized_items.append({
+            "item_name": item_name,
+            "quantity": quantity,
+            "notes": notes,
+        })
+    return normalized_items
+
+
+def hot_field_report_photo_rows(photo_attachments):
+    rows = []
+    for index, attachment in enumerate(photo_attachments or [], start=1):
+        label = str(
+            attachment.get("original_name")
+            or attachment.get("saved_name")
+            or f"Photo {index}"
+        ).strip() or f"Photo {index}"
+        rows.append((f"צילום {index}", label))
+    return rows
+
+
+def build_hot_field_report_pdf(ticket, report, technician_signature_bytes, customer_signature_bytes):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -1658,37 +1702,80 @@ def build_hot_field_report_pdf(ticket, report, signature_bytes):
         alignment=TA_LEFT,
         textColor=colors.black,
     )
+    section_title_style = ParagraphStyle(
+        "HotFieldReportSectionTitle",
+        parent=styles["Normal"],
+        fontName=hebrew_bold_font,
+        fontSize=12,
+        leading=16,
+        alignment=TA_RIGHT,
+        textColor=colors.HexColor("#233f65"),
+        spaceAfter=4,
+    )
+    intro_style = ParagraphStyle(
+        "HotFieldReportIntro",
+        parent=styles["Normal"],
+        fontName=hebrew_regular_font,
+        fontSize=10.5,
+        leading=15,
+        alignment=TA_RIGHT,
+        textColor=colors.black,
+    )
+    center_cell_style = ParagraphStyle(
+        "HotFieldReportCenterCell",
+        parent=text_style,
+        alignment=TA_CENTER,
+    )
 
     details = ticket.get("details") or {}
-    metadata_rows = [
-        ("מספר קריאה", details.get("call_number") or ticket.get("ticket_id") or ""),
-        ("שם לקוח", details.get("customer_name") or ""),
-        ("כתובת", details.get("address") or ""),
-        ("איש קשר במקום", details.get("on_site_contact") or ""),
-        ("טכנאי", report.get("submitted_by") or ""),
-        ("נחתם על ידי", report.get("signed_by") or ""),
-        ("נייד", report.get("mobile_number") or ""),
-        ("שעת התחלה", report.get("work_start") or ""),
-        ("שעת סיום", report.get("work_end") or ""),
-        ("סה\"כ שעות", report.get("total_hours") or ""),
+    meta_rows = [
+        [
+            pdf_paragraph("שם הלקוח בנימבוס", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
+            pdf_paragraph(report.get("nimbus_customer_name") or details.get("customer_name") or details.get("call_number") or "-", text_style, rtl=True, latin_font_name=latin_regular_font, hebrew_font_name=hebrew_regular_font),
+        ],
+        [
+            pdf_paragraph("מספר קריאה", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
+            pdf_paragraph(details.get("call_number") or ticket.get("ticket_id") or "-", latin_style, rtl=False, latin_font_name=latin_regular_font, hebrew_font_name=hebrew_regular_font),
+        ],
+        [
+            pdf_paragraph("שם פרטי", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
+            pdf_paragraph(report.get("contact_first_name") or "-", text_style, rtl=True, latin_font_name=latin_regular_font, hebrew_font_name=hebrew_regular_font),
+        ],
+        [
+            pdf_paragraph("שם משפחה", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
+            pdf_paragraph(report.get("contact_last_name") or "-", text_style, rtl=True, latin_font_name=latin_regular_font, hebrew_font_name=hebrew_regular_font),
+        ],
+        [
+            pdf_paragraph("תפקיד", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
+            pdf_paragraph(report.get("role") or "-", text_style, rtl=True, latin_font_name=latin_regular_font, hebrew_font_name=hebrew_regular_font),
+        ],
+        [
+            pdf_paragraph("כתובת ההתקנה", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
+            pdf_paragraph(report.get("installation_address") or details.get("address") or "-", text_style, rtl=True, latin_font_name=latin_regular_font, hebrew_font_name=hebrew_regular_font),
+        ],
+        [
+            pdf_paragraph("טלפון", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
+            pdf_paragraph(report.get("phone") or "-", latin_style, rtl=False, latin_font_name=latin_regular_font, hebrew_font_name=hebrew_regular_font),
+        ],
+        [
+            pdf_paragraph("הערות", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
+            pdf_paragraph(report.get("customer_notes") or "-", text_style, rtl=True, latin_font_name=latin_regular_font, hebrew_font_name=hebrew_regular_font),
+        ],
     ]
 
-    story = [
-        pdf_paragraph("דוח החתמת לקוח - הוט קריאות", title_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
-        Spacer(1, 6),
-    ]
-    metadata_table = Table(
-        [
-            [
-                pdf_paragraph(value, latin_style if re.search(r"[0-9:]", str(value or "")) and not HEBREW_TEXT_RE.search(str(value or "")) else text_style, rtl=bool(HEBREW_TEXT_RE.search(str(value or ""))), latin_font_name=latin_regular_font, hebrew_font_name=hebrew_regular_font),
-                pdf_paragraph(label, label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
-            ]
-            for label, value in metadata_rows
-        ],
-        colWidths=[116 * mm, 54 * mm],
-        hAlign="RIGHT",
-    )
-    metadata_table.setStyle(TableStyle([
+    story = []
+    if os.path.exists(NIMBUS_LOGO_PATH):
+        story.append(Image(NIMBUS_LOGO_PATH, width=32 * mm, height=18 * mm, hAlign="LEFT"))
+    story.extend([
+        pdf_paragraph("Nimbus Telecom", label_style, rtl=False, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
+        Spacer(1, 3),
+        pdf_paragraph("טופס אישור קבלת ציוד והתקנה", title_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
+        Spacer(1, 5),
+        pdf_paragraph("למילוי ע\"י נציג / הלקוח", section_title_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
+    ])
+
+    meta_table = Table(meta_rows, colWidths=[40 * mm, 130 * mm], hAlign="RIGHT")
+    meta_table.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, -1), colors.white),
         ("BOX", (0, 0), (-1, -1), 0.6, colors.HexColor("#d8deea")),
         ("INNERGRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#d8deea")),
@@ -1698,18 +1785,121 @@ def build_hot_field_report_pdf(ticket, report, signature_bytes):
         ("TOPPADDING", (0, 0), (-1, -1), 6),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
     ]))
-    story.append(metadata_table)
+    story.extend([
+        meta_table,
+        Spacer(1, 8),
+        pdf_paragraph(
+            "הנני מאשר בזאת כי נמסר לידי הציוד המפורט להלן, ובוצעה התקנתו ע\"י טכנאי מטעם נימבוס:",
+            intro_style,
+            rtl=True,
+            latin_font_name=latin_regular_font,
+            hebrew_font_name=hebrew_regular_font,
+        ),
+        Spacer(1, 6),
+    ])
+
+    line_items = list(report.get("line_items") or [])
+    table_rows = [[
+        pdf_paragraph("הערות", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
+        pdf_paragraph("כמות", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
+        pdf_paragraph("שם פריט", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
+    ]]
+    for row in line_items or [{}]:
+        table_rows.append([
+            pdf_paragraph(row.get("notes") or "-", text_style, rtl=True, latin_font_name=latin_regular_font, hebrew_font_name=hebrew_regular_font),
+            pdf_paragraph(row.get("quantity") or "-", center_cell_style, rtl=False, latin_font_name=latin_regular_font, hebrew_font_name=hebrew_regular_font),
+            pdf_paragraph(row.get("item_name") or "-", text_style, rtl=True, latin_font_name=latin_regular_font, hebrew_font_name=hebrew_regular_font),
+        ])
+    while len(table_rows) < 6:
+        table_rows.append([
+            pdf_paragraph("-", text_style, rtl=True, latin_font_name=latin_regular_font, hebrew_font_name=hebrew_regular_font),
+            pdf_paragraph("-", center_cell_style, rtl=False, latin_font_name=latin_regular_font, hebrew_font_name=hebrew_regular_font),
+            pdf_paragraph("-", text_style, rtl=True, latin_font_name=latin_regular_font, hebrew_font_name=hebrew_regular_font),
+        ])
+    items_table = Table(table_rows, colWidths=[74 * mm, 24 * mm, 72 * mm], hAlign="RIGHT")
+    items_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f3f7fd")),
+        ("BOX", (0, 0), (-1, -1), 0.7, colors.HexColor("#bcc8d7")),
+        ("INNERGRID", (0, 0), (-1, -1), 0.45, colors.HexColor("#d8deea")),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 7),
+        ("LEFTPADDING", (0, 0), (-1, -1), 7),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    story.extend([
+        items_table,
+        Spacer(1, 8),
+        pdf_paragraph("הערות נוספות", section_title_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
+        pdf_paragraph(report.get("additional_notes") or "-", text_style, rtl=True, latin_font_name=latin_regular_font, hebrew_font_name=hebrew_regular_font),
+        Spacer(1, 8),
+        pdf_paragraph("צילום אזור עבודה", section_title_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
+    ])
+
+    photo_rows = hot_field_report_photo_rows(report.get("area_photo_attachments") or [])
+    if photo_rows:
+        photo_table = Table([
+            [
+                pdf_paragraph(value, text_style, rtl=True, latin_font_name=latin_regular_font, hebrew_font_name=hebrew_regular_font),
+                pdf_paragraph(label, label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
+            ]
+            for label, value in photo_rows
+        ], colWidths=[128 * mm, 42 * mm], hAlign="RIGHT")
+        photo_table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), colors.white),
+            ("BOX", (0, 0), (-1, -1), 0.6, colors.HexColor("#d8deea")),
+            ("INNERGRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#d8deea")),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+            ("LEFTPADDING", (0, 0), (-1, -1), 8),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ]))
+        story.append(photo_table)
+    else:
+        story.append(pdf_paragraph("-", text_style, rtl=True, latin_font_name=latin_regular_font, hebrew_font_name=hebrew_regular_font))
+
+    signature_table = Table([
+        [
+            pdf_paragraph("חתימת הלקוח", section_title_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
+            pdf_paragraph("חתימת טכנאי", section_title_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
+        ],
+        [
+            Image(io.BytesIO(customer_signature_bytes), width=72 * mm, height=28 * mm, hAlign="CENTER"),
+            Image(io.BytesIO(technician_signature_bytes), width=72 * mm, height=28 * mm, hAlign="CENTER"),
+        ],
+    ], colWidths=[85 * mm, 85 * mm], hAlign="RIGHT")
+    signature_table.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("BOX", (0, 0), (-1, -1), 0.6, colors.HexColor("#d8deea")),
+        ("INNERGRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#d8deea")),
+        ("TOPPADDING", (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+    ]))
     story.extend([
         Spacer(1, 10),
-        pdf_paragraph("סיכום", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
-        pdf_paragraph(report.get("summary") or "-", text_style, rtl=True, latin_font_name=latin_regular_font, hebrew_font_name=hebrew_regular_font),
+        signature_table,
         Spacer(1, 8),
-        pdf_paragraph("הערות", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
-        pdf_paragraph(report.get("notes") or "-", text_style, rtl=True, latin_font_name=latin_regular_font, hebrew_font_name=hebrew_regular_font),
-        Spacer(1, 8),
-        pdf_paragraph("חתימת לקוח", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
     ])
-    story.append(Image(io.BytesIO(signature_bytes), width=90 * mm, height=35 * mm, hAlign="RIGHT"))
+
+    technician_meta_table = Table([
+        [
+            pdf_paragraph("מועד התקנה", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
+            pdf_paragraph(report.get("installation_date") or "-", latin_style, rtl=False, latin_font_name=latin_regular_font, hebrew_font_name=hebrew_regular_font),
+            pdf_paragraph("טכנאי מבצע", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
+            pdf_paragraph(report.get("technician_name") or report.get("submitted_by") or "-", text_style, rtl=True, latin_font_name=latin_regular_font, hebrew_font_name=hebrew_regular_font),
+        ],
+    ], colWidths=[26 * mm, 48 * mm, 30 * mm, 66 * mm], hAlign="RIGHT")
+    technician_meta_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.white),
+        ("BOX", (0, 0), (-1, -1), 0.6, colors.HexColor("#d8deea")),
+        ("INNERGRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#d8deea")),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    story.append(technician_meta_table)
     doc.build(story)
     buffer.seek(0)
     return buffer.getvalue()
@@ -1718,28 +1908,39 @@ def build_hot_field_report_pdf(ticket, report, signature_bytes):
 def send_hot_field_report_email(ticket, report, pdf_filename, pdf_content):
     details = ticket.get("details") or {}
     ticket_label = ticket.get("ticket_id") or f"#{int(ticket.get('id') or 0):04d}"
+    item_lines = []
+    for row in report.get("line_items") or []:
+        item_lines.append(
+            " / ".join(part for part in [
+                str(row.get("item_name") or "").strip() or "-",
+                f"כמות: {str(row.get('quantity') or '').strip() or '-'}",
+                f"הערות: {str(row.get('notes') or '').strip() or '-'}",
+            ] if part)
+        )
     body_lines = [
         f"קריאה: {ticket_label}",
         f"מספר קריאה: {(details.get('call_number') or '').strip() or '-'}",
         f"לקוח: {(details.get('customer_name') or '').strip() or '-'}",
-        f"כתובת: {(details.get('address') or '').strip() or '-'}",
-        f"נחתם על ידי: {(report.get('signed_by') or '').strip() or '-'}",
-        f"נייד: {(report.get('mobile_number') or '').strip() or '-'}",
-        f"שעת התחלה: {(report.get('work_start') or '').strip() or '-'}",
-        f"שעת סיום: {(report.get('work_end') or '').strip() or '-'}",
-        f"סה\"כ שעות: {(report.get('total_hours') or '').strip() or '-'}",
-        f"סיכום: {(report.get('summary') or '').strip() or '-'}",
-        f"הערות: {(report.get('notes') or '').strip() or '-'}",
-        f"טכנאי: {(report.get('submitted_by') or '').strip() or '-'}",
+        f"שם הלקוח בנימבוס: {(report.get('nimbus_customer_name') or '').strip() or '-'}",
+        f"נציג / לקוח: {' '.join(part for part in [(report.get('contact_first_name') or '').strip(), (report.get('contact_last_name') or '').strip()] if part) or '-'}",
+        f"תפקיד: {(report.get('role') or '').strip() or '-'}",
+        f"כתובת: {(report.get('installation_address') or details.get('address') or '').strip() or '-'}",
+        f"טלפון: {(report.get('phone') or '').strip() or '-'}",
+        f"הערות: {(report.get('customer_notes') or '').strip() or '-'}",
+        f"הערות נוספות: {(report.get('additional_notes') or '').strip() or '-'}",
+        f"פריטים: {' | '.join(item_lines) if item_lines else '-'}",
+        f"צילומי אזור עבודה: {len(report.get('area_photo_attachments') or [])}",
+        f"טכנאי מבצע: {(report.get('technician_name') or report.get('submitted_by') or '').strip() or '-'}",
+        f"מועד התקנה: {(report.get('installation_date') or '').strip() or '-'}",
         f"זמן חתימה: {(report.get('submitted_at_display') or '').strip() or '-'}",
     ]
-    html_body = "<html><body dir='rtl'><h2>דוח החתמת לקוח - הוט קריאות</h2><ul>" + "".join(
+    html_body = "<html><body dir='rtl'><h2>טופס אישור קבלת ציוד והתקנה</h2><ul>" + "".join(
         f"<li><strong>{xml_escape(line.split(':', 1)[0])}:</strong> {xml_escape(line.split(':', 1)[1].strip() if ':' in line else '')}</li>"
         for line in body_lines
     ) + "</ul></body></html>"
     send_plain_email(
         HOT_FIELD_REPORT_CUSTOMER_EMAIL,
-        f"{ticket_label} - דוח החתמת לקוח",
+        f"{ticket_label} - טופס אישור קבלת ציוד והתקנה",
         "\n".join(body_lines),
         html_body=html_body,
         attachments=[{
@@ -1751,7 +1952,7 @@ def send_hot_field_report_email(ticket, report, pdf_filename, pdf_content):
     )
 
 
-def save_hot_field_report(ticket_id, actor, payload):
+def save_hot_field_report(ticket_id, actor, payload, area_photo_files=None):
     tickets = load_support_tickets()
     ticket = find_support_ticket(tickets, ticket_id)
     if not ticket:
@@ -1759,46 +1960,64 @@ def save_hot_field_report(ticket_id, actor, payload):
     if (ticket.get("board_slug") or "").strip().lower() != "hot-kiryot":
         raise ValueError("Customer signature is supported only for הוט קריאות")
 
-    signed_by = str(payload.get("signed_by") or "").strip()
-    mobile_number = re.sub(r"\D+", "", str(payload.get("mobile_number") or ""))
-    work_start = str(payload.get("work_start") or "").strip()
-    work_end = str(payload.get("work_end") or "").strip()
-    summary = str(payload.get("summary") or "").strip()
-    notes = str(payload.get("notes") or "").strip()
-    signature_data_url = payload.get("signature_data_url")
+    details = dict(ticket.get("details") or {})
+    previous_report = details.get("field_report") if isinstance(details.get("field_report"), dict) else {}
+    contact_first_name = str(payload.get("contact_first_name") or previous_report.get("contact_first_name") or "").strip()
+    contact_last_name = str(payload.get("contact_last_name") or previous_report.get("contact_last_name") or "").strip()
+    nimbus_customer_name = str(payload.get("nimbus_customer_name") or previous_report.get("nimbus_customer_name") or details.get("customer_name") or details.get("call_number") or "").strip()
+    role = str(payload.get("role") or previous_report.get("role") or "").strip()
+    installation_address = str(payload.get("installation_address") or previous_report.get("installation_address") or details.get("address") or "").strip()
+    phone = re.sub(r"[^\d+]", "", str(payload.get("phone") or previous_report.get("phone") or "").strip())
+    customer_notes = str(payload.get("customer_notes") or previous_report.get("customer_notes") or "").strip()
+    additional_notes = str(payload.get("additional_notes") or previous_report.get("additional_notes") or "").strip()
+    installation_date = str(payload.get("installation_date") or previous_report.get("installation_date") or israel_now().strftime("%d/%m/%Y")).strip()
+    technician_name = str(payload.get("technician_name") or previous_report.get("technician_name") or actor).strip()
+    technician_signature_data_url = str(payload.get("technician_signature_data_url") or previous_report.get("technician_signature_data_url") or "").strip()
+    customer_signature_data_url = str(payload.get("customer_signature_data_url") or previous_report.get("customer_signature_data_url") or "").strip()
+    line_items = normalize_hot_field_report_line_items(payload.get("line_items") or previous_report.get("line_items") or [])
 
-    if not signed_by:
-        raise ValueError("יש למלא נחתם על ידי")
-    if not mobile_number:
-        raise ValueError("יש למלא נייד במספרים בלבד")
-    if not summary:
-        raise ValueError("יש למלא סיכום")
+    if not nimbus_customer_name:
+        raise ValueError("יש למלא שם הלקוח בנימבוס")
+    if not contact_first_name:
+        raise ValueError("יש למלא שם פרטי")
+    if not installation_address:
+        raise ValueError("יש למלא כתובת התקנה")
+    if not phone:
+        raise ValueError("יש למלא טלפון")
+    if not technician_name:
+        raise ValueError("יש למלא טכנאי מבצע")
 
-    duration = calculate_work_duration(work_start, work_end)
-    signature_bytes, _ = parse_signature_data_url(signature_data_url)
+    technician_signature_bytes, _ = parse_signature_data_url(technician_signature_data_url, "חתימת הטכנאי")
+    customer_signature_bytes, _ = parse_signature_data_url(customer_signature_data_url, "חתימת הלקוח")
     now = israel_now()
     submitted_display = now.strftime("%d/%m/%Y %H:%M")
+    merged_photo_attachments = list(previous_report.get("area_photo_attachments") or [])
+    if area_photo_files:
+        merged_photo_attachments.extend(save_support_attachments(area_photo_files, int(ticket.get("id") or 0)))
     report = {
-        "signed_by": signed_by,
-        "mobile_number": mobile_number,
-        "work_start": work_start,
-        "work_end": work_end,
-        "total_hours": duration["label"],
-        "total_minutes": duration["minutes"],
-        "total_hours_decimal": duration["decimal_hours"],
-        "summary": summary,
-        "notes": notes,
+        "nimbus_customer_name": nimbus_customer_name,
+        "contact_first_name": contact_first_name,
+        "contact_last_name": contact_last_name,
+        "role": role,
+        "installation_address": installation_address,
+        "phone": phone,
+        "customer_notes": customer_notes,
+        "line_items": line_items,
+        "additional_notes": additional_notes,
+        "installation_date": installation_date,
+        "technician_name": technician_name,
+        "technician_signature_data_url": technician_signature_data_url,
+        "customer_signature_data_url": customer_signature_data_url,
+        "area_photo_attachments": merged_photo_attachments,
         "submitted_by": actor,
         "submitted_at": now.isoformat(timespec="seconds"),
         "submitted_at_display": submitted_display,
     }
-    pdf_content = build_hot_field_report_pdf(ticket, report, signature_bytes)
+    pdf_content = build_hot_field_report_pdf(ticket, report, technician_signature_bytes, customer_signature_bytes)
     pdf_filename = hot_field_report_attachment_label(ticket, report)
     saved_attachment = save_generated_support_attachment(pdf_content, pdf_filename, int(ticket.get("id") or 0), "application/pdf")
     report["pdf_attachment"] = saved_attachment
 
-    details = dict(ticket.get("details") or {})
-    previous_report = details.get("field_report") if isinstance(details.get("field_report"), dict) else None
     details["field_report"] = report
     now_iso = now.isoformat(timespec="seconds")
     updates = [{
@@ -1808,6 +2027,7 @@ def save_hot_field_report(ticket_id, actor, payload):
         "old_value": json.dumps(previous_report or {}, ensure_ascii=False),
         "new_value": json.dumps(report, ensure_ascii=False),
     }]
+    saved_attachments = list(merged_photo_attachments[len(previous_report.get("area_photo_attachments") or []):]) + [saved_attachment]
 
     if supabase_ticketing_enabled():
         _supabase_request(
@@ -1817,12 +2037,13 @@ def save_hot_field_report(ticket_id, actor, payload):
             json_body={"details": details},
             prefer="return=minimal",
         )
-        _supabase_request(
-            "POST",
-            "ticket_attachments",
-            json_body=[{"ticket_id": ticket["id"], **saved_attachment}],
-            prefer="return=minimal",
-        )
+        if saved_attachments:
+            _supabase_request(
+                "POST",
+                "ticket_attachments",
+                json_body=[{"ticket_id": ticket["id"], **attachment} for attachment in saved_attachments],
+                prefer="return=minimal",
+            )
         _supabase_request(
             "POST",
             "ticket_updates",
@@ -1832,7 +2053,7 @@ def save_hot_field_report(ticket_id, actor, payload):
         normalized_ticket = normalize_support_ticket({
             **ticket,
             "details": details,
-            "attachments": (ticket.get("attachments") or []) + [saved_attachment],
+            "attachments": (ticket.get("attachments") or []) + saved_attachments,
             "updates": (ticket.get("updates") or []) + [{
                 "at": update["changed_at"],
                 "actor": update["actor"],
@@ -1847,7 +2068,7 @@ def save_hot_field_report(ticket_id, actor, payload):
         if not local_ticket:
             raise LookupError("Ticket not found")
         local_ticket["details"] = details
-        local_ticket["attachments"] = (local_ticket.get("attachments") or []) + [saved_attachment]
+        local_ticket["attachments"] = (local_ticket.get("attachments") or []) + saved_attachments
         local_ticket.setdefault("updates", []).extend([{
             "at": update["changed_at"],
             "actor": update["actor"],
@@ -4879,6 +5100,22 @@ def support_tickets_field_report():
         return jsonify({"ok": False, "message": "Technician access required"}), 403
 
     payload = request.get_json(silent=True) or {}
+    area_photo_files = []
+    if not payload and request.form:
+        raw_payload = (request.form.get("payload") or "").strip()
+        if raw_payload:
+            try:
+                payload = json.loads(raw_payload)
+            except json.JSONDecodeError as exc:
+                return jsonify({"ok": False, "message": f"Invalid payload: {exc}"}), 400
+        else:
+            payload = request.form.to_dict(flat=True)
+    if request.files:
+        area_photo_files = [
+            file_storage
+            for file_storage in request.files.getlist("area_photos")
+            if file_storage and file_storage.filename
+        ]
     ticket_id = payload.get("ticket_id")
     target_ticket = find_support_ticket(load_support_tickets(), ticket_id)
     if not target_ticket:
@@ -4889,7 +5126,7 @@ def support_tickets_field_report():
         return jsonify({"ok": False, "message": "Customer signature is supported only for הוט קריאות"}), 400
 
     try:
-        ticket = save_hot_field_report(ticket_id, support_user_name(), payload)
+        ticket = save_hot_field_report(ticket_id, support_user_name(), payload, area_photo_files=area_photo_files)
     except ValueError as exc:
         return jsonify({"ok": False, "message": str(exc)}), 400
     except LookupError:

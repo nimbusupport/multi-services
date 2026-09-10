@@ -1333,11 +1333,168 @@ textarea {
 }
 
 .field-report-card {
-  width: min(760px, 100%);
+  position: relative;
+  width: min(980px, 100%);
+}
+
+.field-report-card.is-loading {
+  pointer-events: none;
+}
+
+.field-report-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  border-radius: 16px;
+  background: rgba(251, 248, 243, 0.88);
+  color: #203c61;
+  font-size: 16px;
+  font-weight: 900;
+  backdrop-filter: blur(2px);
+}
+
+.field-report-loading-spinner {
+  width: 22px;
+  height: 22px;
+  border: 3px solid rgba(32, 60, 97, 0.18);
+  border-top-color: #203c61;
+  border-radius: 50%;
+  animation: field-report-spin 0.9s linear infinite;
+}
+
+@keyframes field-report-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.field-report-form-header {
+  align-items: flex-start;
+}
+
+.field-report-branding {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.field-report-branding img {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  border-radius: 16px;
+  background: #fff;
+  border: 1px solid #dfd5c7;
+  padding: 8px;
+}
+
+.field-report-branding p {
+  margin: 0;
+  color: #6b7a8f;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.field-report-branding h2 {
+  margin-top: 4px;
+}
+
+.field-report-sheet {
+  margin-top: 12px;
+  padding: 18px;
+  border: 1px solid #e1d7ca;
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(249,245,239,0.98) 100%);
+}
+
+.field-report-ticket-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+  color: #5c6570;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.field-report-ticket-meta span:first-child {
+  color: #0f2f57;
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.field-report-full-width {
+  grid-column: 1 / -1;
+}
+
+.field-report-section-title {
+  margin: 18px 0 10px;
+  color: #203c61;
+  font-size: 15px;
+  font-weight: 900;
 }
 
 .field-report-grid {
   margin-top: 0;
+}
+
+.field-report-grid-identity,
+.field-report-grid-technician {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.field-report-intro {
+  margin: 16px 0 10px;
+  color: #38352f;
+  line-height: 1.7;
+  font-weight: 700;
+}
+
+.field-report-table-wrap {
+  overflow-x: auto;
+  margin-top: 10px;
+}
+
+.field-report-table {
+  width: 100%;
+  min-width: 560px;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.field-report-table th,
+.field-report-table td {
+  border: 1px solid #d8deea;
+  padding: 0;
+  background: #fff;
+}
+
+.field-report-table th {
+  padding: 10px 12px;
+  background: #f3f7fd;
+  color: #203c61;
+  font-size: 13px;
+  font-weight: 900;
+  text-align: right;
+}
+
+.field-report-table td input {
+  margin-top: 0;
+  border: 0;
+  border-radius: 0;
+  min-height: 44px;
+  box-shadow: none;
+  background: transparent;
 }
 
 .field-report-summary {
@@ -1345,6 +1502,60 @@ textarea {
   gap: 8px;
   margin-top: 10px;
   color: #3d3b35;
+}
+
+.field-report-photo-card {
+  margin-top: 16px;
+}
+
+.field-report-photo-stack {
+  display: grid;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.field-report-photo-upload {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 12px 16px;
+  border: 1px dashed #c9b79d;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #fffdf9 0%, #f4eadb 100%);
+  color: #5f513f;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.field-report-photo-upload input {
+  display: none;
+}
+
+.field-report-photo-list {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.field-report-photo-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.field-report-empty {
+  color: #7b6d5d;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.field-report-signatures-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
 }
 
 .field-report-actions,
@@ -1363,6 +1574,18 @@ textarea {
 
 .signature-status.ready {
   color: #1f7a57;
+}
+
+.field-report-message {
+  font-weight: 800;
+}
+
+.field-report-message.success {
+  color: #1f7a57;
+}
+
+.field-report-message.error {
+  color: #b04444;
 }
 
 .signature-card {
@@ -1704,5 +1927,28 @@ textarea {
   .confirm-actions {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .field-report-sheet {
+    padding: 14px;
+  }
+
+  .field-report-branding {
+    align-items: flex-start;
+  }
+
+  .field-report-branding img {
+    width: 58px;
+    height: 58px;
+  }
+
+  .field-report-signatures-grid,
+  .field-report-grid-identity,
+  .field-report-grid-technician {
+    grid-template-columns: 1fr;
+  }
+
+  .field-report-ticket-meta {
+    align-items: flex-start;
   }
 }
