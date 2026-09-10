@@ -727,15 +727,7 @@
                     <th>הערות</th>
                   </tr>
                 </thead>
-                <tbody id="field-report-line-items">
-                  {% for row in range(5) %}
-                  <tr>
-                    <td><input id="field-report-item-name-{{ row }}" type="text" data-line-item="item_name" data-index="{{ row }}"></td>
-                    <td><input id="field-report-item-quantity-{{ row }}" type="text" inputmode="numeric" data-line-item="quantity" data-index="{{ row }}"></td>
-                    <td><input id="field-report-item-notes-{{ row }}" type="text" data-line-item="notes" data-index="{{ row }}"></td>
-                  </tr>
-                  {% endfor %}
-                </tbody>
+                <tbody id="field-report-line-items"></tbody>
               </table>
             </div>
           </div>

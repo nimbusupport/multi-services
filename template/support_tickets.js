@@ -12,7 +12,6 @@ let signaturePadDirty = false;
 let activeFieldReportSignatureTarget = "customer";
 
 const AUTO_REFRESH_INTERVAL_MS = 10000;
-const FIELD_REPORT_LINE_ITEM_ROWS = 5;
 const NASTYA_EDITABLE_STATUSES = ["ממתין לתיאום", "תואם", "בוצע", "נכשל"];
 const NASTYA_FINAL_STATUSES = ["בוצע", "נכשל"];
 
@@ -694,23 +693,96 @@ function splitContactName(rawValue) {
   };
 }
 
-function fieldReportLineItemsWithPadding(items) {
-  const rows = Array.isArray(items) ? items.filter((row) => row && typeof row === "object") : [];
-  const padded = [];
-  for (let index = 0; index < FIELD_REPORT_LINE_ITEM_ROWS; index += 1) {
-    padded.push({
-      item_name: String(rows[index]?.item_name || ""),
-      quantity: String(rows[index]?.quantity || ""),
-      notes: String(rows[index]?.notes || ""),
-    });
-  }
-  return padded;
+function normalizeFieldReportLineItems(items) {
+  return (Array.isArray(items) ? items : [])
+    .filter((row) => row && typeof row === "object")
+    .map((row) => ({
+      item_name: String(row.item_name || ""),
+      quantity: String(row.quantity || ""),
+      notes: String(row.notes || ""),
+    }));
 }
 
 function lineItemsHasData(items) {
   return (Array.isArray(items) ? items : []).some((row) => (
     row && typeof row === "object" && Object.values(row).some((value) => String(value || "").trim())
   ));
+}
+
+function fieldReportLineItemHasData(row) {
+  return row && typeof row === "object" && Object.values(row).some((value) => String(value || "").trim());
+}
+
+function fieldReportLineItemRowHtml(index, row = {}) {
+  return `
+    <tr data-line-item-row="${index}">
+      <td><input id="field-report-item-name-${index}" type="text" data-line-item="item_name" data-index="${index}" value="${escapeHtml(row.item_name || "")}"></td>
+      <td><input id="field-report-item-quantity-${index}" type="number" min="1" max="100" step="1" inputmode="numeric" data-line-item="quantity" data-index="${index}" value="${escapeHtml(row.quantity || "")}"></td>
+      <td><input id="field-report-item-notes-${index}" type="text" data-line-item="notes" data-index="${index}" value="${escapeHtml(row.notes || "")}"></td>
+    </tr>
+  `;
+}
+
+function collectFieldReportLineItems() {
+  return Array.from(document.querySelectorAll("#field-report-line-items tr")).map((row) => ({
+    item_name: row.querySelector('[data-line-item="item_name"]')?.value || "",
+    quantity: row.querySelector('[data-line-item="quantity"]')?.value || "",
+    notes: row.querySelector('[data-line-item="notes"]')?.value || "",
+  }));
+}
+
+function appendFieldReportLineItemRow(row = {}) {
+  const host = document.getElementById("field-report-line-items");
+  if (!host) return;
+  const index = host.querySelectorAll("tr").length;
+  host.insertAdjacentHTML("beforeend", fieldReportLineItemRowHtml(index, row));
+  bindFieldReportLineItemInputs();
+}
+
+function ensureSingleTrailingEmptyLineItemRow() {
+  const host = document.getElementById("field-report-line-items");
+  if (!host) return;
+  let items = collectFieldReportLineItems();
+  if (items.length === 0) {
+    appendFieldReportLineItemRow();
+    return;
+  }
+  while (items.length > 1 && !fieldReportLineItemHasData(items[items.length - 1]) && !fieldReportLineItemHasData(items[items.length - 2])) {
+    host.lastElementChild?.remove();
+    items = collectFieldReportLineItems();
+  }
+  const lastRow = items[items.length - 1];
+  if (fieldReportLineItemHasData(lastRow)) {
+    appendFieldReportLineItemRow();
+  }
+}
+
+function bindFieldReportLineItemInputs() {
+  document.querySelectorAll('#field-report-line-items input').forEach((input) => {
+    if (input.dataset.bound === "true") return;
+    input.addEventListener("input", (event) => {
+      if (event.currentTarget.dataset.lineItem === "quantity") {
+        const digitsOnly = String(event.currentTarget.value || "").replace(/\D+/g, "");
+        if (!digitsOnly) {
+          event.currentTarget.value = "";
+        } else {
+          event.currentTarget.value = String(Math.min(100, Math.max(1, Number(digitsOnly))));
+        }
+      }
+      ensureSingleTrailingEmptyLineItemRow();
+    });
+    input.dataset.bound = "true";
+  });
+}
+
+function renderFieldReportLineItemRows(items) {
+  const host = document.getElementById("field-report-line-items");
+  if (!host) return;
+  const normalizedItems = normalizeFieldReportLineItems(items)
+    .filter((row) => Object.values(row).some((value) => String(value || "").trim()));
+  const visibleRows = normalizedItems.length ? [...normalizedItems, { item_name: "", quantity: "", notes: "" }] : [{ item_name: "", quantity: "", notes: "" }];
+  host.innerHTML = visibleRows.map((row, index) => fieldReportLineItemRowHtml(index, row)).join("");
+  bindFieldReportLineItemInputs();
 }
 
 function renderFieldReportPhotoList(attachments, hostId, emptyLabel) {
@@ -1882,7 +1954,7 @@ function openFieldReportModal(ticketId) {
   const nameParts = splitContactName(report.contact_first_name || report.contact_last_name
     ? `${report.contact_first_name || ""} ${report.contact_last_name || ""}`.trim()
     : (details.on_site_contact || ""));
-  const itemRows = fieldReportLineItemsWithPadding(report.line_items);
+  const itemRows = normalizeFieldReportLineItems(report.line_items);
   document.getElementById("field-report-ticket-id").value = ticket.id;
   document.getElementById("field-report-ticket-label").textContent = ticket.ticket_id || `#${String(ticket.id).padStart(4, "0")}`;
   document.getElementById("field-report-call-number-label").textContent = `מספר קריאה: ${details.call_number || "-"}`;
@@ -1899,14 +1971,7 @@ function openFieldReportModal(ticketId) {
   document.getElementById("field-report-technician-signature-data").value = report.technician_signature_data_url || "";
   document.getElementById("field-report-customer-signature-data").value = report.customer_signature_data_url || "";
   document.getElementById("field-report-area-photos").value = "";
-  itemRows.forEach((row, index) => {
-    const itemName = document.getElementById(`field-report-item-name-${index}`);
-    const quantity = document.getElementById(`field-report-item-quantity-${index}`);
-    const notes = document.getElementById(`field-report-item-notes-${index}`);
-    if (itemName) itemName.value = row.item_name || "";
-    if (quantity) quantity.value = row.quantity || "";
-    if (notes) notes.value = row.notes || "";
-  });
+  renderFieldReportLineItemRows(itemRows);
   renderFieldReportPhotoList(report.area_photo_attachments || [], "field-report-existing-photos", "עדיין לא נוספו צילומים");
   renderFieldReportPhotoList([], "field-report-pending-photos", "לא נבחרו קבצים חדשים");
   setFieldReportMessage("", "");
@@ -1928,11 +1993,8 @@ async function submitFieldReport(event) {
   setFieldReportMessage("", "");
   setFieldReportLoading(true);
 
-  const lineItems = Array.from({ length: FIELD_REPORT_LINE_ITEM_ROWS }, (_, index) => ({
-    item_name: document.getElementById(`field-report-item-name-${index}`)?.value || "",
-    quantity: document.getElementById(`field-report-item-quantity-${index}`)?.value || "",
-    notes: document.getElementById(`field-report-item-notes-${index}`)?.value || "",
-  })).filter((row) => Object.values(row).some((value) => String(value || "").trim()));
+  const lineItems = collectFieldReportLineItems()
+    .filter((row) => Object.values(row).some((value) => String(value || "").trim()));
 
   const payload = {
     ticket_id: document.getElementById("field-report-ticket-id")?.value || "",

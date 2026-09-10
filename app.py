@@ -1622,7 +1622,7 @@ def normalize_hot_field_report_line_items(items):
             items = []
     if not isinstance(items, list):
         items = []
-    for row in items[:5]:
+    for row in items:
         if not isinstance(row, dict):
             continue
         item_name = str(row.get("item_name") or "").strip()
@@ -1630,6 +1630,13 @@ def normalize_hot_field_report_line_items(items):
         notes = str(row.get("notes") or "").strip()
         if not any([item_name, quantity, notes]):
             continue
+        if quantity:
+            if not quantity.isdigit():
+                raise ValueError("כמות חייבת להיות מספר בין 1 ל-100")
+            quantity_value = int(quantity)
+            if quantity_value < 1 or quantity_value > 100:
+                raise ValueError("כמות חייבת להיות מספר בין 1 ל-100")
+            quantity = str(quantity_value)
         normalized_items.append({
             "item_name": item_name,
             "quantity": quantity,
@@ -1788,48 +1795,48 @@ def build_hot_field_report_pdf(ticket, report, technician_signature_bytes, custo
     story.extend([
         meta_table,
         Spacer(1, 8),
-        pdf_paragraph(
-            "הנני מאשר בזאת כי נמסר לידי הציוד המפורט להלן, ובוצעה התקנתו ע\"י טכנאי מטעם נימבוס:",
-            intro_style,
-            rtl=True,
-            latin_font_name=latin_regular_font,
-            hebrew_font_name=hebrew_regular_font,
-        ),
-        Spacer(1, 6),
     ])
 
     line_items = list(report.get("line_items") or [])
-    table_rows = [[
-        pdf_paragraph("הערות", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
-        pdf_paragraph("כמות", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
-        pdf_paragraph("שם פריט", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
-    ]]
-    for row in line_items or [{}]:
-        table_rows.append([
-            pdf_paragraph(row.get("notes") or "-", text_style, rtl=True, latin_font_name=latin_regular_font, hebrew_font_name=hebrew_regular_font),
-            pdf_paragraph(row.get("quantity") or "-", center_cell_style, rtl=False, latin_font_name=latin_regular_font, hebrew_font_name=hebrew_regular_font),
-            pdf_paragraph(row.get("item_name") or "-", text_style, rtl=True, latin_font_name=latin_regular_font, hebrew_font_name=hebrew_regular_font),
+    if line_items:
+        story.extend([
+            pdf_paragraph(
+                "הנני מאשר בזאת כי נמסר לידי הציוד המפורט להלן, ובוצעה התקנתו ע\"י טכנאי מטעם נימבוס:",
+                intro_style,
+                rtl=True,
+                latin_font_name=latin_regular_font,
+                hebrew_font_name=hebrew_regular_font,
+            ),
+            Spacer(1, 6),
         ])
-    while len(table_rows) < 6:
-        table_rows.append([
-            pdf_paragraph("-", text_style, rtl=True, latin_font_name=latin_regular_font, hebrew_font_name=hebrew_regular_font),
-            pdf_paragraph("-", center_cell_style, rtl=False, latin_font_name=latin_regular_font, hebrew_font_name=hebrew_regular_font),
-            pdf_paragraph("-", text_style, rtl=True, latin_font_name=latin_regular_font, hebrew_font_name=hebrew_regular_font),
+        table_rows = [[
+            pdf_paragraph("הערות", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
+            pdf_paragraph("כמות", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
+            pdf_paragraph("שם פריט", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
+        ]]
+        for row in line_items:
+            table_rows.append([
+                pdf_paragraph(row.get("notes") or "-", text_style, rtl=True, latin_font_name=latin_regular_font, hebrew_font_name=hebrew_regular_font),
+                pdf_paragraph(row.get("quantity") or "-", center_cell_style, rtl=False, latin_font_name=latin_regular_font, hebrew_font_name=hebrew_regular_font),
+                pdf_paragraph(row.get("item_name") or "-", text_style, rtl=True, latin_font_name=latin_regular_font, hebrew_font_name=hebrew_regular_font),
+            ])
+        items_table = Table(table_rows, colWidths=[74 * mm, 24 * mm, 72 * mm], hAlign="RIGHT")
+        items_table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f3f7fd")),
+            ("BOX", (0, 0), (-1, -1), 0.7, colors.HexColor("#bcc8d7")),
+            ("INNERGRID", (0, 0), (-1, -1), 0.45, colors.HexColor("#d8deea")),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 7),
+            ("LEFTPADDING", (0, 0), (-1, -1), 7),
+            ("TOPPADDING", (0, 0), (-1, -1), 6),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ]))
+        story.extend([
+            items_table,
+            Spacer(1, 8),
         ])
-    items_table = Table(table_rows, colWidths=[74 * mm, 24 * mm, 72 * mm], hAlign="RIGHT")
-    items_table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f3f7fd")),
-        ("BOX", (0, 0), (-1, -1), 0.7, colors.HexColor("#bcc8d7")),
-        ("INNERGRID", (0, 0), (-1, -1), 0.45, colors.HexColor("#d8deea")),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 7),
-        ("LEFTPADDING", (0, 0), (-1, -1), 7),
-        ("TOPPADDING", (0, 0), (-1, -1), 6),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-    ]))
+
     story.extend([
-        items_table,
-        Spacer(1, 8),
         pdf_paragraph("הערות נוספות", section_title_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
         pdf_paragraph(report.get("additional_notes") or "-", text_style, rtl=True, latin_font_name=latin_regular_font, hebrew_font_name=hebrew_regular_font),
         Spacer(1, 8),
