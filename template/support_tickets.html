@@ -539,7 +539,7 @@
       </label>
       {% endif %}
 
-      {% if can_upload_ticket_attachments %}
+      {% if show_create_button and can_upload_ticket_attachments %}
       <section class="ticket-upload-panel">
         <div class="ticket-upload-copy">
           <h3>העלאת תמונה</h3>
@@ -660,6 +660,7 @@
       ticketQueue: {{ ticket_queue|tojson }},
       ticketOperatorMode: {{ ticket_operator_mode|tojson }},
       canUploadTicketAttachments: {{ can_upload_ticket_attachments|tojson }},
+      canDeleteTicketAttachments: {{ can_delete_ticket_attachments|tojson }},
       defaultTicketScope: {{ default_ticket_scope|tojson }}
     };
   </script>

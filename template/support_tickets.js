@@ -26,6 +26,7 @@ const pageMode = String(supportTicketsContext.pageMode || "board");
 const ticketQueue = String(supportTicketsContext.ticketQueue || "");
 const ticketOperatorMode = String(supportTicketsContext.ticketOperatorMode || "default");
 const canUploadTicketAttachments = supportTicketsContext.canUploadTicketAttachments === true || supportTicketsContext.canUploadTicketAttachments === "true";
+const canDeleteTicketAttachments = supportTicketsContext.canDeleteTicketAttachments === true || supportTicketsContext.canDeleteTicketAttachments === "true";
 const defaultTicketScope = String(supportTicketsContext.defaultTicketScope || "all");
 const isNastyaQueuePage = pageMode === "nastia" || ticketQueue === "nastia";
 const isAssignedTechnicianMode = ticketOperatorMode === "assigned_technician";
@@ -2031,7 +2032,7 @@ function openTicketDetail(ticketId) {
             data-folder="${escapeHtml(file.folder || "")}"
             data-saved-name="${escapeHtml(file.saved_name || "")}"
             title="Delete image"
-            ${canUploadTicketAttachments ? "" : "hidden"}
+            ${canDeleteTicketAttachments ? "" : "hidden"}
           >
             <i class="fa-solid fa-trash"></i>
           </button>
@@ -2041,19 +2042,15 @@ function openTicketDetail(ticketId) {
   attachmentHost.querySelectorAll(".detail-image-btn").forEach((button) => {
     button.addEventListener("click", () => openImagePreview(button.dataset.imageUrl || ""));
   });
-  if (!canUploadTicketAttachments) {
-    const modal = document.getElementById("ticket-detail-modal");
-    modal.classList.add("open");
-    modal.setAttribute("aria-hidden", "false");
-    return;
+  if (canDeleteTicketAttachments) {
+    attachmentHost.querySelectorAll(".detail-attachment-delete").forEach((button) => {
+      button.addEventListener("click", () => deleteDetailAttachment(
+        button.dataset.ticketId || "",
+        button.dataset.folder || "",
+        button.dataset.savedName || "",
+      ));
+    });
   }
-  attachmentHost.querySelectorAll(".detail-attachment-delete").forEach((button) => {
-    button.addEventListener("click", () => deleteDetailAttachment(
-      button.dataset.ticketId || "",
-      button.dataset.folder || "",
-      button.dataset.savedName || "",
-    ));
-  });
 
   const modal = document.getElementById("ticket-detail-modal");
   modal.classList.add("open");

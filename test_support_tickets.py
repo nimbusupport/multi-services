@@ -1441,7 +1441,7 @@ class SupportTicketsTestCase(unittest.TestCase):
         )
         self.assertEqual(foreign_ticket_response.status_code, 403)
 
-    def test_assigned_technician_cannot_create_or_upload_attachments(self):
+    def test_assigned_technician_cannot_create_but_can_upload_attachments(self):
         tickets = self.app_module.load_support_tickets()
         tickets.append({
             "id": 2,
@@ -1496,7 +1496,10 @@ class SupportTicketsTestCase(unittest.TestCase):
             },
             content_type="multipart/form-data",
         )
-        self.assertEqual(upload_response.status_code, 403)
+        self.assertEqual(upload_response.status_code, 200)
+        upload_payload = upload_response.get_json()
+        self.assertTrue(upload_payload["ok"])
+        self.assertEqual(len(upload_payload["ticket"]["attachments"]), 1)
 
     def test_slot_conflict_is_rejected(self):
         tickets = self.app_module.load_support_tickets()

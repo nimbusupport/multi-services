@@ -3796,7 +3796,8 @@ def render_ticket_board_page(board_slug):
         pais_statuses=PAIS_STATUSES,
         nastia_notification_email=NASTIA_NOTIFICATION_EMAIL,
         ticket_operator_mode="assigned_technician" if assigned_technician_mode else "default",
-        can_upload_ticket_attachments=not assigned_technician_mode,
+        can_upload_ticket_attachments=True,
+        can_delete_ticket_attachments=not assigned_technician_mode,
         default_ticket_scope="my" if assigned_technician_mode else "all",
         can_access_home="home" in allowed_pages,
         can_access_support="support_tickets" in allowed_pages,
@@ -3890,6 +3891,10 @@ def nastia_tickets_page():
         support_statuses=SUPPORT_STATUSES,
         pais_statuses=PAIS_STATUSES,
         nastia_notification_email=NASTIA_NOTIFICATION_EMAIL,
+        ticket_operator_mode="default",
+        can_upload_ticket_attachments=True,
+        can_delete_ticket_attachments=True,
+        default_ticket_scope="all",
         can_access_home="home" in allowed_pages,
         can_access_support="support_tickets" in allowed_pages,
         can_access_pais="pais_tickets" in allowed_pages,
@@ -4296,10 +4301,15 @@ def support_tickets_update():
 def support_tickets_attachments():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
-    if support_user_is_assigned_technician():
-        return jsonify({"ok": False, "message": "Technician accounts cannot upload attachments"}), 403
 
     ticket_id = (request.form.get("ticket_id") or "").strip()
+    if support_user_is_assigned_technician():
+        target_ticket = find_support_ticket(load_support_tickets(), ticket_id)
+        if not target_ticket:
+            return jsonify({"ok": False, "message": "Ticket not found"}), 404
+        if not assigned_technician_can_access_ticket(target_ticket):
+            return jsonify({"ok": False, "message": "Access denied"}), 403
+
     attachment_files = [file_storage for file_storage in request.files.getlist("attachments") if file_storage and file_storage.filename]
     if not attachment_files:
         legacy_attachment = request.files.get("attachment")
