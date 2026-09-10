@@ -59,9 +59,13 @@ function isHotTicket(ticket) {
 }
 
 function canAssignedTechnicianEditTicket(ticket) {
+  const details = ticketDetails(ticket);
+  const ownerName = isCoordinationTicket(ticket)
+    ? String(details.coordinated_worker || "")
+    : String(ticket?.assigned_to || "");
   return isAssignedTechnicianMode
     && isCoordinationTicket(ticket)
-    && String(ticket?.assigned_to || "") === currentSupportUser;
+    && ownerName === currentSupportUser;
 }
 
 function escapeHtml(value) {

@@ -1237,6 +1237,23 @@ class SupportTicketsTestCase(unittest.TestCase):
         tickets.extend([
             {
                 "id": 2,
+                "board_slug": "support",
+                "created_at": "2026-07-08T08:50:00+03:00",
+                "created_at_display": "08/07/2026 08:50",
+                "creator": "Admin",
+                "ticket_type": "שאלה",
+                "service_type": "מרכזייה",
+                "domain": "golan.example",
+                "priority": "Medium",
+                "description": "Assigned support ticket",
+                "solution": "",
+                "status": "Waiting",
+                "assigned_to": "גולן",
+                "attachments": [],
+                "updates": [],
+            },
+            {
+                "id": 3,
                 "board_slug": "pais",
                 "created_at": "2026-07-08T09:00:00+03:00",
                 "created_at_display": "08/07/2026 09:00",
@@ -1248,13 +1265,13 @@ class SupportTicketsTestCase(unittest.TestCase):
                 "description": "",
                 "solution": "",
                 "status": "ממתין לתאום",
-                "assigned_to": "גולן",
+                "assigned_to": "זוהרה",
                 "details": {
                     "terminal_number": "9001",
                     "address": "Golan street 1",
                     "customer_request": "Need visit",
                     "actions_taken": "",
-                    "coordinated_worker": "",
+                    "coordinated_worker": "גולן",
                     "visit_date": "",
                     "visit_hour_from": "",
                     "visit_hour_to": "",
@@ -1264,7 +1281,7 @@ class SupportTicketsTestCase(unittest.TestCase):
                 "updates": [],
             },
             {
-                "id": 3,
+                "id": 4,
                 "board_slug": "hot-kiryot",
                 "created_at": "2026-07-08T09:10:00+03:00",
                 "created_at_display": "08/07/2026 09:10",
@@ -1276,7 +1293,7 @@ class SupportTicketsTestCase(unittest.TestCase):
                 "description": "",
                 "solution": "",
                 "status": "תואם",
-                "assigned_to": "גולן",
+                "assigned_to": "זוהרה",
                 "details": {
                     "call_number": "275749117",
                     "customer_name": "חיים",
@@ -1293,7 +1310,7 @@ class SupportTicketsTestCase(unittest.TestCase):
                 "updates": [],
             },
             {
-                "id": 4,
+                "id": 5,
                 "board_slug": "pais",
                 "created_at": "2026-07-08T09:15:00+03:00",
                 "created_at_display": "08/07/2026 09:15",
@@ -1305,13 +1322,13 @@ class SupportTicketsTestCase(unittest.TestCase):
                 "description": "",
                 "solution": "",
                 "status": "ממתין לתאום",
-                "assigned_to": "אסף",
+                "assigned_to": "ניר",
                 "details": {
                     "terminal_number": "9002",
                     "address": "Assaf street 2",
                     "customer_request": "Other visit",
                     "actions_taken": "",
-                    "coordinated_worker": "",
+                    "coordinated_worker": "אסף",
                     "visit_date": "",
                     "visit_hour_from": "",
                     "visit_hour_to": "",
@@ -1325,18 +1342,24 @@ class SupportTicketsTestCase(unittest.TestCase):
 
         self.login("golan@nimbusip.com", "0503009456!")
 
+        support_response = self.client.get("/support-tickets-data?board=support")
+        self.assertEqual(support_response.status_code, 200)
+        support_payload = support_response.get_json()
+        self.assertEqual(len(support_payload["tickets"]), 1)
+        self.assertEqual(support_payload["tickets"][0]["assigned_to"], "גולן")
+
         pais_response = self.client.get("/support-tickets-data?board=pais")
         self.assertEqual(pais_response.status_code, 200)
         pais_payload = pais_response.get_json()
         self.assertEqual(len(pais_payload["tickets"]), 1)
-        self.assertEqual(pais_payload["tickets"][0]["assigned_to"], "גולן")
+        self.assertEqual(pais_payload["tickets"][0]["details"]["coordinated_worker"], "גולן")
         self.assertEqual(pais_payload["stats"]["all"], 1)
 
         hot_response = self.client.get("/support-tickets-data?board=hot-kiryot")
         self.assertEqual(hot_response.status_code, 200)
         hot_payload = hot_response.get_json()
         self.assertEqual(len(hot_payload["tickets"]), 1)
-        self.assertEqual(hot_payload["tickets"][0]["assigned_to"], "גולן")
+        self.assertEqual(hot_payload["tickets"][0]["details"]["coordinated_worker"], "גולן")
         self.assertEqual(hot_payload["stats"]["all"], 1)
 
     def test_assigned_technician_can_only_set_final_status_on_own_ticket(self):
@@ -1355,7 +1378,7 @@ class SupportTicketsTestCase(unittest.TestCase):
                 "description": "",
                 "solution": "",
                 "status": "תואם",
-                "assigned_to": "גולן",
+                "assigned_to": "זוהרה",
                 "details": {
                     "call_number": "275749117",
                     "customer_name": "חיים",
@@ -1384,13 +1407,13 @@ class SupportTicketsTestCase(unittest.TestCase):
                 "description": "",
                 "solution": "",
                 "status": "ממתין לתאום",
-                "assigned_to": "אסף",
+                "assigned_to": "ניר",
                 "details": {
                     "terminal_number": "9002",
                     "address": "Assaf street 2",
                     "customer_request": "Other visit",
                     "actions_taken": "",
-                    "coordinated_worker": "",
+                    "coordinated_worker": "אסף",
                     "visit_date": "",
                     "visit_hour_from": "",
                     "visit_hour_to": "",

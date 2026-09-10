@@ -298,12 +298,12 @@ LOGIN_USER_OVERRIDES = {
     "golan@nimbusip.com": {
         "password": "0503009456!",
         "role": "assigned_technician",
-        "allowed_pages": ["pais_tickets", "hot_tickets"],
+        "allowed_pages": ["support_tickets", "pais_tickets", "hot_tickets"],
     },
     "assafh@nimbusip.com": {
         "password": "0523111777!",
         "role": "assigned_technician",
-        "allowed_pages": ["pais_tickets", "hot_tickets"],
+        "allowed_pages": ["support_tickets", "pais_tickets", "hot_tickets"],
     },
 }
 SUPPORT_PRIORITIES = ["High", "Medium", "Low"]
@@ -465,10 +465,15 @@ def assigned_technician_allowed_statuses():
 
 def assigned_technician_can_access_ticket(ticket, actor_name=None):
     actor_name = (actor_name or support_user_name()).strip()
+    board_slug = (ticket.get("board_slug") or "").strip().lower()
+    details = ticket.get("details") or {}
+    if board_supports_coordination(board_slug):
+        owner_name = (details.get("coordinated_worker") or "").strip()
+    else:
+        owner_name = (ticket.get("assigned_to") or "").strip()
     return (
         support_user_is_assigned_technician()
-        and board_supports_coordination(ticket.get("board_slug"))
-        and (ticket.get("assigned_to") or "").strip() == actor_name
+        and owner_name == actor_name
     )
 
 
@@ -497,7 +502,7 @@ def normalize_support_ticket(ticket):
 
 
 def support_ticket_is_done(ticket):
-    return (ticket.get("status") or "").strip() in {"Done", "בוצע"}
+    return (ticket.get("status") or "").strip() in {"Done", "בוצע", "נכשל"}
 
 
 def support_ticket_is_open(ticket):
@@ -526,7 +531,7 @@ def allowed_pages_for_role(role):
     if normalized_role == "tickets_only":
         return sorted(TICKETS_ONLY_ALLOWED_PAGES)
     if normalized_role == "assigned_technician":
-        return ["hot_tickets", "pais_tickets"]
+        return ["hot_tickets", "pais_tickets", "support_tickets"]
     return sorted(FULL_ACCESS_PAGES)
 
 
@@ -540,6 +545,13 @@ def user_can_access_page(page_key):
 
 def first_allowed_route():
     allowed = allowed_pages_for_current_user()
+    if support_user_is_assigned_technician():
+        if "pais_tickets" in allowed:
+            return url_for("pais_tickets_page")
+        if "hot_tickets" in allowed:
+            return url_for("hot_kiryot_tickets_page")
+        if "support_tickets" in allowed:
+            return url_for("support_tickets_page")
     if "home" in allowed:
         return url_for("home")
     if "support_tickets" in allowed:
@@ -3935,7 +3947,10 @@ def support_tickets_data():
 
     filtered = list(base_tickets)
     if scope == "my":
-        filtered = [t for t in filtered if t.get("assigned_to") == current_support_user]
+        if assigned_technician_mode:
+            filtered = [t for t in filtered if assigned_technician_can_access_ticket(t, current_support_user)]
+        else:
+            filtered = [t for t in filtered if t.get("assigned_to") == current_support_user]
     elif scope == "unassigned":
         filtered = [t for t in filtered if not t.get("assigned_to")]
 
