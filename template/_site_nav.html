@@ -1,20 +1,26 @@
 <nav class="site-nav">
   <div class="site-nav-inner">
-    <a class="brand" href="/home" aria-label="Nimbus {{ t('nav.dashboard') }}">
-      <span class="brand-mark" aria-hidden="true">
-        <svg viewBox="0 0 100 100" focusable="false">
-          <defs>
-            <linearGradient id="swooshGradNav" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stop-color="#60a5fa" />
-              <stop offset="100%" stop-color="#2563eb" />
-            </linearGradient>
-          </defs>
-          <path d="M50,10 A40,40 0 1,1 15,35" fill="none" stroke="url(#swooshGradNav)" stroke-width="6" stroke-linecap="round" />
-        </svg>
-      </span>
-      <span class="brand-word">Nimbus</span>
-    </a>
-    <button class="nav-toggle" type="button" aria-label="{{ t('nav.open') }}"><i class="fa-solid fa-bars"></i></button>
+    <div class="site-nav-topbar">
+      <a class="brand" href="/home" aria-label="Nimbus {{ t('nav.dashboard') }}">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 100 100" focusable="false">
+            <defs>
+              <linearGradient id="swooshGradNav" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#60a5fa" />
+                <stop offset="100%" stop-color="#2563eb" />
+              </linearGradient>
+            </defs>
+            <path d="M50,10 A40,40 0 1,1 15,35" fill="none" stroke="url(#swooshGradNav)" stroke-width="6" stroke-linecap="round" />
+          </svg>
+        </span>
+        <span class="brand-word">Nimbus</span>
+      </a>
+      <div class="site-nav-top-actions">
+        <div class="nav-user">{{ (current_user or "").split("@")[0] }}</div>
+        <a class="nav-logout nav-logout-icon" href="/logout" aria-label="{{ t('nav.logout') }}"><i class="fa-solid fa-right-from-bracket"></i></a>
+        <button class="nav-toggle" type="button" aria-label="{{ t('nav.open') }}"><i class="fa-solid fa-bars"></i></button>
+      </div>
+    </div>
     <div class="nav-links">
       <a class="nav-link {% if active_nav == 'home' %}active{% endif %}" href="/home"><span class="nav-icon"><i class="fa-solid fa-table-cells-large"></i></span><span class="nav-label">{{ t('nav.dashboard') }}</span></a>
       <a class="nav-link {% if active_nav == 'sms' %}active{% endif %}" href="/sms"><span class="nav-icon"><i class="fa-solid fa-comment-sms"></i></span><span class="nav-label">{{ t('nav.sms') }}</span></a>
@@ -34,7 +40,6 @@
         <a class="{% if lang == 'he' %}active{% endif %}" href="/set-language/he">{{ t('lang.he') }}</a>
         <a class="{% if lang == 'en' %}active{% endif %}" href="/set-language/en">{{ t('lang.en') }}</a>
       </div>
-      <a class="nav-logout" href="/logout"><i class="fa-solid fa-right-from-bracket"></i><span>{{ t('nav.logout') }}</span></a>
     </div>
   </div>
 </nav>

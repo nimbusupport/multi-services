@@ -19,8 +19,14 @@
   {% else %}
   <nav class="site-nav"{% if can_access_home %} hidden{% endif %}>
     <div class="site-nav-inner">
-      <a class="brand" href="{{ '/home' if can_access_home else '/support-tickets' }}"><span class="brand-kicker">Support Suite</span><span class="brand-main">Services</span></a>
-      <button class="nav-toggle" type="button">Menu</button>
+      <div class="site-nav-topbar">
+        <a class="brand" href="{{ '/home' if can_access_home else '/support-tickets' }}"><span class="brand-kicker">Support Suite</span><span class="brand-main">Services</span></a>
+        <div class="site-nav-top-actions">
+          <div class="nav-user">{{ support_user or (current_user or "").split("@")[0] }}</div>
+          <a class="nav-logout nav-logout-icon" href="/logout" aria-label="Logout"><i class="fa-solid fa-right-from-bracket"></i></a>
+          <button class="nav-toggle" type="button" aria-label="Open menu"><i class="fa-solid fa-bars"></i></button>
+        </div>
+      </div>
       <div class="nav-links">
         {% if can_access_home %}
         <a class="nav-link" href="/sms"><span class="nav-icon"><i class="fa-solid fa-comment-sms"></i></span><span class="nav-label">SMS</span></a>
@@ -48,7 +54,6 @@
         {% endif %}
       </div>
       <div class="nav-footer">
-        <div class="nav-user">{{ support_user or (current_user or "").split("@")[0] }}</div>
         <a class="nav-logout" href="/logout"><i class="fa-solid fa-right-from-bracket"></i> Logout</a>
       </div>
     </div>

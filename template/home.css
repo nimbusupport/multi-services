@@ -81,6 +81,7 @@ body.dashboard-page .nav-actions {
   align-items: center;
   gap: 8px;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 body.dashboard-page .nav-icon-btn {
@@ -620,45 +621,73 @@ body.dashboard-page .guide-panel {
   }
 
   body.dashboard-page .site-nav {
+    position: sticky;
     height: var(--dashboard-nav-height);
   }
 
   body.dashboard-page .site-nav-inner {
-    display: flex;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
     align-items: center;
-    justify-content: space-between;
-    padding: 0 16px;
-    gap: 12px;
+    padding: 0 12px;
+    gap: 10px;
   }
 
   body.dashboard-page .nav-toggle {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    padding: 0;
   }
 
   body.dashboard-page .nav-center {
-    flex: 1;
+    min-width: 0;
+    justify-content: center;
   }
 
   body.dashboard-page .nav-links {
     position: fixed;
-    top: 70px;
-    right: 16px;
-    left: 16px;
+    top: var(--dashboard-nav-height);
+    right: 0;
+    left: 0;
     display: none;
     flex-direction: column;
     align-items: stretch;
     gap: 8px;
-    width: auto;
-    padding: 14px;
+    width: 100%;
+    max-height: calc(100vh - var(--dashboard-nav-height));
+    padding: 12px 14px 16px;
     background: rgba(255, 255, 255, 0.96);
-    border: 1px solid rgba(118, 149, 195, 0.2);
-    border-radius: 20px;
+    border-top: 1px solid rgba(118, 149, 195, 0.2);
+    border-radius: 0;
     box-shadow: 0 22px 40px rgba(28, 62, 109, 0.16);
-    overflow: hidden;
+    overflow-y: auto;
   }
 
   body.dashboard-page .site-nav.open .nav-links {
     display: flex;
+  }
+
+  body.dashboard-page .nav-left {
+    min-width: 0;
+  }
+
+  body.dashboard-page .nav-actions {
+    gap: 6px;
+    min-width: 0;
+  }
+
+  body.dashboard-page .nav-user-inline {
+    min-width: 0;
+  }
+
+  body.dashboard-page .nav-user-name {
+    max-width: 20vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   body.dashboard-page .nav-link {
