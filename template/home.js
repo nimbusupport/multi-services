@@ -3,7 +3,7 @@ function displayUserName(user) {
   if (local === "nir") return "ניר";
   if (["eugeni", "yevgeni", "evgeni"].includes(local)) return "יבגני";
   if (local === "golan") return "גולן";
-  if (local === "asaf") return "אסף";
+  if (["asaf", "assafh"].includes(local)) return "אסף";
   if (["itsik", "itzik", "isaac"].includes(local)) return "איציק";
   if (local === "zohar" || local === "zora") return "זורה";
   if (["nastia", "nastya", "nastiya"].includes(local)) return "נסטיה";
