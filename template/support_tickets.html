@@ -706,30 +706,40 @@
           </label>
         </div>
 
-        <p class="field-report-intro">
-          הנני מאשר בזאת כי נמסר לידי הציוד המפורט להלן, ובוצעה התקנתו ע"י טכנאי מטעם נימבוס:
-        </p>
+        <section class="detail-description detail-edit-card field-report-items-card">
+          <div class="field-report-collapsible-head">
+            <h3>ציוד והתקנה</h3>
+            <button class="field-report-collapse-btn" id="field-report-items-toggle" type="button" aria-expanded="false">
+              <span class="field-report-collapse-icon">+</span>
+            </button>
+          </div>
+          <div class="field-report-collapsible-body" id="field-report-items-body" hidden>
+            <p class="field-report-intro">
+              הנני מאשר בזאת כי נמסר לידי הציוד המפורט להלן, ובוצעה התקנתו ע"י טכנאי מטעם נימבוס:
+            </p>
 
-        <div class="field-report-table-wrap">
-          <table class="field-report-table">
-            <thead>
-              <tr>
-                <th>שם פריט</th>
-                <th>כמות</th>
-                <th>הערות</th>
-              </tr>
-            </thead>
-            <tbody id="field-report-line-items">
-              {% for row in range(5) %}
-              <tr>
-                <td><input id="field-report-item-name-{{ row }}" type="text" data-line-item="item_name" data-index="{{ row }}"></td>
-                <td><input id="field-report-item-quantity-{{ row }}" type="text" inputmode="numeric" data-line-item="quantity" data-index="{{ row }}"></td>
-                <td><input id="field-report-item-notes-{{ row }}" type="text" data-line-item="notes" data-index="{{ row }}"></td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
+            <div class="field-report-table-wrap">
+              <table class="field-report-table">
+                <thead>
+                  <tr>
+                    <th>שם פריט</th>
+                    <th>כמות</th>
+                    <th>הערות</th>
+                  </tr>
+                </thead>
+                <tbody id="field-report-line-items">
+                  {% for row in range(5) %}
+                  <tr>
+                    <td><input id="field-report-item-name-{{ row }}" type="text" data-line-item="item_name" data-index="{{ row }}"></td>
+                    <td><input id="field-report-item-quantity-{{ row }}" type="text" inputmode="numeric" data-line-item="quantity" data-index="{{ row }}"></td>
+                    <td><input id="field-report-item-notes-{{ row }}" type="text" data-line-item="notes" data-index="{{ row }}"></td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
 
         <label class="description-field field-report-full-width">
           <span>הערות נוספות</span>

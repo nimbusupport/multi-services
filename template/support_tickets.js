@@ -707,6 +707,12 @@ function fieldReportLineItemsWithPadding(items) {
   return padded;
 }
 
+function lineItemsHasData(items) {
+  return (Array.isArray(items) ? items : []).some((row) => (
+    row && typeof row === "object" && Object.values(row).some((value) => String(value || "").trim())
+  ));
+}
+
 function renderFieldReportPhotoList(attachments, hostId, emptyLabel) {
   const host = document.getElementById(hostId);
   if (!host) return;
@@ -724,6 +730,22 @@ function renderFieldReportPhotoList(attachments, hostId, emptyLabel) {
 
 function technicianDisplayName() {
   return String(currentSupportUser || "").trim() || "טכנאי";
+}
+
+function setFieldReportItemsExpanded(expanded) {
+  const body = document.getElementById("field-report-items-body");
+  const button = document.getElementById("field-report-items-toggle");
+  const icon = button?.querySelector(".field-report-collapse-icon");
+  if (body) {
+    body.hidden = !expanded;
+  }
+  if (button) {
+    button.setAttribute("aria-expanded", expanded ? "true" : "false");
+    button.classList.toggle("expanded", Boolean(expanded));
+  }
+  if (icon) {
+    icon.textContent = expanded ? "−" : "+";
+  }
 }
 
 function fieldReportSummaryCard(ticket, allowEdit = false) {
@@ -1889,12 +1911,14 @@ function openFieldReportModal(ticketId) {
   renderFieldReportPhotoList([], "field-report-pending-photos", "לא נבחרו קבצים חדשים");
   setFieldReportMessage("", "");
   setFieldReportLoading(false);
+  setFieldReportItemsExpanded(lineItemsHasData(itemRows));
   syncFieldReportSignatureStatuses();
   document.getElementById("field-report-modal")?.classList.add("open");
   document.getElementById("field-report-modal")?.setAttribute("aria-hidden", "false");
 }
 
 function closeFieldReportModal() {
+  setFieldReportLoading(false);
   document.getElementById("field-report-modal")?.classList.remove("open");
   document.getElementById("field-report-modal")?.setAttribute("aria-hidden", "true");
 }
@@ -3065,9 +3089,14 @@ document.addEventListener("DOMContentLoaded", () => {
     const files = Array.from(event.currentTarget?.files || []).map((file) => ({ original_name: file.name }));
     renderFieldReportPhotoList(files, "field-report-pending-photos", "לא נבחרו קבצים חדשים");
   });
+  document.getElementById("field-report-items-toggle")?.addEventListener("click", () => {
+    const isExpanded = document.getElementById("field-report-items-toggle")?.getAttribute("aria-expanded") === "true";
+    setFieldReportItemsExpanded(!isExpanded);
+  });
   syncAttachmentInputState();
   syncDetailAttachmentInputState();
   syncFieldReportSignatureStatuses();
+  setFieldReportItemsExpanded(false);
   renderFieldReportPhotoList([], "field-report-existing-photos", "עדיין לא נוספו צילומים");
   renderFieldReportPhotoList([], "field-report-pending-photos", "לא נבחרו קבצים חדשים");
   bindSignaturePad();

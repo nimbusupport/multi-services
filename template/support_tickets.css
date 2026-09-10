@@ -1357,6 +1357,10 @@ textarea {
   backdrop-filter: blur(2px);
 }
 
+.field-report-loading[hidden] {
+  display: none !important;
+}
+
 .field-report-loading-spinner {
   width: 22px;
   height: 22px;
@@ -1458,6 +1462,57 @@ textarea {
   color: #38352f;
   line-height: 1.7;
   font-weight: 700;
+}
+
+.field-report-items-card {
+  margin-top: 16px;
+}
+
+.field-report-collapsible-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.field-report-collapsible-head h3 {
+  margin: 0;
+}
+
+.field-report-collapse-btn {
+  width: 42px;
+  height: 42px;
+  border: 1px solid #d8c6af;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #fffdf9 0%, #f4eadb 100%);
+  color: #203c61;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(93, 72, 45, 0.08);
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+}
+
+.field-report-collapse-btn:hover {
+  transform: translateY(-1px);
+  border-color: #c9b596;
+  box-shadow: 0 12px 24px rgba(93, 72, 45, 0.12);
+}
+
+.field-report-collapse-btn.expanded {
+  background: linear-gradient(135deg, #f7fbff 0%, #e7f0fb 100%);
+  border-color: #b8ccea;
+}
+
+.field-report-collapse-icon {
+  line-height: 1;
+}
+
+.field-report-collapsible-body {
+  margin-top: 10px;
 }
 
 .field-report-table-wrap {
