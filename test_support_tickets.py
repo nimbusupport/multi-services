@@ -156,6 +156,7 @@ class SupportTicketsTestCase(unittest.TestCase):
             platypus.Spacer = lambda *args, **kwargs: ("Spacer", args, kwargs)
             platypus.Table = lambda *args, **kwargs: ("Table", args, kwargs)
             platypus.TableStyle = lambda *args, **kwargs: ("TableStyle", args, kwargs)
+            platypus.Image = lambda *args, **kwargs: ("Image", args, kwargs)
             sys.modules["reportlab.platypus"] = platypus
 
     def setUp(self):
@@ -174,6 +175,7 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.original_get_feature_report_counts = self.app_module.get_feature_report_counts
         self.original_send_nastia_ticket_email = self.app_module.send_nastia_ticket_email
         self.original_send_plain_email = self.app_module.send_plain_email
+        self.original_build_hot_field_report_pdf = self.app_module.build_hot_field_report_pdf
         self.original_smtp_from = self.app_module.SMTP_FROM
         self.original_smtp_username = self.app_module.SMTP_USERNAME
         self.original_token_inforu = self.app_module.TOKEN_INFORU
@@ -198,6 +200,7 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.app_module.get_feature_report_counts = self.original_get_feature_report_counts
         self.app_module.send_nastia_ticket_email = self.original_send_nastia_ticket_email
         self.app_module.send_plain_email = self.original_send_plain_email
+        self.app_module.build_hot_field_report_pdf = self.original_build_hot_field_report_pdf
         self.app_module.SMTP_FROM = self.original_smtp_from
         self.app_module.SMTP_USERNAME = self.original_smtp_username
         self.app_module.TOKEN_INFORU = self.original_token_inforu
@@ -1248,7 +1251,18 @@ class SupportTicketsTestCase(unittest.TestCase):
                 "description": "Assigned support ticket",
                 "solution": "",
                 "status": "Waiting",
-                "assigned_to": "גולן",
+                "assigned_to": "ניר",
+                "details": {
+                    "service_mode": "ביקור טכנאי בתשלום",
+                    "business_name": "Nimbus Biz",
+                    "service_contact": "גולן 0503009456",
+                    "service_address": "Support road 1",
+                    "coordinated_worker": "גולן",
+                    "visit_date": "2026-07-10",
+                    "visit_hour_from": "10:00",
+                    "visit_hour_to": "11:00",
+                    "failure_notes": "",
+                },
                 "attachments": [],
                 "updates": [],
             },
@@ -1346,7 +1360,7 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertEqual(support_response.status_code, 200)
         support_payload = support_response.get_json()
         self.assertEqual(len(support_payload["tickets"]), 1)
-        self.assertEqual(support_payload["tickets"][0]["assigned_to"], "גולן")
+        self.assertEqual(support_payload["tickets"][0]["details"]["coordinated_worker"], "גולן")
 
         pais_response = self.client.get("/support-tickets-data?board=pais")
         self.assertEqual(pais_response.status_code, 200)
@@ -1523,6 +1537,344 @@ class SupportTicketsTestCase(unittest.TestCase):
         upload_payload = upload_response.get_json()
         self.assertTrue(upload_payload["ok"])
         self.assertEqual(len(upload_payload["ticket"]["attachments"]), 1)
+
+    def test_assigned_technician_can_save_hot_field_report_pdf(self):
+        tickets = self.app_module.load_support_tickets()
+        tickets.append({
+            "id": 2,
+            "board_slug": "hot-kiryot",
+            "created_at": "2026-07-08T09:10:00+03:00",
+            "created_at_display": "08/07/2026 09:10",
+            "creator": "Admin",
+            "ticket_type": "שירות",
+            "service_type": "הוט קריאות",
+            "domain": "",
+            "priority": "Medium",
+            "description": "",
+            "solution": "",
+            "status": "תואם",
+            "assigned_to": "גולן",
+            "details": {
+                "call_number": "275749117",
+                "customer_name": "חיים",
+                "address": "האופה 1, נתניה",
+                "on_site_contact": "חיים 0524443593",
+                "issue_summary": "PANCODE לא עובד",
+                "technician_actions": "בדיקות",
+                "coordinated_worker": "גולן",
+                "visit_date": "2026-07-09",
+                "visit_hour_from": "09:00",
+                "visit_hour_to": "10:00",
+                "failure_notes": "",
+            },
+            "attachments": [],
+            "updates": [],
+        })
+        self.app_module.save_support_tickets(tickets)
+        self.app_module.build_hot_field_report_pdf = lambda ticket, report, signature: b"%PDF-1.4 fake"
+        captured = {}
+
+        def fake_send_plain_email(to_address, subject, body, from_address=None, html_body=None, attachments=None):
+            captured["to_address"] = to_address
+            captured["subject"] = subject
+            captured["attachments"] = attachments or []
+
+        self.app_module.send_plain_email = fake_send_plain_email
+        self.login("golan@nimbusip.com", "0503009456!")
+
+        response = self.client.post(
+            "/support-tickets-field-report",
+            json={
+                "ticket_id": 2,
+                "signed_by": "חיים",
+                "mobile_number": "0524443593",
+                "work_start": "09:00",
+                "work_end": "11:30",
+                "summary": "העבודה הושלמה",
+                "notes": "הותקן בהצלחה",
+                "signature_data_url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4////fwAJ+wP9KobjigAAAABJRU5ErkJggg==",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertTrue(payload["ok"])
+        self.assertTrue(payload["ticket"]["field_report_sent"])
+        self.assertEqual(payload["ticket"]["details"]["field_report"]["signed_by"], "חיים")
+        self.assertEqual(payload["ticket"]["details"]["field_report"]["total_hours"], "2:30")
+        self.assertEqual(len(payload["ticket"]["attachments"]), 1)
+        self.assertTrue(payload["ticket"]["attachments"][0]["original_name"].endswith(".pdf"))
+        self.assertEqual(captured["to_address"], self.app_module.HOT_FIELD_REPORT_CUSTOMER_EMAIL)
+        self.assertEqual(captured["attachments"][0]["subtype"], "pdf")
+
+    def test_assigned_technician_field_report_requires_hot_ticket(self):
+        tickets = self.app_module.load_support_tickets()
+        tickets.append({
+            "id": 2,
+            "board_slug": "support",
+            "created_at": "2026-07-08T09:10:00+03:00",
+            "created_at_display": "08/07/2026 09:10",
+            "creator": "Admin",
+            "ticket_type": "תקלה",
+            "service_type": "מצלמות",
+            "domain": "",
+            "priority": "Medium",
+            "description": "Need visit",
+            "solution": "",
+            "status": "תואם",
+            "assigned_to": "ניר",
+            "details": {
+                "coordinated_worker": "גולן",
+                "visit_date": "2026-07-09",
+                "visit_hour_from": "09:00",
+                "visit_hour_to": "10:00",
+                "failure_notes": "",
+            },
+            "attachments": [],
+            "updates": [],
+        })
+        self.app_module.save_support_tickets(tickets)
+        self.login("golan@nimbusip.com", "0503009456!")
+
+        response = self.client.post(
+            "/support-tickets-field-report",
+            json={
+                "ticket_id": 2,
+                "signed_by": "לקוח",
+                "mobile_number": "0501234567",
+                "work_start": "09:00",
+                "work_end": "10:00",
+                "summary": "Done",
+                "signature_data_url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4////fwAJ+wP9KobjigAAAABJRU5ErkJggg==",
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("הוט קריאות", response.get_json()["message"])
+
+    def test_assigned_technician_failed_status_requires_reason(self):
+        tickets = self.app_module.load_support_tickets()
+        tickets.append({
+            "id": 2,
+            "board_slug": "hot-kiryot",
+            "created_at": "2026-07-08T09:10:00+03:00",
+            "created_at_display": "08/07/2026 09:10",
+            "creator": "Admin",
+            "ticket_type": "שירות",
+            "service_type": "הוט קריאות",
+            "domain": "",
+            "priority": "Medium",
+            "description": "",
+            "solution": "",
+            "status": "תואם",
+            "assigned_to": "זוהרה",
+            "details": {
+                "call_number": "275749117",
+                "customer_name": "חיים",
+                "address": "האופה 1, נתניה",
+                "issue_summary": "PANCODE לא עובד",
+                "technician_actions": "בדיקות",
+                "coordinated_worker": "גולן",
+                "visit_date": "2026-07-09",
+                "visit_hour_from": "09:00",
+                "visit_hour_to": "10:00",
+                "failure_notes": "",
+            },
+            "attachments": [],
+            "updates": [],
+        })
+        self.app_module.save_support_tickets(tickets)
+
+        self.login("golan@nimbusip.com", "0503009456!")
+        response = self.client.post(
+            "/support-tickets-update",
+            json={
+                "ticket_id": 2,
+                "status": "נכשל",
+                "details": {
+                    "failure_notes": "",
+                },
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("סיבת כשל", response.get_json()["message"])
+
+    def test_can_create_support_ticket_with_service_mode_details(self):
+        self.login("admin@nimbusip.com")
+        response = self.client.post(
+            "/support-tickets-create",
+            data={
+                "board_slug": "support",
+                "ticket_type": "תקלה",
+                "service_type": "מרכזייה",
+                "domain": "biz.example",
+                "priority": "Medium",
+                "assigned_to": "ניר",
+                "description": "Need Nimbus technician",
+                "solution": "",
+                "service_mode": "ביקור טכנאי בתשלום",
+                "business_name": "עסק בדיקה",
+                "service_contact": "דני 0501234567",
+                "service_address": "רחוב השלום 7",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["ticket"]["board_slug"], "support")
+        self.assertEqual(payload["ticket"]["status"], "ממתין")
+        self.assertEqual(payload["ticket"]["details"]["service_mode"], "ביקור טכנאי בתשלום")
+        self.assertEqual(payload["ticket"]["details"]["business_name"], "עסק בדיקה")
+
+    def test_support_ticket_pending_coordination_appears_in_nastya_queue(self):
+        tickets = self.app_module.load_support_tickets()
+        tickets.append({
+            "id": 2,
+            "board_slug": "support",
+            "created_at": "2026-07-08T09:00:00+03:00",
+            "created_at_display": "08/07/2026 09:00",
+            "creator": "Admin",
+            "ticket_type": "שירות",
+            "service_type": "מרכזייה",
+            "domain": "support.example",
+            "priority": "Medium",
+            "description": "Nimbus coordination",
+            "solution": "",
+            "status": "ממתין לתיאום",
+            "assigned_to": "ניר",
+            "details": {
+                "service_mode": "ביקור ללא תשלום",
+                "business_name": "Nimbus Queue",
+                "service_contact": "Dana",
+                "service_address": "Queue road 3",
+                "coordinated_worker": "",
+                "visit_date": "",
+                "visit_hour_from": "",
+                "visit_hour_to": "",
+                "failure_notes": "",
+            },
+            "attachments": [],
+            "updates": [],
+        })
+        self.app_module.save_support_tickets(tickets)
+
+        self.login("nastya@nimbusip.com", "tygeydfuyw5t3g")
+        response = self.client.get("/support-tickets-data?board=support&queue=nastia")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(len(payload["tickets"]), 1)
+        self.assertEqual(payload["tickets"][0]["board_slug"], "support")
+
+    def test_nastya_marking_support_ticket_as_shipping_sends_racheli_email(self):
+        tickets = self.app_module.load_support_tickets()
+        tickets.append({
+            "id": 2,
+            "board_slug": "support",
+            "created_at": "2026-07-08T09:00:00+03:00",
+            "created_at_display": "08/07/2026 09:00",
+            "creator": "Admin",
+            "ticket_type": "שירות",
+            "service_type": "מרכזייה",
+            "domain": "support.example",
+            "priority": "Medium",
+            "description": "Nimbus shipping",
+            "solution": "",
+            "status": "ממתין לתיאום",
+            "assigned_to": "ניר",
+            "details": {
+                "service_mode": "ביקור ללא תשלום",
+                "business_name": "Ship Biz",
+                "service_contact": "Dana 0501111111",
+                "service_address": "Ship road 4",
+                "coordinated_worker": "",
+                "visit_date": "",
+                "visit_hour_from": "",
+                "visit_hour_to": "",
+                "failure_notes": "",
+            },
+            "attachments": [],
+            "updates": [],
+        })
+        self.app_module.save_support_tickets(tickets)
+
+        captured = {}
+
+        def fake_send_plain_email(to_address, subject, body, from_address=None, html_body=None, attachments=None):
+            captured["to_address"] = to_address
+            captured["subject"] = subject
+            captured["body"] = body
+            captured["html_body"] = html_body or ""
+
+        self.app_module.send_plain_email = fake_send_plain_email
+        self.login("nastya@nimbusip.com", "tygeydfuyw5t3g")
+        response = self.client.post(
+            "/support-tickets-update",
+            json={
+                "ticket_id": 2,
+                "source_page_mode": "nastia",
+                "source_ticket_queue": "nastia",
+                "details": {
+                    "service_mode": "משלוח",
+                    "business_name": "Ship Biz",
+                    "service_contact": "Dana 0501111111",
+                    "service_address": "Ship road 4",
+                    "failure_notes": "",
+                },
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertTrue(payload["ticket"]["racheli_notification_attempted"])
+        self.assertTrue(payload["ticket"]["racheli_notification_sent"])
+        self.assertEqual(captured["to_address"], self.app_module.RACHELI_NOTIFICATION_EMAIL)
+        self.assertIn("#0002", captured["subject"])
+        self.assertIn("משלוח", captured["subject"])
+        self.assertIn("Ship Biz", captured["html_body"])
+
+    def test_support_board_report_data_uses_board_parameter(self):
+        tickets = self.app_module.load_support_tickets()
+        tickets.append({
+            "id": 2,
+            "board_slug": "support",
+            "created_at": "2026-07-08T09:00:00+03:00",
+            "created_at_display": "08/07/2026 09:00",
+            "creator": "Admin",
+            "ticket_type": "שירות",
+            "service_type": "מרכזייה",
+            "domain": "support.example",
+            "priority": "Medium",
+            "description": "Nimbus report",
+            "solution": "",
+            "status": "בוצע",
+            "assigned_to": "ניר",
+            "details": {
+                "service_mode": "ביקור טכנאי בתשלום",
+                "business_name": "Report Biz",
+                "service_contact": "Dana",
+                "service_address": "Report road 6",
+                "coordinated_worker": "אסף",
+                "visit_date": "2026-07-08",
+                "visit_hour_from": "09:00",
+                "visit_hour_to": "10:00",
+                "failure_notes": "",
+            },
+            "attachments": [],
+            "updates": [],
+        })
+        self.app_module.save_support_tickets(tickets)
+
+        self.login("admin@nimbusip.com")
+        response = self.client.get("/pais-tickets-report-data?board=support&period=monthly&date_from=2026-07-01&date_to=2026-07-31")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["board"]["slug"], "support")
+        self.assertEqual(payload["summary"]["total"], 1)
 
     def test_slot_conflict_is_rejected(self):
         tickets = self.app_module.load_support_tickets()

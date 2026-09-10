@@ -3,7 +3,9 @@ import os
 import shutil
 import csv
 import tempfile
+import base64
 from werkzeug.utils import secure_filename
+from werkzeug.datastructures import FileStorage
 from werkzeug.security import check_password_hash
 import re
 import io
@@ -34,7 +36,7 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 load_dotenv()
 
@@ -263,9 +265,13 @@ SUPABASE_KEY = (
 SUPPORT_USERS = ["ניר", "יבגני", "גולן", "איציק", "זורה", "אסף", "מוסטפה.א", "מוסטפה.ח", "נסטיה"]
 COORDINATION_USERS = ["נסטיה"]
 TECHNICIAN_SUPPORT_USERS = [user for user in SUPPORT_USERS if user not in COORDINATION_USERS]
+COORDINATION_PENDING_STATUS = "ממתין לתיאום"
+COORDINATION_PENDING_ALIASES = {COORDINATION_PENDING_STATUS, "ממתין לתאום"}
 SUPPORT_STATUSES = ["Waiting", "Done"]
-PAIS_STATUSES = ["ממתין", "ממתין לתאום", "תואם", "אין מענה", "בוצע", "נכשל"]
+PAIS_STATUSES = ["ממתין", COORDINATION_PENDING_STATUS, "תואם", "אין מענה", "בוצע", "נכשל"]
 ALL_TICKET_STATUSES = SUPPORT_STATUSES + [status for status in PAIS_STATUSES if status not in SUPPORT_STATUSES]
+SUPPORT_DELIVERY_OPTIONS = ["ביקור טכנאי בתשלום", "ביקור ללא תשלום", "משלוח"]
+SUPPORT_CUSTOMER_TYPES = ["לקוח נימבוס", "לקוח הוט"]
 VISIT_SLOT_START_HOUR = 9
 VISIT_SLOT_END_HOUR = 18
 FULL_ACCESS_PAGES = {
@@ -327,6 +333,8 @@ SUPABASE_BUCKET_REGION = (os.environ.get("SUPABASE_BUCKET_REGION") or "").strip(
 SUPABASE_BUCKET_ACCESS_KEY = (os.environ.get("SUPABASE_BUCKET_ACCESS_KEY") or "").strip()
 SUPABASE_BUCKET_SECRET_KEY = (os.environ.get("SUPABASE_BUCKET_SECRET_KEY") or "").strip()
 NASTIA_NOTIFICATION_EMAIL = (os.environ.get("NASTIA_NOTIFICATION_EMAIL") or "nastya@nimbusip.com").strip()
+RACHELI_NOTIFICATION_EMAIL = (os.environ.get("RACHELI_NOTIFICATION_EMAIL") or "racheli@nimbusip.com").strip()
+HOT_FIELD_REPORT_CUSTOMER_EMAIL = (os.environ.get("HOT_FIELD_REPORT_CUSTOMER_EMAIL") or NASTIA_NOTIFICATION_EMAIL).strip()
 PAIS_NOTIFICATION_FROM = (
     os.environ.get("PAIS_NOTIFICATION_FROM")
     or os.environ.get("NASTIA_NOTIFICATION_FROM")
@@ -346,12 +354,12 @@ SMTP_USE_SSL = env_flag("SMTP_USE_SSL", False)
 TICKET_BOARD_DEFAULTS = {
     "support": {
         "slug": "support",
-        "name": "Support Tickets",
-        "icon_path": "",
+        "name": "נימבוס",
+        "icon_path": "https://tel1.nimbusip.com/themes/default/images/logo.png",
         "route_path": "/support-tickets",
-        "workflow": "support",
+        "workflow": "coordination",
         "paste_template": "",
-        "report_enabled": False,
+        "report_enabled": True,
         "sort_order": 1,
     },
     "pais": {
@@ -463,17 +471,38 @@ def assigned_technician_allowed_statuses():
     return {"בוצע", "נכשל"}
 
 
+def normalize_ticket_status(board_slug, status):
+    normalized_board = (board_slug or "").strip().lower()
+    raw_status = str(status or "").strip()
+    if not raw_status:
+        return "ממתין" if board_supports_coordination(normalized_board) else "Waiting"
+    if raw_status in COORDINATION_PENDING_ALIASES:
+        return COORDINATION_PENDING_STATUS
+    if normalized_board == "support":
+        if raw_status == "Waiting":
+            return "ממתין"
+        if raw_status == "Done":
+            return "בוצע"
+    return raw_status
+
+
+def status_is_coordination_pending(status):
+    return normalize_ticket_status("pais", status) == COORDINATION_PENDING_STATUS
+
+
+def ticket_owner_name(ticket):
+    ticket = ticket or {}
+    details = ticket.get("details") or {}
+    if board_supports_coordination(ticket.get("board_slug")):
+        return (details.get("coordinated_worker") or "").strip()
+    return (ticket.get("assigned_to") or "").strip()
+
+
 def assigned_technician_can_access_ticket(ticket, actor_name=None):
     actor_name = (actor_name or support_user_name()).strip()
-    board_slug = (ticket.get("board_slug") or "").strip().lower()
-    details = ticket.get("details") or {}
-    if board_supports_coordination(board_slug):
-        owner_name = (details.get("coordinated_worker") or "").strip()
-    else:
-        owner_name = (ticket.get("assigned_to") or "").strip()
     return (
         support_user_is_assigned_technician()
-        and owner_name == actor_name
+        and ticket_owner_name(ticket) == actor_name
     )
 
 
@@ -482,7 +511,7 @@ def normalize_support_ticket(ticket):
     ticket["id"] = int(ticket.get("id") or 0)
     ticket["ticket_id"] = f"#{ticket['id']:04d}"
     ticket.setdefault("board_slug", "support")
-    ticket.setdefault("status", "Waiting")
+    ticket["status"] = normalize_ticket_status(ticket.get("board_slug"), ticket.get("status"))
     ticket.setdefault("assigned_to", "")
     ticket.setdefault("solution", "")
     ticket.setdefault("priority", "Medium")
@@ -502,7 +531,7 @@ def normalize_support_ticket(ticket):
 
 
 def support_ticket_is_done(ticket):
-    return (ticket.get("status") or "").strip() in {"Done", "בוצע", "נכשל"}
+    return normalize_ticket_status(ticket.get("board_slug"), ticket.get("status")) in {"Done", "בוצע", "נכשל"}
 
 
 def support_ticket_is_open(ticket):
@@ -655,7 +684,7 @@ def pais_ticket_is_coordination(ticket):
         return False
     details = ticket.get("details") or {}
     return (
-        (ticket.get("status") or "").strip() == "ממתין לתאום"
+        status_is_coordination_pending(ticket.get("status"))
         or bool((details.get("coordinated_worker") or "").strip())
         or bool((details.get("visit_date") or "").strip())
         or bool((details.get("visit_hour_from") or "").strip())
@@ -700,6 +729,9 @@ def board_has_coordination_report(board_slug):
 
 
 def board_statuses(board_slug):
+    normalized_board = (board_slug or "").strip().lower()
+    if normalized_board == "support":
+        return PAIS_STATUSES
     return PAIS_STATUSES if board_supports_coordination(board_slug) else SUPPORT_STATUSES
 
 
@@ -1299,7 +1331,7 @@ def support_ticket_stats(tickets):
         "all": len(tickets),
         "waiting": len([t for t in tickets if support_ticket_is_open(t)]),
         "done": len([t for t in tickets if support_ticket_is_done(t)]),
-        "coordination": len([t for t in tickets if t.get("status") == "ממתין לתאום"]),
+        "coordination": len([t for t in tickets if status_is_coordination_pending(t.get("status"))]),
         "unassigned": len([t for t in tickets if not t.get("assigned_to")]),
     }
 
@@ -1427,7 +1459,7 @@ def pais_report_range(period, date_from_raw=None, date_to_raw=None):
     return start, end
 
 
-def build_pais_report(tickets, status_filter="", period="daily", date_from_raw="", date_to_raw=""):
+def build_ticket_board_report(tickets, status_filter="", period="daily", date_from_raw="", date_to_raw=""):
     report_from, report_to = pais_report_range(period, date_from_raw, date_to_raw)
     period_filtered = filter_tickets_by_created_range(tickets, report_from, report_to)
     filtered = list(period_filtered)
@@ -1436,10 +1468,10 @@ def build_pais_report(tickets, status_filter="", period="daily", date_from_raw="
 
     leaderboard = []
     for user in TECHNICIAN_SUPPORT_USERS:
-        user_tickets = [ticket for ticket in filtered if ticket.get("assigned_to") == user]
+        user_tickets = [ticket for ticket in filtered if ticket_owner_name(ticket) == user]
         done_count = len([ticket for ticket in user_tickets if support_ticket_is_done(ticket)])
         waiting_count = len([ticket for ticket in user_tickets if support_ticket_is_open(ticket)])
-        coordination_count = len([ticket for ticket in user_tickets if ticket.get("status") == "ממתין לתאום"])
+        coordination_count = len([ticket for ticket in user_tickets if status_is_coordination_pending(ticket.get("status"))])
         total_count = len(user_tickets)
         completion_rate = round((done_count / total_count) * 100, 1) if total_count else 0
         leaderboard.append({
@@ -1463,7 +1495,7 @@ def build_pais_report(tickets, status_filter="", period="daily", date_from_raw="
             "total": len(filtered),
             "done": len([ticket for ticket in filtered if support_ticket_is_done(ticket)]),
             "waiting": len([ticket for ticket in filtered if support_ticket_is_open(ticket)]),
-            "coordination": len([ticket for ticket in filtered if ticket.get("status") == "ממתין לתאום"]),
+            "coordination": len([ticket for ticket in filtered if status_is_coordination_pending(ticket.get("status"))]),
             "failed": len([ticket for ticket in filtered if ticket.get("status") == "נכשל"]),
             "coordinated": len([ticket for ticket in filtered if ticket.get("status") == "תואם"]),
         },
@@ -1471,13 +1503,14 @@ def build_pais_report(tickets, status_filter="", period="daily", date_from_raw="
     }
 
 
-def save_support_attachment(file_storage, ticket_number):
+def save_support_attachment(file_storage, ticket_number, allowed_extensions=None):
     if not file_storage or not file_storage.filename:
         return None
 
     original = secure_filename(file_storage.filename)
     ext = os.path.splitext(original)[1].lower()
-    if ext not in SUPPORT_ATTACHMENT_EXTENSIONS:
+    allowed_extensions = allowed_extensions or SUPPORT_ATTACHMENT_EXTENSIONS
+    if ext not in allowed_extensions:
         raise ValueError("Only image files (JPG, PNG, WEBP, GIF) are supported")
 
     ticket_folder = f"TicketID{ticket_number:04d}"
@@ -1519,6 +1552,320 @@ def save_support_attachments(attachment_files, ticket_number):
         if saved_attachment:
             attachments.append(saved_attachment)
     return attachments
+
+
+def save_generated_support_attachment(content, filename, ticket_number, content_type="application/octet-stream"):
+    if not filename:
+        raise ValueError("Attachment filename is required")
+    generated_file = FileStorage(
+        stream=io.BytesIO(content if isinstance(content, (bytes, bytearray)) else bytes(content or b"")),
+        filename=filename,
+        content_type=content_type,
+    )
+    return save_support_attachment(generated_file, ticket_number, allowed_extensions=SUPPORT_ATTACHMENT_EXTENSIONS | {".pdf"})
+
+
+def parse_signature_data_url(signature_data_url):
+    raw_value = str(signature_data_url or "").strip()
+    match = re.fullmatch(r"data:image/(?P<subtype>png|jpeg|jpg);base64,(?P<data>[A-Za-z0-9+/=\s]+)", raw_value, re.IGNORECASE)
+    if not match:
+        raise ValueError("חתימת הלקוח אינה תקינה")
+    subtype = match.group("subtype").lower().replace("jpg", "jpeg")
+    try:
+        image_bytes = base64.b64decode(match.group("data"), validate=True)
+    except Exception as exc:
+        raise ValueError("חתימת הלקוח אינה תקינה") from exc
+    if not image_bytes:
+        raise ValueError("חתימת הלקוח אינה תקינה")
+    return image_bytes, subtype
+
+
+def calculate_work_duration(start_time, end_time):
+    start_value = str(start_time or "").strip()
+    end_value = str(end_time or "").strip()
+    if not re.fullmatch(r"\d{2}:\d{2}", start_value) or not re.fullmatch(r"\d{2}:\d{2}", end_value):
+        raise ValueError("יש לבחור שעת התחלה ושעת סיום תקינות")
+    start_minutes = int(start_value[:2]) * 60 + int(start_value[3:5])
+    end_minutes = int(end_value[:2]) * 60 + int(end_value[3:5])
+    if end_minutes <= start_minutes:
+        raise ValueError("שעת הסיום חייבת להיות אחרי שעת ההתחלה")
+    total_minutes = end_minutes - start_minutes
+    hours = total_minutes // 60
+    minutes = total_minutes % 60
+    return {
+        "minutes": total_minutes,
+        "label": f"{hours}:{minutes:02d}",
+        "decimal_hours": round(total_minutes / 60, 2),
+    }
+
+
+def hot_field_report_attachment_label(ticket, report):
+    ticket_label = (ticket.get("ticket_id") or f"#{int(ticket.get('id') or 0):04d}").replace("#", "")
+    customer_name = secure_filename((ticket.get("details") or {}).get("customer_name") or "customer") or "customer"
+    report_stamp = secure_filename(str(report.get("submitted_at_display") or "").replace("/", "-").replace(":", "-").replace(" ", "_")) or israel_now().strftime("%Y%m%d_%H%M")
+    return f"hot-field-report-{ticket_label}-{customer_name}-{report_stamp}.pdf"
+
+
+def build_hot_field_report_pdf(ticket, report, signature_bytes):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=16 * mm,
+        leftMargin=16 * mm,
+        topMargin=16 * mm,
+        bottomMargin=16 * mm,
+    )
+    latin_regular_font = get_pdf_font_name("regular", "latin")
+    latin_bold_font = get_pdf_font_name("bold", "latin")
+    hebrew_regular_font = get_pdf_font_name("regular", "hebrew")
+    hebrew_bold_font = get_pdf_font_name("bold", "hebrew")
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        "HotFieldReportTitle",
+        parent=styles["Normal"],
+        fontName=hebrew_bold_font,
+        fontSize=18,
+        leading=22,
+        alignment=TA_RIGHT,
+        textColor=colors.HexColor("#1f2f46"),
+        spaceAfter=10,
+    )
+    text_style = ParagraphStyle(
+        "HotFieldReportText",
+        parent=styles["Normal"],
+        fontName=hebrew_regular_font,
+        fontSize=11,
+        leading=16,
+        alignment=TA_RIGHT,
+        textColor=colors.black,
+    )
+    label_style = ParagraphStyle(
+        "HotFieldReportLabel",
+        parent=styles["Normal"],
+        fontName=hebrew_bold_font,
+        fontSize=10,
+        leading=14,
+        alignment=TA_RIGHT,
+        textColor=colors.HexColor("#385475"),
+    )
+    latin_style = ParagraphStyle(
+        "HotFieldReportLatin",
+        parent=styles["Normal"],
+        fontName=latin_bold_font or latin_regular_font,
+        fontSize=11,
+        leading=16,
+        alignment=TA_LEFT,
+        textColor=colors.black,
+    )
+
+    details = ticket.get("details") or {}
+    metadata_rows = [
+        ("מספר קריאה", details.get("call_number") or ticket.get("ticket_id") or ""),
+        ("שם לקוח", details.get("customer_name") or ""),
+        ("כתובת", details.get("address") or ""),
+        ("איש קשר במקום", details.get("on_site_contact") or ""),
+        ("טכנאי", report.get("submitted_by") or ""),
+        ("נחתם על ידי", report.get("signed_by") or ""),
+        ("נייד", report.get("mobile_number") or ""),
+        ("שעת התחלה", report.get("work_start") or ""),
+        ("שעת סיום", report.get("work_end") or ""),
+        ("סה\"כ שעות", report.get("total_hours") or ""),
+    ]
+
+    story = [
+        pdf_paragraph("דוח החתמת לקוח - הוט קריאות", title_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
+        Spacer(1, 6),
+    ]
+    metadata_table = Table(
+        [
+            [
+                pdf_paragraph(value, latin_style if re.search(r"[0-9:]", str(value or "")) and not HEBREW_TEXT_RE.search(str(value or "")) else text_style, rtl=bool(HEBREW_TEXT_RE.search(str(value or ""))), latin_font_name=latin_regular_font, hebrew_font_name=hebrew_regular_font),
+                pdf_paragraph(label, label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
+            ]
+            for label, value in metadata_rows
+        ],
+        colWidths=[116 * mm, 54 * mm],
+        hAlign="RIGHT",
+    )
+    metadata_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.white),
+        ("BOX", (0, 0), (-1, -1), 0.6, colors.HexColor("#d8deea")),
+        ("INNERGRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#d8deea")),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    story.append(metadata_table)
+    story.extend([
+        Spacer(1, 10),
+        pdf_paragraph("סיכום", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
+        pdf_paragraph(report.get("summary") or "-", text_style, rtl=True, latin_font_name=latin_regular_font, hebrew_font_name=hebrew_regular_font),
+        Spacer(1, 8),
+        pdf_paragraph("הערות", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
+        pdf_paragraph(report.get("notes") or "-", text_style, rtl=True, latin_font_name=latin_regular_font, hebrew_font_name=hebrew_regular_font),
+        Spacer(1, 8),
+        pdf_paragraph("חתימת לקוח", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
+    ])
+    story.append(Image(io.BytesIO(signature_bytes), width=90 * mm, height=35 * mm, hAlign="RIGHT"))
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+def send_hot_field_report_email(ticket, report, pdf_filename, pdf_content):
+    details = ticket.get("details") or {}
+    ticket_label = ticket.get("ticket_id") or f"#{int(ticket.get('id') or 0):04d}"
+    body_lines = [
+        f"קריאה: {ticket_label}",
+        f"מספר קריאה: {(details.get('call_number') or '').strip() or '-'}",
+        f"לקוח: {(details.get('customer_name') or '').strip() or '-'}",
+        f"כתובת: {(details.get('address') or '').strip() or '-'}",
+        f"נחתם על ידי: {(report.get('signed_by') or '').strip() or '-'}",
+        f"נייד: {(report.get('mobile_number') or '').strip() or '-'}",
+        f"שעת התחלה: {(report.get('work_start') or '').strip() or '-'}",
+        f"שעת סיום: {(report.get('work_end') or '').strip() or '-'}",
+        f"סה\"כ שעות: {(report.get('total_hours') or '').strip() or '-'}",
+        f"סיכום: {(report.get('summary') or '').strip() or '-'}",
+        f"הערות: {(report.get('notes') or '').strip() or '-'}",
+        f"טכנאי: {(report.get('submitted_by') or '').strip() or '-'}",
+        f"זמן חתימה: {(report.get('submitted_at_display') or '').strip() or '-'}",
+    ]
+    html_body = "<html><body dir='rtl'><h2>דוח החתמת לקוח - הוט קריאות</h2><ul>" + "".join(
+        f"<li><strong>{xml_escape(line.split(':', 1)[0])}:</strong> {xml_escape(line.split(':', 1)[1].strip() if ':' in line else '')}</li>"
+        for line in body_lines
+    ) + "</ul></body></html>"
+    send_plain_email(
+        HOT_FIELD_REPORT_CUSTOMER_EMAIL,
+        f"{ticket_label} - דוח החתמת לקוח",
+        "\n".join(body_lines),
+        html_body=html_body,
+        attachments=[{
+            "filename": pdf_filename,
+            "content": pdf_content,
+            "maintype": "application",
+            "subtype": "pdf",
+        }],
+    )
+
+
+def save_hot_field_report(ticket_id, actor, payload):
+    tickets = load_support_tickets()
+    ticket = find_support_ticket(tickets, ticket_id)
+    if not ticket:
+        raise LookupError("Ticket not found")
+    if (ticket.get("board_slug") or "").strip().lower() != "hot-kiryot":
+        raise ValueError("Customer signature is supported only for הוט קריאות")
+
+    signed_by = str(payload.get("signed_by") or "").strip()
+    mobile_number = re.sub(r"\D+", "", str(payload.get("mobile_number") or ""))
+    work_start = str(payload.get("work_start") or "").strip()
+    work_end = str(payload.get("work_end") or "").strip()
+    summary = str(payload.get("summary") or "").strip()
+    notes = str(payload.get("notes") or "").strip()
+    signature_data_url = payload.get("signature_data_url")
+
+    if not signed_by:
+        raise ValueError("יש למלא נחתם על ידי")
+    if not mobile_number:
+        raise ValueError("יש למלא נייד במספרים בלבד")
+    if not summary:
+        raise ValueError("יש למלא סיכום")
+
+    duration = calculate_work_duration(work_start, work_end)
+    signature_bytes, _ = parse_signature_data_url(signature_data_url)
+    now = israel_now()
+    submitted_display = now.strftime("%d/%m/%Y %H:%M")
+    report = {
+        "signed_by": signed_by,
+        "mobile_number": mobile_number,
+        "work_start": work_start,
+        "work_end": work_end,
+        "total_hours": duration["label"],
+        "total_minutes": duration["minutes"],
+        "total_hours_decimal": duration["decimal_hours"],
+        "summary": summary,
+        "notes": notes,
+        "submitted_by": actor,
+        "submitted_at": now.isoformat(timespec="seconds"),
+        "submitted_at_display": submitted_display,
+    }
+    pdf_content = build_hot_field_report_pdf(ticket, report, signature_bytes)
+    pdf_filename = hot_field_report_attachment_label(ticket, report)
+    saved_attachment = save_generated_support_attachment(pdf_content, pdf_filename, int(ticket.get("id") or 0), "application/pdf")
+    report["pdf_attachment"] = saved_attachment
+
+    details = dict(ticket.get("details") or {})
+    previous_report = details.get("field_report") if isinstance(details.get("field_report"), dict) else None
+    details["field_report"] = report
+    now_iso = now.isoformat(timespec="seconds")
+    updates = [{
+        "changed_at": now_iso,
+        "actor": actor,
+        "field_name": "details.field_report",
+        "old_value": json.dumps(previous_report or {}, ensure_ascii=False),
+        "new_value": json.dumps(report, ensure_ascii=False),
+    }]
+
+    if supabase_ticketing_enabled():
+        _supabase_request(
+            "PATCH",
+            "support_tickets",
+            params={"id": f"eq.{ticket['id']}"},
+            json_body={"details": details},
+            prefer="return=minimal",
+        )
+        _supabase_request(
+            "POST",
+            "ticket_attachments",
+            json_body=[{"ticket_id": ticket["id"], **saved_attachment}],
+            prefer="return=minimal",
+        )
+        _supabase_request(
+            "POST",
+            "ticket_updates",
+            json_body=[{"ticket_id": ticket["id"], **update} for update in updates],
+            prefer="return=minimal",
+        )
+        normalized_ticket = normalize_support_ticket({
+            **ticket,
+            "details": details,
+            "attachments": (ticket.get("attachments") or []) + [saved_attachment],
+            "updates": (ticket.get("updates") or []) + [{
+                "at": update["changed_at"],
+                "actor": update["actor"],
+                "field": update["field_name"],
+                "from": update["old_value"],
+                "to": update["new_value"],
+            } for update in updates],
+        })
+    else:
+        persisted = load_support_tickets()
+        local_ticket = find_support_ticket(persisted, ticket_id)
+        if not local_ticket:
+            raise LookupError("Ticket not found")
+        local_ticket["details"] = details
+        local_ticket["attachments"] = (local_ticket.get("attachments") or []) + [saved_attachment]
+        local_ticket.setdefault("updates", []).extend([{
+            "at": update["changed_at"],
+            "actor": update["actor"],
+            "field": update["field_name"],
+            "from": update["old_value"],
+            "to": update["new_value"],
+        } for update in updates])
+        save_support_tickets(persisted)
+        normalized_ticket = normalize_support_ticket(local_ticket)
+
+    try:
+        send_hot_field_report_email(normalized_ticket, report, pdf_filename, pdf_content)
+        normalized_ticket["field_report_sent"] = True
+        normalized_ticket["field_report_error"] = ""
+    except Exception as exc:
+        normalized_ticket["field_report_sent"] = False
+        normalized_ticket["field_report_error"] = str(exc)
+    return normalized_ticket
 
 
 def smtp_email_enabled():
@@ -1629,7 +1976,37 @@ def coordination_ticket_email_context(ticket):
         ("משויך ל", ticket.get("assigned_to")),
     ]
 
-    if board_slug == "hot-kiryot":
+    if board_slug == "support":
+        detail_rows = [
+            ("סוג כרטיס", ticket.get("ticket_type")),
+            ("סוג שירות", ticket.get("service_type")),
+            ("דומיין", ticket.get("domain")),
+            ("עדיפות", ticket.get("priority")),
+            ("תיאור", ticket.get("description")),
+            ("פתרון", ticket.get("solution")),
+            ("סוג לקוח", details.get("customer_type")),
+            ("סוג טיפול", details.get("service_mode")),
+            ("שם העסק", details.get("business_name")),
+            ("איש קשר", details.get("service_contact")),
+            ("כתובת", details.get("service_address")),
+            ("טכנאי מתואם", details.get("coordinated_worker")),
+            ("תאריך ביקור", details.get("visit_date")),
+            ("שעת ביקור מ", details.get("visit_hour_from")),
+            ("שעת ביקור עד", details.get("visit_hour_to")),
+            ("הערות כשל", details.get("failure_notes")),
+        ]
+        calendar_description_lines = [
+            f"מספר קריאה: {ticket_label}",
+            f"סוג לקוח: {(details.get('customer_type') or '').strip() or '-'}",
+            f"שם העסק: {(details.get('business_name') or '').strip() or '-'}",
+            f"תיאור: {(ticket.get('description') or '').strip() or '-'}",
+            f"כתובת: {(details.get('service_address') or '').strip() or '-'}",
+            f"טכנאי מתואם: {(details.get('coordinated_worker') or '').strip() or '-'}",
+        ]
+        calendar_summary = f"קריאת שירות נימבוס {ticket_label}"
+        location = (details.get("service_address") or details.get("address") or "").strip() or "נימבוס"
+        subject = f"קריאת שירות נימבוס מס' קריאה : {ticket_label}"
+    elif board_slug == "hot-kiryot":
         detail_rows = [
             ("שעה ותאריך פתיחת תקלה", details.get("opened_at")),
             ("מספר קריאה שהוקצה", details.get("call_number")),
@@ -1790,6 +2167,28 @@ def build_pais_email_html(ticket, calendar_link=None):
 """
 
 
+def should_notify_racheli(previous_ticket, updated_ticket, actor, changes):
+    if (updated_ticket.get("board_slug") or "").strip().lower() != "support":
+        return False
+    if not actor_can_trigger_nastia_notification(actor) and not request_targets_nastia_queue(changes):
+        return False
+    previous_mode = ((previous_ticket or {}).get("details") or {}).get("service_mode") or ""
+    updated_mode = ((updated_ticket.get("details") or {}).get("service_mode") or "").strip()
+    return updated_mode == "משלוח" and previous_mode != updated_mode
+
+
+def send_racheli_ticket_email(ticket):
+    email_context = coordination_ticket_email_context(ticket)
+    selected_mode = ((ticket.get("details") or {}).get("service_mode") or "").strip() or "משלוח"
+    send_plain_email(
+        RACHELI_NOTIFICATION_EMAIL,
+        f"{email_context['ticket_label']} - {selected_mode}",
+        "\n".join(email_context["body_lines"]),
+        from_address=PAIS_NOTIFICATION_FROM or SMTP_FROM or SMTP_USERNAME,
+        html_body=build_pais_email_html(ticket),
+    )
+
+
 def send_nastia_ticket_email(ticket):
     email_context = coordination_ticket_email_context(ticket)
     calendar_link = build_pais_google_calendar_link(ticket)
@@ -1823,6 +2222,24 @@ def process_nastia_ticket_notification(previous_ticket, updated_ticket, enabled=
     except Exception as exc:
         print(f"Nastia notification email warning for ticket {updated_ticket.get('id')}: {exc}")
         result["notification_error"] = str(exc)
+    return result
+
+
+def process_racheli_ticket_notification(previous_ticket, updated_ticket, actor, changes):
+    attempted = should_notify_racheli(previous_ticket, updated_ticket, actor, changes)
+    result = {
+        "racheli_notification_attempted": attempted,
+        "racheli_notification_sent": False,
+        "racheli_notification_error": "",
+    }
+    if not attempted:
+        return result
+    try:
+        send_racheli_ticket_email(updated_ticket)
+        result["racheli_notification_sent"] = True
+    except Exception as exc:
+        print(f"Racheli notification email warning for ticket {updated_ticket.get('id')}: {exc}")
+        result["racheli_notification_error"] = str(exc)
     return result
 
 
@@ -2144,6 +2561,18 @@ def update_support_ticket_record(ticket_id, changes, actor):
         ticket["status"] = status
         updates.append({"changed_at": now, "actor": actor, "field_name": "status", "old_value": old_value, "new_value": status})
 
+    if "description" in changes:
+        description = str(changes.get("description") or "").strip()
+        old_value = ticket.get("description", "")
+        ticket["description"] = description
+        updates.append({"changed_at": now, "actor": actor, "field_name": "description", "old_value": old_value, "new_value": description})
+
+    if "solution" in changes:
+        solution = str(changes.get("solution") or "").strip()
+        old_value = ticket.get("solution", "")
+        ticket["solution"] = solution
+        updates.append({"changed_at": now, "actor": actor, "field_name": "solution", "old_value": old_value, "new_value": solution})
+
     if "details" in changes and isinstance(changes.get("details"), dict):
         detail_fields = {
             "actions_taken",
@@ -2153,6 +2582,11 @@ def update_support_ticket_record(ticket_id, changes, actor):
             "visit_hour_from",
             "visit_hour_to",
             "failure_notes",
+            "customer_type",
+            "service_mode",
+            "business_name",
+            "service_contact",
+            "service_address",
         }
         details = dict(ticket.get("details") or {})
         for field_name, new_value in changes.get("details", {}).items():
@@ -2179,6 +2613,10 @@ def update_support_ticket_record(ticket_id, changes, actor):
             patch_payload["assigned_to"] = ticket["assigned_to"]
         if "status" in changes:
             patch_payload["status"] = ticket["status"]
+        if "description" in changes:
+            patch_payload["description"] = ticket.get("description") or ""
+        if "solution" in changes:
+            patch_payload["solution"] = ticket.get("solution") or ""
         if "details" in changes:
             patch_payload["details"] = ticket.get("details") or {}
         if patch_payload:
@@ -2213,6 +2651,12 @@ def update_support_ticket_record(ticket_id, changes, actor):
             enabled=notification_enabled,
         )
         normalized_ticket.update(notification_result)
+        normalized_ticket.update(process_racheli_ticket_notification(
+            previous_ticket,
+            normalized_ticket,
+            actor,
+            changes,
+        ))
         return normalized_ticket
 
     persisted = load_support_tickets()
@@ -2225,6 +2669,10 @@ def update_support_ticket_record(ticket_id, changes, actor):
             local_ticket["assigned_to"] = ticket["assigned_to"]
         if "status" in changes:
             local_ticket["status"] = ticket["status"]
+        if "description" in changes:
+            local_ticket["description"] = ticket.get("description") or ""
+        if "solution" in changes:
+            local_ticket["solution"] = ticket.get("solution") or ""
         if "details" in changes:
             local_ticket["details"] = dict(ticket.get("details") or {})
         local_updates.append({
@@ -2243,6 +2691,12 @@ def update_support_ticket_record(ticket_id, changes, actor):
         enabled=notification_enabled,
     )
     normalized_ticket.update(notification_result)
+    normalized_ticket.update(process_racheli_ticket_notification(
+        previous_ticket,
+        normalized_ticket,
+        actor,
+        changes,
+    ))
     return normalized_ticket
 
 
@@ -3434,10 +3888,19 @@ def build_pais_export_rows(report):
     rows = []
     for index, ticket in enumerate(report["tickets"], start=1):
         details = ticket.get("details") or {}
+        if (ticket.get("board_slug") or "").strip().lower() == "support":
+            reference_value = details.get("business_name") or ticket.get("service_type") or ""
+            address_value = details.get("service_address") or ""
+        elif (ticket.get("board_slug") or "").strip().lower() == "hot-kiryot":
+            reference_value = details.get("call_number") or ""
+            address_value = details.get("address") or ""
+        else:
+            reference_value = details.get("terminal_number") or ""
+            address_value = details.get("address") or ""
         rows.append({
             "counter": index,
-            "terminal_number": details.get("terminal_number") or "",
-            "address": details.get("address") or "",
+            "terminal_number": reference_value,
+            "address": address_value,
         })
     return rows
 
@@ -3772,7 +4235,7 @@ def dashboard_data():
             "nastia_tickets",
             lambda: len([
                 t for t in load_support_tickets()
-                if board_supports_coordination(t.get("board_slug")) and (t.get("status") or "").strip() == "ממתין לתאום"
+                if board_supports_coordination(t.get("board_slug")) and status_is_coordination_pending(t.get("status"))
             ]),
         ),
     })
@@ -3804,6 +4267,8 @@ def render_ticket_board_page(board_slug):
         service_types=SUPPORT_SERVICE_TYPES,
         ticket_types=SUPPORT_TICKET_TYPES,
         priorities=SUPPORT_PRIORITIES,
+        support_delivery_options=SUPPORT_DELIVERY_OPTIONS,
+        support_customer_types=SUPPORT_CUSTOMER_TYPES,
         support_statuses=SUPPORT_STATUSES,
         pais_statuses=PAIS_STATUSES,
         nastia_notification_email=NASTIA_NOTIFICATION_EMAIL,
@@ -3900,6 +4365,8 @@ def nastia_tickets_page():
         service_types=SUPPORT_SERVICE_TYPES,
         ticket_types=SUPPORT_TICKET_TYPES,
         priorities=SUPPORT_PRIORITIES,
+        support_delivery_options=SUPPORT_DELIVERY_OPTIONS,
+        support_customer_types=SUPPORT_CUSTOMER_TYPES,
         support_statuses=SUPPORT_STATUSES,
         pais_statuses=PAIS_STATUSES,
         nastia_notification_email=NASTIA_NOTIFICATION_EMAIL,
@@ -3981,6 +4448,8 @@ def support_tickets_data():
                     search in str((t.get("details") or {}).get(field_name) or "").lower()
                     for field_name in ("call_number", "customer_name", "address", "line_code", "issue_summary")
                 )
+                or search in str(t.get("ticket_id") or "").lower()
+                or search in str(t.get("id") or "").lower()
             ]
         else:
             filtered = [
@@ -4005,7 +4474,10 @@ def pais_tickets_report_data():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    register_service_activity("pais_tickets")
+    board_slug = (request.args.get("board") or "pais").strip().lower()
+    if not board_has_coordination_report(board_slug):
+        return jsonify({"ok": False, "message": "Report not enabled"}), 400
+    register_service_activity(board_page_key(board_slug))
     status_filter = (request.args.get("status") or "").strip()
     period = (request.args.get("period") or "monthly").strip().lower()
     date_from = (request.args.get("date_from") or "").strip()
@@ -4013,14 +4485,14 @@ def pais_tickets_report_data():
     if period not in {"daily", "weekly", "monthly"}:
         period = "monthly"
 
-    report = build_pais_report(
-        load_support_tickets("pais"),
+    report = build_ticket_board_report(
+        load_support_tickets(board_slug),
         status_filter=status_filter,
         period=period,
         date_from_raw=date_from,
         date_to_raw=date_to,
     )
-    return jsonify({"ok": True, **report})
+    return jsonify({"ok": True, "board": get_ticket_board(board_slug), **report})
 
 
 @app.route("/pais-tickets-report-export")
@@ -4028,7 +4500,10 @@ def pais_tickets_report_export():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    register_service_activity("pais_tickets")
+    board_slug = (request.args.get("board") or "pais").strip().lower()
+    if not board_has_coordination_report(board_slug):
+        return jsonify({"ok": False, "message": "Report not enabled"}), 400
+    register_service_activity(board_page_key(board_slug))
     status_filter = (request.args.get("status") or "").strip()
     period = (request.args.get("period") or "monthly").strip().lower()
     export_format = (request.args.get("format") or "csv").strip().lower()
@@ -4039,8 +4514,8 @@ def pais_tickets_report_export():
     if export_format not in {"csv", "pdf"}:
         export_format = "csv"
 
-    report = build_pais_report(
-        load_support_tickets("pais"),
+    report = build_ticket_board_report(
+        load_support_tickets(board_slug),
         status_filter=status_filter,
         period=period,
         date_from_raw=date_from,
@@ -4048,10 +4523,11 @@ def pais_tickets_report_export():
     )
 
     rows = build_pais_export_rows(report)
+    board = get_ticket_board(board_slug)
 
     if export_format == "pdf":
         pdf_buffer = build_pdf_buffer(
-            title="מפעל הפיס",
+            title=board.get("name") or "דו\"ח קריאות",
             metadata_rows=[
                 ("Period", report.get("period") or ""),
                 ("Dates", f"{report.get('date_from') or ''} - {report.get('date_to') or ''}"),
@@ -4068,7 +4544,7 @@ def pais_tickets_report_export():
             pdf_buffer,
             mimetype="application/pdf",
             as_attachment=True,
-            download_name=f"pais_tickets_{period}_{report['date_from']}_to_{report['date_to']}.pdf",
+            download_name=f"{board_slug}_tickets_{period}_{report['date_from']}_to_{report['date_to']}.pdf",
         )
 
     csv_text = io.StringIO()
@@ -4084,7 +4560,7 @@ def pais_tickets_report_export():
         output,
         mimetype="text/csv",
         as_attachment=True,
-        download_name=f"pais_tickets_{period}_{report['date_from']}_to_{report['date_to']}.csv",
+        download_name=f"{board_slug}_tickets_{period}_{report['date_from']}_to_{report['date_to']}.csv",
     )
 
 
@@ -4144,6 +4620,38 @@ def support_tickets_create():
         ticket_type = "שירות"
         description = ""
         solution = ""
+    elif board["slug"] == "support":
+        if ticket_type not in SUPPORT_TICKET_TYPES:
+            return jsonify({"ok": False, "message": "Invalid ticket type"}), 400
+        if priority not in SUPPORT_PRIORITIES:
+            return jsonify({"ok": False, "message": "Invalid priority"}), 400
+        if service_type == "מרכזייה" and not domain:
+            return jsonify({"ok": False, "message": "Domain is required for מרכזייה"}), 400
+        if not description:
+            return jsonify({"ok": False, "message": "Description is required"}), 400
+        service_mode = (request.form.get("service_mode") or "").strip()
+        if service_mode and service_mode not in SUPPORT_DELIVERY_OPTIONS:
+            return jsonify({"ok": False, "message": "Invalid service mode"}), 400
+        customer_type = (request.form.get("customer_type") or "").strip()
+        if customer_type and customer_type not in SUPPORT_CUSTOMER_TYPES:
+            return jsonify({"ok": False, "message": "Invalid customer type"}), 400
+        business_name = (request.form.get("business_name") or "").strip()
+        service_contact = (request.form.get("service_contact") or "").strip()
+        service_address = (request.form.get("service_address") or "").strip()
+        if service_mode and not all([business_name, service_contact, service_address]):
+            return jsonify({"ok": False, "message": "יש למלא שם העסק, איש קשר וכתובת עבור סוג הטיפול שנבחר"}), 400
+        details = {
+            "customer_type": customer_type,
+            "service_mode": service_mode,
+            "business_name": business_name,
+            "service_contact": service_contact,
+            "service_address": service_address,
+            "coordinated_worker": "",
+            "visit_date": "",
+            "visit_hour_from": "",
+            "visit_hour_to": "",
+            "failure_notes": "",
+        }
     elif board["slug"] == "hot-kiryot":
         call_number = (request.form.get("call_number") or "").strip()
         address = (request.form.get("address") or "").strip()
@@ -4207,7 +4715,7 @@ def support_tickets_create():
         "priority": priority,
         "description": description,
         "solution": solution,
-        "status": "ממתין" if board_supports_coordination(board["slug"]) else "Waiting",
+        "status": normalize_ticket_status(board["slug"], "ממתין" if board_supports_coordination(board["slug"]) else "Waiting"),
         "assigned_to": assigned_to,
         "details": details,
     }
@@ -4245,9 +4753,12 @@ def support_tickets_update():
             return jsonify({"ok": False, "message": "Access denied"}), 403
         if "assigned_to" in payload:
             return jsonify({"ok": False, "message": "Technician accounts cannot reassign tickets"}), 403
-        status = (payload.get("status") or "").strip()
+        status = normalize_ticket_status(target_ticket.get("board_slug"), payload.get("status"))
+        payload["status"] = status
         if status not in assigned_technician_allowed_statuses():
             return jsonify({"ok": False, "message": "Technician accounts can only set status to בוצע או נכשל"}), 403
+        if status == "נכשל" and not isinstance(payload.get("details"), dict):
+            return jsonify({"ok": False, "message": "יש למלא סיבת כשל"}), 400
         if "details" in payload:
             details = payload.get("details")
             if not isinstance(details, dict):
@@ -4258,6 +4769,8 @@ def support_tickets_update():
             }
             if disallowed_fields:
                 return jsonify({"ok": False, "message": "Technician accounts can only update failure notes"}), 403
+            if status == "נכשל" and not str(details.get("failure_notes") or "").strip():
+                return jsonify({"ok": False, "message": "יש למלא סיבת כשל"}), 400
 
     if "details" in payload and isinstance(payload.get("details"), dict):
         details = payload["details"]
@@ -4275,11 +4788,25 @@ def support_tickets_update():
             return jsonify({"ok": False, "message": "Invalid assignee"}), 400
 
     if "status" in payload:
-        status = (payload.get("status") or "").strip()
+        target_ticket = target_ticket or find_support_ticket(load_support_tickets(), payload.get("ticket_id"))
+        status = normalize_ticket_status((target_ticket or {}).get("board_slug"), payload.get("status"))
+        payload["status"] = status
         if status not in ALL_TICKET_STATUSES:
             return jsonify({"ok": False, "message": "Invalid status"}), 400
     if "details" in payload and isinstance(payload.get("details"), dict):
         details = payload["details"]
+        customer_type = (details.get("customer_type") or "").strip()
+        if customer_type and customer_type not in SUPPORT_CUSTOMER_TYPES:
+            return jsonify({"ok": False, "message": "Invalid customer type"}), 400
+        service_mode = (details.get("service_mode") or "").strip()
+        if service_mode and service_mode not in SUPPORT_DELIVERY_OPTIONS:
+            return jsonify({"ok": False, "message": "Invalid service mode"}), 400
+        if service_mode and not all([
+            (details.get("business_name") or "").strip(),
+            (details.get("service_contact") or "").strip(),
+            (details.get("service_address") or "").strip(),
+        ]):
+            return jsonify({"ok": False, "message": "יש למלא שם העסק, איש קשר וכתובת עבור סוג הטיפול שנבחר"}), 400
         coordinated_worker = (details.get("coordinated_worker") or "").strip()
         visit_date = (details.get("visit_date") or "").strip()
         visit_hour_from = (details.get("visit_hour_from") or "").strip()
@@ -4303,6 +4830,8 @@ def support_tickets_update():
                 "ok": False,
                 "message": f"העובד {coordinated_worker} כבר תפוס בתאריך {visit_date} בין {visit_hour_from} ל-{visit_hour_to}",
             }), 400
+        if (payload.get("status") or "").strip() == "נכשל" and not (details.get("failure_notes") or "").strip():
+            return jsonify({"ok": False, "message": "יש למלא סיבת כשל"}), 400
     try:
         ticket = update_support_ticket_record(payload.get("ticket_id"), payload, actor)
     except LookupError:
@@ -4333,6 +4862,34 @@ def support_tickets_attachments():
 
     try:
         ticket = append_support_ticket_attachments(ticket_id, attachment_files)
+    except ValueError as exc:
+        return jsonify({"ok": False, "message": str(exc)}), 400
+    except LookupError:
+        return jsonify({"ok": False, "message": "Ticket not found"}), 404
+    except RuntimeError as exc:
+        return jsonify({"ok": False, "message": str(exc)}), 502
+    return jsonify({"ok": True, "ticket": ticket})
+
+
+@app.route("/support-tickets-field-report", methods=["POST"])
+def support_tickets_field_report():
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+    if not support_user_is_assigned_technician():
+        return jsonify({"ok": False, "message": "Technician access required"}), 403
+
+    payload = request.get_json(silent=True) or {}
+    ticket_id = payload.get("ticket_id")
+    target_ticket = find_support_ticket(load_support_tickets(), ticket_id)
+    if not target_ticket:
+        return jsonify({"ok": False, "message": "Ticket not found"}), 404
+    if not assigned_technician_can_access_ticket(target_ticket):
+        return jsonify({"ok": False, "message": "Access denied"}), 403
+    if (target_ticket.get("board_slug") or "").strip().lower() != "hot-kiryot":
+        return jsonify({"ok": False, "message": "Customer signature is supported only for הוט קריאות"}), 400
+
+    try:
+        ticket = save_hot_field_report(ticket_id, support_user_name(), payload)
     except ValueError as exc:
         return jsonify({"ok": False, "message": str(exc)}), 400
     except LookupError:

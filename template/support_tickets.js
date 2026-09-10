@@ -8,20 +8,21 @@ let autoRefreshTimer = null;
 let leaderboardWorkersVisible = false;
 let imagePreviewScale = 1;
 let sendSuccessToastTimer = null;
+let signaturePadDirty = false;
 
 const AUTO_REFRESH_INTERVAL_MS = 10000;
-const NASTYA_EDITABLE_STATUSES = ["ממתין לתאום", "תואם", "בוצע", "נכשל"];
+const NASTYA_EDITABLE_STATUSES = ["ממתין לתיאום", "תואם", "בוצע", "נכשל"];
 const NASTYA_FINAL_STATUSES = ["בוצע", "נכשל"];
 
 const supportTicketsContext = window.supportTicketsContext || {};
 const boardSlug = String(supportTicketsContext.boardSlug || "support");
-const boardName = String(supportTicketsContext.boardName || "Support Tickets");
+const boardName = String(supportTicketsContext.boardName || "נימבוס");
 const isAdmin = supportTicketsContext.isAdmin === true || supportTicketsContext.isAdmin === "true";
 const supportUsers = Array.isArray(supportTicketsContext.supportUsers) ? supportTicketsContext.supportUsers : [];
 const technicianUsers = Array.isArray(supportTicketsContext.technicianUsers) ? supportTicketsContext.technicianUsers : [];
 const currentSupportUser = String(supportTicketsContext.currentSupportUser || "");
 const supportStatuses = Array.isArray(supportTicketsContext.supportStatuses) ? supportTicketsContext.supportStatuses : ["Waiting", "Done"];
-const paisStatuses = Array.isArray(supportTicketsContext.paisStatuses) ? supportTicketsContext.paisStatuses : ["ממתין", "ממתין לתאום", "תואם", "אין מענה", "בוצע", "נכשל"];
+const paisStatuses = Array.isArray(supportTicketsContext.paisStatuses) ? supportTicketsContext.paisStatuses : ["ממתין", "ממתין לתיאום", "תואם", "אין מענה", "בוצע", "נכשל"];
 const pageMode = String(supportTicketsContext.pageMode || "board");
 const ticketQueue = String(supportTicketsContext.ticketQueue || "");
 const ticketOperatorMode = String(supportTicketsContext.ticketOperatorMode || "default");
@@ -39,11 +40,15 @@ function boardConfig(boardSlugValue) {
 }
 
 function boardDisplayName(boardSlugValue) {
-  return String(boardConfig(boardSlugValue).name || (boardSlugValue === "support" ? "Support Tickets" : ""));
+  return String(boardConfig(boardSlugValue).name || (boardSlugValue === "support" ? "נימבוס" : ""));
 }
 
 function boardSupportsCoordination(boardSlugValue) {
   return String(boardConfig(boardSlugValue).workflow || "") === "coordination";
+}
+
+function boardSupportsReport(boardSlugValue) {
+  return boardConfig(boardSlugValue).report_enabled === true;
 }
 
 function isCoordinationTicket(ticket) {
@@ -56,6 +61,10 @@ function isPaisTicket(ticket) {
 
 function isHotTicket(ticket) {
   return ticket?.board_slug === "hot-kiryot";
+}
+
+function normalizePendingStatus(status) {
+  return String(status || "") === "ממתין לתאום" ? "ממתין לתיאום" : String(status || "");
 }
 
 function canAssignedTechnicianEditTicket(ticket) {
@@ -128,13 +137,28 @@ function leaderboardRankMarkup(index, doneCount) {
 }
 
 function statusClassName(status) {
-  if (status === "Done" || status === "בוצע") return "done";
-  if (status === "ממתין לתאום" || status === "תואם") return "coordination";
+  const normalizedStatus = normalizePendingStatus(status);
+  if (normalizedStatus === "Done" || normalizedStatus === "בוצע" || normalizedStatus === "נכשל") return "done";
+  if (normalizedStatus === "ממתין לתיאום" || normalizedStatus === "תואם") return "coordination";
   return "waiting";
 }
 
+function attachmentExtension(file) {
+  const name = String(file?.original_name || file?.saved_name || "").toLowerCase();
+  const dotIndex = name.lastIndexOf(".");
+  return dotIndex >= 0 ? name.slice(dotIndex) : "";
+}
+
+function isPdfAttachment(file) {
+  return attachmentExtension(file) === ".pdf";
+}
+
+function isImageAttachment(file) {
+  return [".jpg", ".jpeg", ".png", ".webp", ".gif"].includes(attachmentExtension(file));
+}
+
 function displayTicketStatus(ticket) {
-  if (pageMode === "nastia" && ticket?.board_slug === "pais" && ticket?.status === "ממתין לתאום") {
+  if (pageMode === "nastia" && ticket?.board_slug === "pais" && normalizePendingStatus(ticket?.status) === "ממתין לתיאום") {
     return "ממתין";
   }
   return ticket?.status || "";
@@ -178,6 +202,17 @@ function ticketHeadline(ticket) {
     const terminal = details.terminal_number ? `מסוף ${details.terminal_number}` : boardName;
     const address = details.address ? ` / ${details.address}` : "";
     return `${terminal}${address}`;
+  }
+  if (ticket.board_slug === "support") {
+    const business = details.business_name || ticket.service_type || boardDisplayName(ticket.board_slug);
+    const address = details.service_address ? ` / ${details.service_address}` : "";
+    return `${business}${address}`;
+  }
+  if (ticket.board_slug === "hot-kiryot") {
+    const callNumber = details.call_number ? `פניה ${details.call_number}` : boardDisplayName(ticket.board_slug);
+    const customer = details.customer_name ? ` / ${details.customer_name}` : "";
+    const address = details.address ? ` / ${details.address}` : "";
+    return `${callNumber}${customer}${address}`;
   }
   return `${ticket.service_type || "General"}${ticket.domain ? ` / ${ticket.domain}` : ""}`;
 }
@@ -224,7 +259,7 @@ function ticketCopyText(ticket) {
   const lines = [];
 
   pushCopyLine(lines, "Ticket", ticket.ticket_id || `#${String(ticket.id || "").padStart(4, "0")}`);
-  pushCopyLine(lines, "Board", ticket.board_slug === "pais" ? "מפעל הפיס" : "Support Tickets");
+  pushCopyLine(lines, "Board", ticket.board_slug === "pais" ? "מפעל הפיס" : "נימבוס");
   if (ticket.board_slug !== "pais") {
     pushCopyLine(lines, "Ticket Type", ticket.ticket_type);
     pushCopyLine(lines, "Service Type", ticket.service_type);
@@ -339,13 +374,13 @@ function coordinationSummary(ticket) {
 function applyReportQuickFilter(tickets) {
   if (!Array.isArray(tickets)) return [];
   if (reportQuickFilter === "done") {
-    return tickets.filter((ticket) => ticket.status === "בוצע");
+    return tickets.filter((ticket) => ["בוצע", "נכשל"].includes(normalizePendingStatus(ticket.status)));
   }
   if (reportQuickFilter === "open") {
-    return tickets.filter((ticket) => ticket.status !== "בוצע");
+    return tickets.filter((ticket) => !["בוצע", "נכשל"].includes(normalizePendingStatus(ticket.status)));
   }
   if (reportQuickFilter === "coordination") {
-    return tickets.filter((ticket) => ticket.status === "ממתין לתאום");
+    return tickets.filter((ticket) => normalizePendingStatus(ticket.status) === "ממתין לתיאום");
   }
   if (reportQuickFilter === "failed") {
     return tickets.filter((ticket) => ticket.status === "נכשל");
@@ -506,6 +541,98 @@ function renderPhoneValue(phone) {
   return `<a class="detail-link" href="${escapeHtml(href)}">${safePhone}</a>`;
 }
 
+function extractPhoneNumber(text) {
+  const match = String(text || "").match(/(\+?\d[\d -]{7,}\d)/);
+  return match ? match[1].trim() : "";
+}
+
+function renderContactWithPhone(text) {
+  const safeText = String(text || "").trim();
+  if (!safeText) return "-";
+  const phone = extractPhoneNumber(safeText);
+  if (!phone) return escapeHtml(safeText);
+  const href = phoneHref(phone);
+  if (!href) return escapeHtml(safeText);
+  const safePhone = escapeHtml(phone);
+  const safeFullText = escapeHtml(safeText);
+  return safeFullText.replace(safePhone, `<a class="detail-link" href="${escapeHtml(href)}">${safePhone}</a>`);
+}
+
+function selectedSupportServiceMode(root = document) {
+  const field = root.querySelector('input[name="service_mode"][type="hidden"], input[name="service_mode"]:checked, select[name="service_mode"]');
+  return String(field?.value || "");
+}
+
+function selectedSupportCustomerType(root = document) {
+  const field = root.querySelector('input[name="customer_type"]:checked, select[name="customer_type"]');
+  return String(field?.value || "");
+}
+
+function closeServiceModeMenus(exceptSelector = null) {
+  document.querySelectorAll(".service-mode-selector").forEach((selector) => {
+    if (exceptSelector && selector === exceptSelector) return;
+    selector.querySelector('[data-role="menu"]')?.classList.remove("open");
+    selector.querySelector('[data-role="toggle"]')?.setAttribute("aria-expanded", "false");
+  });
+}
+
+function syncServiceModeSelector(selector, root = document) {
+  if (!selector) return;
+  const hiddenInput = selector.querySelector('input[name="service_mode"]');
+  const label = selector.querySelector('[data-role="label"]');
+  const toggle = selector.querySelector('[data-role="toggle"]');
+  const selectedMode = String(hiddenInput?.value || "");
+  const placeholder = selector.dataset.placeholder || "בחר סוג טיפול";
+  if (label) {
+    label.textContent = selectedMode || placeholder;
+  }
+  if (toggle) {
+    toggle.classList.toggle("selected", Boolean(selectedMode));
+  }
+  selector.querySelectorAll("[data-service-mode]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.serviceMode === selectedMode);
+  });
+  toggleSupportServiceDetails(root);
+}
+
+function setupServiceModeSelectors(root = document) {
+  root.querySelectorAll(".service-mode-selector").forEach((selector) => {
+    const toggle = selector.querySelector('[data-role="toggle"]');
+    const menu = selector.querySelector('[data-role="menu"]');
+    const hiddenInput = selector.querySelector('input[name="service_mode"]');
+    if (!toggle || !menu || !hiddenInput) return;
+    if (!selector.dataset.bound) {
+      toggle.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const willOpen = !menu.classList.contains("open");
+        closeServiceModeMenus(willOpen ? selector : null);
+        menu.classList.toggle("open", willOpen);
+        toggle.setAttribute("aria-expanded", willOpen ? "true" : "false");
+      });
+      menu.querySelectorAll("[data-service-mode]").forEach((button) => {
+        button.addEventListener("click", () => {
+          hiddenInput.value = String(button.dataset.serviceMode || "");
+          syncServiceModeSelector(selector, root);
+          closeServiceModeMenus();
+        });
+      });
+      selector.dataset.bound = "true";
+    }
+    syncServiceModeSelector(selector, root);
+  });
+}
+
+function toggleSupportServiceDetails(root = document) {
+  const detailsWrap = root.querySelector("#support-create-service-details, #support-service-details");
+  if (!detailsWrap) return;
+  const hasSelection = Boolean(selectedSupportServiceMode(root));
+  detailsWrap.hidden = !hasSelection;
+  detailsWrap.querySelectorAll("input").forEach((input) => {
+    input.required = hasSelection;
+  });
+}
+
 function renderAddressValue(address) {
   const safeAddress = String(address || "").trim();
   if (!safeAddress) return "-";
@@ -532,6 +659,40 @@ function detailSection(title, value) {
   `;
 }
 
+function detailSectionHtml(title, html) {
+  return `
+    <section class="detail-description">
+      <h3>${escapeHtml(title)}</h3>
+      <div class="detail-rich-content">${html || "-"}</div>
+    </section>
+  `;
+}
+
+function fieldReportSummaryCard(ticket, allowEdit = false) {
+  const report = ticketDetails(ticket).field_report;
+  if (!report || typeof report !== "object") return "";
+  const pdfUrl = String(report?.pdf_attachment?.url || "").trim();
+  return `
+    <section class="detail-description detail-edit-card">
+      <h3>דוח החתמת לקוח</h3>
+      <div class="field-report-summary">
+        <div><strong>נחתם על ידי:</strong> ${escapeHtml(report.signed_by || "-")}</div>
+        <div><strong>נייד:</strong> ${escapeHtml(report.mobile_number || "-")}</div>
+        <div><strong>שעות עבודה:</strong> ${escapeHtml(report.work_start || "-")} - ${escapeHtml(report.work_end || "-")} (${escapeHtml(report.total_hours || "-")})</div>
+        <div><strong>סיכום:</strong> ${escapeHtml(report.summary || "-")}</div>
+        ${report.notes ? `<div><strong>הערות:</strong> ${escapeHtml(report.notes)}</div>` : ""}
+        ${report.submitted_at_display ? `<div><strong>נשמר:</strong> ${escapeHtml(report.submitted_at_display)}</div>` : ""}
+      </div>
+      <div class="field-report-actions">
+        ${allowEdit ? `<button class="create-ticket-btn open-field-report-btn" type="button" data-ticket-id="${escapeHtml(ticket.id)}">
+          <i class="fa-solid fa-file-signature"></i><span>${pdfUrl ? "עדכן החתמה" : "החתמת לקוח"}</span>
+        </button>` : ""}
+        ${pdfUrl ? `<a class="secondary-btn field-report-download-btn" href="${escapeHtml(pdfUrl)}" download>הורד PDF</a>` : ""}
+      </div>
+    </section>
+  `;
+}
+
 function renderPaisDetailSections(ticket) {
   const details = ticketDetails(ticket);
   const technicianMode = canAssignedTechnicianEditTicket(ticket);
@@ -539,7 +700,7 @@ function renderPaisDetailSections(ticket) {
   const technicianOptions = ['<option value="">בחר עובד</option>']
     .concat(technicianUsers.map((user) => `<option value="${escapeHtml(user)}" ${details.coordinated_worker === user ? "selected" : ""}>${escapeHtml(user)}</option>`))
     .join("");
-  const showCoordination = isCoordinatorView || pageMode === "nastia" || ticket.status === "ממתין לתאום" || Boolean(details.coordinated_worker || details.visit_date || details.visit_hour_from || details.visit_hour_to);
+  const showCoordination = isCoordinatorView || pageMode === "nastia" || normalizePendingStatus(ticket.status) === "ממתין לתיאום" || Boolean(details.coordinated_worker || details.visit_date || details.visit_hour_from || details.visit_hour_to);
   const showFailureNotes = ticket.status === "נכשל";
   const showCoordinatorStatus = isCoordinatorView && NASTYA_EDITABLE_STATUSES.includes(ticket.status);
   const coordinatorStatusOptions = [
@@ -674,7 +835,7 @@ async function savePaisDetail(ticketId) {
   const selectedStatus = statusSelect?.value || "";
   const shouldMarkCoordinated = Object.values(coordinationPayload).every(Boolean);
   let nextStatus = selectedStatus;
-  if (shouldMarkCoordinated && (!selectedStatus || selectedStatus === "ממתין לתאום" || selectedStatus === "תואם")) {
+  if (shouldMarkCoordinated && (!selectedStatus || selectedStatus === "ממתין לתיאום" || selectedStatus === "תואם")) {
     nextStatus = "תואם";
   }
   const isFinalStatus = NASTYA_FINAL_STATUSES.includes(selectedStatus);
@@ -769,7 +930,7 @@ function openTicketDetail(ticketId) {
   document.getElementById("detail-title").textContent = ticket.ticket_id || `#${String(ticket.id).padStart(4, "0")}`;
 
   const gridItems = [
-    detailItem("Board", ticket.board_slug === "pais" ? "מפעל הפיס" : "Support Tickets"),
+    detailItem("Board", ticket.board_slug === "pais" ? "מפעל הפיס" : "נימבוס"),
     detailItem("Status", displayTicketStatus(ticket)),
     detailItem("Assigned To", ticket.assigned_to || "Unassigned"),
     detailItem("Creator", ticket.creator),
@@ -1004,6 +1165,7 @@ function startAutoRefresh() {
 
 function paisReportParams() {
   return new URLSearchParams({
+    board: boardSlug,
     period: document.getElementById("pais-report-period")?.value || "monthly",
     status: document.getElementById("pais-report-status")?.value || "",
     format: document.getElementById("pais-report-format")?.value || "csv",
@@ -1033,7 +1195,7 @@ function renderPaisReport(data) {
     </article>
     <article class="report-stat-card coordination ${reportQuickFilter === "coordination" ? "active" : ""}" data-quick-filter="coordination">
       <strong>${escapeHtml(summary.coordination ?? 0)}</strong>
-      <span>ממתין לתאום</span>
+      <span>ממתין לתיאום</span>
     </article>
     <article class="report-stat-card failed ${reportQuickFilter === "failed" ? "active" : ""}" data-quick-filter="failed">
       <strong>${escapeHtml(summary.failed ?? 0)}</strong>
@@ -1090,7 +1252,7 @@ function renderPaisReport(data) {
 }
 
 async function loadPaisReport() {
-  if (boardSlug !== "pais") return;
+  if (!boardSupportsReport(boardSlug)) return;
   if (paisReportLoading) return;
   paisReportLoading = true;
   try {
@@ -1105,13 +1267,35 @@ async function loadPaisReport() {
 }
 
 function exportPaisReport() {
-  if (boardSlug !== "pais") return;
+  if (!boardSupportsReport(boardSlug)) return;
   const params = paisReportParams();
   const url = `/pais-tickets-report-export?${params.toString()}`;
   window.location.href = url;
 }
 
 async function updateTicket(ticketId, changes) {
+  if (Object.prototype.hasOwnProperty.call(changes || {}, "status") && !changes?.status) {
+    return;
+  }
+  if (isAssignedTechnicianMode && changes.status === "נכשל" && (!changes.details || !String(changes.details.failure_notes || "").trim())) {
+    const reason = window.prompt("למה קריאה נכשלה?");
+    if (reason === null) {
+      await loadTickets();
+      return;
+    }
+    if (!String(reason).trim()) {
+      openNotificationErrorModal("יש למלא סיבת כשל");
+      await loadTickets();
+      return;
+    }
+    changes = {
+      ...changes,
+      details: {
+        ...(changes.details || {}),
+        failure_notes: String(reason).trim(),
+      },
+    };
+  }
   const payload = {
     ticket_id: ticketId,
     source_page_mode: pageMode,
@@ -1165,12 +1349,16 @@ async function deleteTicket(ticketId) {
 function openModal() {
   document.getElementById("created-preview").value = israelDatePreview();
   document.getElementById("ticket-form-message").textContent = "";
+  setupServiceModeSelectors(document.getElementById("ticket-form"));
+  toggleSupportServiceDetails(document.getElementById("ticket-form"));
   document.getElementById("ticket-modal").classList.add("open");
   document.getElementById("ticket-modal").setAttribute("aria-hidden", "false");
   closeCreateMenu();
 }
 
 function closeModal() {
+  closeServiceModeMenus();
+  toggleSupportServiceDetails(document.getElementById("ticket-form"));
   document.getElementById("ticket-modal").classList.remove("open");
   document.getElementById("ticket-modal").setAttribute("aria-hidden", "true");
 }
@@ -1191,6 +1379,7 @@ function syncDomainRequirement() {
   domainField.classList.toggle("visible", required);
   domainInput.required = required;
   if (!required) domainInput.value = "";
+  toggleSupportServiceDetails(document.getElementById("ticket-form"));
 }
 
 function parsePaisPasteText(rawText) {
@@ -1426,6 +1615,8 @@ async function submitTicket(event) {
     if (hiddenBoard) hiddenBoard.value = boardSlug;
     syncAttachmentInputState();
     syncDomainRequirement();
+    setupServiceModeSelectors(form);
+    toggleSupportServiceDetails(form);
     closeModal();
     await loadTickets();
     await loadPaisReport();
@@ -1436,33 +1627,252 @@ async function submitTicket(event) {
   }
 }
 
+function computeFieldReportTotalHours() {
+  const startValue = document.getElementById("field-report-work-start")?.value || "";
+  const endValue = document.getElementById("field-report-work-end")?.value || "";
+  const totalField = document.getElementById("field-report-total-hours");
+  if (!totalField) return "";
+  if (!startValue || !endValue) {
+    totalField.value = "";
+    return "";
+  }
+  const parseMinutes = (value) => {
+    const [hours, minutes] = String(value || "").split(":").map((part) => Number(part));
+    if (!Number.isInteger(hours) || !Number.isInteger(minutes)) return NaN;
+    return (hours * 60) + minutes;
+  };
+  const startMinutes = parseMinutes(startValue);
+  const endMinutes = parseMinutes(endValue);
+  if (!Number.isFinite(startMinutes) || !Number.isFinite(endMinutes) || endMinutes <= startMinutes) {
+    totalField.value = "";
+    return "";
+  }
+  const diff = endMinutes - startMinutes;
+  totalField.value = `${Math.floor(diff / 60)}:${String(diff % 60).padStart(2, "0")}`;
+  return totalField.value;
+}
+
+function fieldReportSignatureStatusText() {
+  return document.getElementById("field-report-signature-data")?.value ? "חתימה נוספה" : "לא נוספה חתימה";
+}
+
+function syncFieldReportSignatureStatus() {
+  const status = document.getElementById("field-report-signature-status");
+  if (status) {
+    status.textContent = fieldReportSignatureStatusText();
+    status.classList.toggle("ready", Boolean(document.getElementById("field-report-signature-data")?.value));
+  }
+}
+
+function signatureCanvasContext() {
+  const canvas = document.getElementById("signature-canvas");
+  if (!canvas) return { canvas: null, ctx: null };
+  return { canvas, ctx: canvas.getContext("2d") };
+}
+
+function resizeSignatureCanvas() {
+  const { canvas, ctx } = signatureCanvasContext();
+  if (!canvas || !ctx) return;
+  const ratio = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  const cssWidth = Math.max(Math.round(rect.width), 320);
+  const cssHeight = Math.max(Math.round(rect.height), 220);
+  canvas.width = Math.round(cssWidth * ratio);
+  canvas.height = Math.round(cssHeight * ratio);
+  ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.lineWidth = 2.2;
+  ctx.strokeStyle = "#1f2f46";
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, cssWidth, cssHeight);
+  signaturePadDirty = false;
+}
+
+function clearSignatureCanvas() {
+  resizeSignatureCanvas();
+}
+
+function openSignatureModal() {
+  const modal = document.getElementById("signature-modal");
+  modal?.classList.add("open");
+  modal?.setAttribute("aria-hidden", "false");
+  window.setTimeout(clearSignatureCanvas, 0);
+}
+
+function closeSignatureModal() {
+  const modal = document.getElementById("signature-modal");
+  modal?.classList.remove("open");
+  modal?.setAttribute("aria-hidden", "true");
+}
+
+function saveSignatureToFieldReport() {
+  const { canvas } = signatureCanvasContext();
+  if (!canvas || !signaturePadDirty) {
+    openNotificationErrorModal("יש להוסיף חתימה לפני שמירה");
+    return;
+  }
+  const dataField = document.getElementById("field-report-signature-data");
+  if (dataField) {
+    dataField.value = canvas.toDataURL("image/png");
+  }
+  syncFieldReportSignatureStatus();
+  closeSignatureModal();
+}
+
+function bindSignaturePad() {
+  const { canvas, ctx } = signatureCanvasContext();
+  if (!canvas || !ctx || canvas.dataset.bound === "true") return;
+  let drawing = false;
+  const pointForEvent = (event) => {
+    const rect = canvas.getBoundingClientRect();
+    const source = event.touches?.[0] || event.changedTouches?.[0] || event;
+    return {
+      x: source.clientX - rect.left,
+      y: source.clientY - rect.top,
+    };
+  };
+  const startStroke = (event) => {
+    event.preventDefault();
+    const point = pointForEvent(event);
+    drawing = true;
+    ctx.beginPath();
+    ctx.moveTo(point.x, point.y);
+  };
+  const moveStroke = (event) => {
+    if (!drawing) return;
+    event.preventDefault();
+    const point = pointForEvent(event);
+    ctx.lineTo(point.x, point.y);
+    ctx.stroke();
+    signaturePadDirty = true;
+  };
+  const endStroke = (event) => {
+    if (!drawing) return;
+    event.preventDefault();
+    drawing = false;
+  };
+  canvas.addEventListener("pointerdown", startStroke);
+  canvas.addEventListener("pointermove", moveStroke);
+  canvas.addEventListener("pointerup", endStroke);
+  canvas.addEventListener("pointerleave", endStroke);
+  canvas.dataset.bound = "true";
+}
+
+function openFieldReportModal(ticketId) {
+  const ticket = getTicket(ticketId);
+  if (!ticket) return;
+  const report = ticketDetails(ticket).field_report || {};
+  document.getElementById("field-report-ticket-id").value = ticket.id;
+  document.getElementById("field-report-signed-by").value = report.signed_by || "";
+  document.getElementById("field-report-mobile-number").value = report.mobile_number || "";
+  document.getElementById("field-report-work-start").value = report.work_start || "";
+  document.getElementById("field-report-work-end").value = report.work_end || "";
+  document.getElementById("field-report-summary").value = report.summary || "";
+  document.getElementById("field-report-notes").value = report.notes || "";
+  document.getElementById("field-report-signature-data").value = "";
+  document.getElementById("field-report-message").textContent = "";
+  computeFieldReportTotalHours();
+  syncFieldReportSignatureStatus();
+  document.getElementById("field-report-modal")?.classList.add("open");
+  document.getElementById("field-report-modal")?.setAttribute("aria-hidden", "false");
+}
+
+function closeFieldReportModal() {
+  document.getElementById("field-report-modal")?.classList.remove("open");
+  document.getElementById("field-report-modal")?.setAttribute("aria-hidden", "true");
+}
+
+async function submitFieldReport(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const message = document.getElementById("field-report-message");
+  const button = document.getElementById("field-report-save-btn");
+  if (message) message.textContent = "";
+  if (button) button.disabled = true;
+  computeFieldReportTotalHours();
+
+  const payload = {
+    ticket_id: document.getElementById("field-report-ticket-id")?.value || "",
+    signed_by: document.getElementById("field-report-signed-by")?.value || "",
+    mobile_number: document.getElementById("field-report-mobile-number")?.value || "",
+    work_start: document.getElementById("field-report-work-start")?.value || "",
+    work_end: document.getElementById("field-report-work-end")?.value || "",
+    summary: document.getElementById("field-report-summary")?.value || "",
+    notes: document.getElementById("field-report-notes")?.value || "",
+    signature_data_url: document.getElementById("field-report-signature-data")?.value || "",
+  };
+
+  if (!payload.signature_data_url) {
+    if (message) message.textContent = "יש להוסיף חתימת לקוח";
+    if (button) button.disabled = false;
+    return;
+  }
+
+  try {
+    const res = await fetch("/support-tickets-field-report", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) {
+      throw new Error(data.message || "Save failed");
+    }
+    if (data?.ticket?.field_report_error) {
+      openNotificationErrorModal(`הדוח נשמר אך שליחת המייל נכשלה: ${data.ticket.field_report_error}`);
+    } else {
+      showSendSuccessToast();
+    }
+    closeSignatureModal();
+    closeFieldReportModal();
+    await loadTickets();
+    openTicketDetail(payload.ticket_id);
+  } catch (err) {
+    if (message) message.textContent = err.message || "Save failed";
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
 function displayTicketStatus(ticket) {
-  if (pageMode === "nastia" && isCoordinationTicket(ticket) && ticket?.status === "ממתין לתאום") {
+  const normalizedStatus = normalizePendingStatus(ticket?.status);
+  if (pageMode === "nastia" && isCoordinationTicket(ticket) && normalizedStatus === "ממתין לתיאום") {
     return "ממתין";
   }
-  return ticket?.status || "";
+  return normalizedStatus || "";
 }
 
 function statusOptionsForTicket(ticket) {
-  if (isCoordinationTicket(ticket) && isNastyaQueuePage && NASTYA_EDITABLE_STATUSES.includes(ticket.status)) {
+  const normalizedStatus = normalizePendingStatus(ticket.status);
+  if (canAssignedTechnicianEditTicket(ticket)) {
+    const normalizedStatus = normalizePendingStatus(ticket.status);
+    const placeholder = NASTYA_FINAL_STATUSES.includes(normalizedStatus)
+      ? ""
+      : '<option value="" selected disabled>בחר סטטוס</option>';
+    return `${placeholder}${NASTYA_FINAL_STATUSES.map((status) => `
+      <option value="${escapeHtml(status)}" ${normalizedStatus === status ? "selected" : ""}>${escapeHtml(status)}</option>
+    `).join("")}`;
+  }
+  if (isCoordinationTicket(ticket) && isNastyaQueuePage && NASTYA_EDITABLE_STATUSES.includes(normalizedStatus)) {
     const options = [
-      { value: ticket.status, label: displayTicketStatus(ticket) },
+      { value: normalizedStatus, label: displayTicketStatus(ticket) },
       ...NASTYA_FINAL_STATUSES
-        .filter((status) => status !== ticket.status)
+        .filter((status) => status !== normalizedStatus)
         .map((status) => ({ value: status, label: status })),
     ];
     return options.map(({ value, label }) => `
-      <option value="${escapeHtml(value)}" ${ticket.status === value ? "selected" : ""}>${escapeHtml(label)}</option>
+      <option value="${escapeHtml(value)}" ${normalizedStatus === value ? "selected" : ""}>${escapeHtml(label)}</option>
     `).join("");
   }
   const options = isCoordinationTicket(ticket) ? paisStatuses : supportStatuses;
   return options.map((status) => `
-    <option value="${escapeHtml(status)}" ${ticket.status === status ? "selected" : ""}>${escapeHtml(status)}</option>
+    <option value="${escapeHtml(status)}" ${normalizedStatus === status ? "selected" : ""}>${escapeHtml(status)}</option>
   `).join("");
 }
 
 function canNastyaEditPaisInlineStatus(ticket) {
-  return isCoordinationTicket(ticket) && isNastyaQueuePage && NASTYA_EDITABLE_STATUSES.includes(ticket.status);
+  return isCoordinationTicket(ticket) && isNastyaQueuePage && NASTYA_EDITABLE_STATUSES.includes(normalizePendingStatus(ticket.status));
 }
 
 function ticketHeadline(ticket) {
@@ -1503,6 +1913,18 @@ function ticketSnippet(ticket) {
     }
     return parts.filter(Boolean).join(" | ");
   }
+  if (ticket.board_slug === "support") {
+    const parts = [ticket.description || ""];
+    if (details.customer_type) parts.push(`סוג לקוח: ${details.customer_type}`);
+    if (details.service_mode) parts.push(`סוג טיפול: ${details.service_mode}`);
+    if (details.service_contact) parts.push(`איש קשר: ${details.service_contact}`);
+    if (details.coordinated_worker) parts.push(`תואם: ${details.coordinated_worker}`);
+    if (details.visit_date) {
+      const hourRange = [details.visit_hour_from, details.visit_hour_to].filter(Boolean).join(" - ");
+      parts.push(`ביקור: ${details.visit_date}${hourRange ? ` ${hourRange}` : ""}`);
+    }
+    return parts.filter(Boolean).join(" | ");
+  }
   return ticket.description || "";
 }
 
@@ -1518,7 +1940,7 @@ function ticketCopyText(ticket) {
   const lines = [];
 
   pushCopyLine(lines, "Ticket", ticket.ticket_id || `#${String(ticket.id || "").padStart(4, "0")}`);
-  pushCopyLine(lines, "Board", isCoordinationTicket(ticket) ? (boardDisplayName(ticket.board_slug) || ticket.service_type || "") : "Support Tickets");
+  pushCopyLine(lines, "Board", isCoordinationTicket(ticket) ? (boardDisplayName(ticket.board_slug) || ticket.service_type || "") : "נימבוס");
   if (!isCoordinationTicket(ticket)) {
     pushCopyLine(lines, "Ticket Type", ticket.ticket_type);
     pushCopyLine(lines, "Service Type", ticket.service_type);
@@ -1565,6 +1987,18 @@ function ticketCopyText(ticket) {
     pushCopyLine(lines, "Equipment Type", details.equipment_type);
     pushCopyLine(lines, "Service Agreement", details.service_agreement);
     pushCopyLine(lines, "Technical Notes", details.technical_notes);
+    pushCopyLine(lines, "Coordinated Worker", details.coordinated_worker);
+    pushCopyLine(lines, "Visit Date", details.visit_date);
+    pushCopyLine(lines, "Visit Hours", [details.visit_hour_from, details.visit_hour_to].filter(Boolean).join(" - "));
+    pushCopyLine(lines, "Failure Notes", details.failure_notes);
+  } else if (ticket.board_slug === "support") {
+    pushCopyLine(lines, "Description", ticket.description);
+    pushCopyLine(lines, "Solution", ticket.solution);
+    pushCopyLine(lines, "Customer Type", details.customer_type);
+    pushCopyLine(lines, "Service Mode", details.service_mode);
+    pushCopyLine(lines, "Business Name", details.business_name);
+    pushCopyLine(lines, "Service Contact", details.service_contact);
+    pushCopyLine(lines, "Service Address", details.service_address);
     pushCopyLine(lines, "Coordinated Worker", details.coordinated_worker);
     pushCopyLine(lines, "Visit Date", details.visit_date);
     pushCopyLine(lines, "Visit Hours", [details.visit_hour_from, details.visit_hour_to].filter(Boolean).join(" - "));
@@ -1732,7 +2166,7 @@ function coordinationSchedulingEditor(ticket, details) {
   const technicianOptions = ['<option value="">בחר עובד</option>']
     .concat(technicianUsers.map((user) => `<option value="${escapeHtml(user)}" ${details.coordinated_worker === user ? "selected" : ""}>${escapeHtml(user)}</option>`))
     .join("");
-  const showCoordination = isCoordinatorView || ticket.status === "ממתין לתאום" || Boolean(details.coordinated_worker || details.visit_date || details.visit_hour_from || details.visit_hour_to);
+  const showCoordination = isCoordinatorView || normalizePendingStatus(ticket.status) === "ממתין לתיאום" || Boolean(details.coordinated_worker || details.visit_date || details.visit_hour_from || details.visit_hour_to);
   if (!showCoordination) return "";
   return `
     <section class="detail-description detail-edit-card">
@@ -1771,6 +2205,15 @@ function renderHotDetailSections(ticket) {
       ${details.equipment_type ? detailSection("סוג ציוד קיים אצל הלקוח", details.equipment_type) : ""}
       ${details.service_agreement ? detailSection("הסכם שירות ואיזה ציוד באחריות הוט", details.service_agreement) : ""}
       ${details.technical_notes ? detailSection("פרטים טכניים נוספים", details.technical_notes) : ""}
+      ${fieldReportSummaryCard(ticket, true) || `
+      <section class="detail-description detail-edit-card">
+        <h3>דוח החתמת לקוח</h3>
+        <div class="field-report-actions">
+          <button class="create-ticket-btn open-field-report-btn" type="button" data-ticket-id="${escapeHtml(ticket.id)}">
+            <i class="fa-solid fa-file-signature"></i><span>החתמת לקוח</span>
+          </button>
+        </div>
+      </section>`}
       ${coordinationStatusEditor(ticket)}
       <section class="detail-description detail-edit-card ${showFailureNotes ? "" : "hidden"}" id="detail-failure-notes-wrap">
         <h3>הערות</h3>
@@ -1792,6 +2235,7 @@ function renderHotDetailSections(ticket) {
     ${details.equipment_type ? detailSection("סוג ציוד קיים אצל הלקוח", details.equipment_type) : ""}
     ${details.service_agreement ? detailSection("הסכם שירות ואיזה ציוד באחריות הוט", details.service_agreement) : ""}
     ${details.technical_notes ? detailSection("פרטים טכניים נוספים", details.technical_notes) : ""}
+    ${details.field_report ? fieldReportSummaryCard(ticket, false) : ""}
     ${coordinationStatusEditor(ticket)}
     ${coordinationSchedulingEditor(ticket, details)}
     <section class="detail-description detail-edit-card ${showFailureNotes ? "" : "hidden"}" id="detail-failure-notes-wrap">
@@ -1805,7 +2249,104 @@ function renderHotDetailSections(ticket) {
   `;
 }
 
+function supportServiceModeEditor(details) {
+  const currentCustomerType = String(details.customer_type || "");
+  const currentMode = String(details.service_mode || "");
+  const customerTypes = ["לקוח נימבוס", "לקוח הוט"];
+  const options = ["ביקור טכנאי בתשלום", "ביקור ללא תשלום", "משלוח"];
+  return `
+    <section class="detail-description detail-edit-card service-mode-card">
+      <h3>סוג לקוח</h3>
+      <div class="choice-pill-selector customer-type-selector">
+        ${customerTypes.map((option) => `
+          <label class="choice-pill">
+            <input type="radio" name="customer_type" value="${escapeHtml(option)}" ${currentCustomerType === option ? "checked" : ""}>
+            <span>${escapeHtml(option)}</span>
+          </label>
+        `).join("")}
+      </div>
+      <h3>סוג טיפול</h3>
+      <div class="service-mode-selector" data-placeholder="בחר סוג טיפול">
+        <input type="hidden" name="service_mode" value="${escapeHtml(currentMode)}">
+        <button class="service-mode-toggle-btn servoption-ticket-menu-toggle" type="button" data-role="toggle" aria-expanded="false">
+          <span data-role="label">${escapeHtml(currentMode || "בחר סוג טיפול")}</span>
+          <i class="fa-solid fa-chevron-down"></i>
+        </button>
+        <div class="add-ticket-menu service-option-menu" data-role="menu">
+        ${options.map((option) => `
+          <button class="menu-item ${currentMode === option ? "active" : ""}" type="button" data-service-mode="${escapeHtml(option)}">${escapeHtml(option)}</button>
+        `).join("")}
+        </div>
+      </div>
+    </section>
+    <div class="detail-form-grid support-service-details" id="support-service-details" ${currentMode ? "" : "hidden"}>
+      <label>
+        <span>שם העסק</span>
+        <input id="detail-business-name" type="text" value="${escapeHtml(details.business_name || "")}">
+      </label>
+      <label>
+        <span>איש קשר</span>
+        <input id="detail-service-contact" type="text" value="${escapeHtml(details.service_contact || "")}">
+      </label>
+      <label>
+        <span>כתובת</span>
+        <input id="detail-service-address" type="text" value="${escapeHtml(details.service_address || "")}">
+      </label>
+    </div>
+  `;
+}
+
+function renderSupportDetailSections(ticket) {
+  const details = ticketDetails(ticket);
+  const technicianMode = canAssignedTechnicianEditTicket(ticket);
+  const showFailureNotes = normalizePendingStatus(ticket.status) === "נכשל";
+  if (technicianMode) {
+    return `
+      ${detailSection("תיאור", ticket.description)}
+      ${detailSection("פתרון", ticket.solution)}
+      ${details.customer_type ? detailSection("סוג לקוח", details.customer_type) : ""}
+      ${details.service_mode ? detailSection("סוג טיפול", details.service_mode) : ""}
+      ${details.business_name ? detailSection("שם העסק", details.business_name) : ""}
+      ${details.service_contact ? detailSectionHtml("איש קשר", renderContactWithPhone(details.service_contact)) : ""}
+      ${details.service_address ? detailSectionHtml("כתובת", renderAddressValue(details.service_address)) : ""}
+      ${coordinationStatusEditor(ticket)}
+      <section class="detail-description detail-edit-card ${showFailureNotes ? "" : "hidden"}" id="detail-failure-notes-wrap">
+        <h3>למה קריאה נכשלה</h3>
+        <textarea id="detail-failure-notes" rows="4">${escapeHtml(details.failure_notes || "")}</textarea>
+      </section>
+      <div class="detail-save-row">
+        <span id="detail-save-message"></span>
+        <button class="create-ticket-btn" id="detail-save-btn" type="button">שמור</button>
+      </div>
+    `;
+  }
+  return `
+    <section class="detail-description detail-edit-card">
+      <h3>תיאור</h3>
+      <textarea id="detail-support-description" rows="4">${escapeHtml(ticket.description || "")}</textarea>
+    </section>
+    <section class="detail-description detail-edit-card">
+      <h3>פתרון</h3>
+      <textarea id="detail-support-solution" rows="4">${escapeHtml(ticket.solution || "")}</textarea>
+    </section>
+    ${supportServiceModeEditor(details)}
+    ${coordinationStatusEditor(ticket)}
+    ${coordinationSchedulingEditor(ticket, details)}
+    <section class="detail-description detail-edit-card ${showFailureNotes ? "" : "hidden"}" id="detail-failure-notes-wrap">
+      <h3>למה קריאה נכשלה</h3>
+      <textarea id="detail-failure-notes" rows="4">${escapeHtml(details.failure_notes || "")}</textarea>
+    </section>
+    <div class="detail-save-row">
+      <span id="detail-save-message"></span>
+      <button class="create-ticket-btn" id="detail-save-btn" type="button">שמור</button>
+    </div>
+  `;
+}
+
 function renderDetailSections(ticket) {
+  if (ticket.board_slug === "support") {
+    return renderSupportDetailSections(ticket);
+  }
   if (isPaisTicket(ticket)) {
     return renderPaisDetailSections(ticket);
   }
@@ -1836,9 +2377,10 @@ async function savePaisDetail(ticketId) {
     visit_hour_to: visitHourToField?.value || "",
   };
   const selectedStatus = statusSelect?.value || "";
+  const detailSections = document.getElementById("detail-sections");
   const shouldMarkCoordinated = Object.values(coordinationPayload).every(Boolean);
   let nextStatus = selectedStatus;
-  if (shouldMarkCoordinated && (!selectedStatus || selectedStatus === "ממתין לתאום" || selectedStatus === "תואם")) {
+  if (shouldMarkCoordinated && (!selectedStatus || selectedStatus === "ממתין לתיאום" || selectedStatus === "תואם")) {
     nextStatus = "תואם";
   }
   const isFinalStatus = NASTYA_FINAL_STATUSES.includes(selectedStatus);
@@ -1853,8 +2395,22 @@ async function savePaisDetail(ticketId) {
       failure_notes: document.getElementById("detail-failure-notes")?.value || "",
     };
   } else {
+    if (currentTicket.board_slug === "support") {
+      payload.description = document.getElementById("detail-support-description")?.value || "";
+      payload.solution = document.getElementById("detail-support-solution")?.value || "";
+    }
     payload.details = {
-      [detailFieldName]: detailFieldElement?.value || "",
+      ...(currentTicket.board_slug === "support"
+        ? {
+            service_mode: selectedSupportServiceMode(detailSections || document),
+            customer_type: selectedSupportCustomerType(detailSections || document),
+            business_name: document.getElementById("detail-business-name")?.value || "",
+            service_contact: document.getElementById("detail-service-contact")?.value || "",
+            service_address: document.getElementById("detail-service-address")?.value || "",
+          }
+        : {
+            [detailFieldName]: detailFieldElement?.value || "",
+          }),
       coordinated_worker: coordinationPayload.coordinated_worker,
       visit_date: coordinationPayload.visit_date,
       visit_hour_from: coordinationPayload.visit_hour_from,
@@ -1867,6 +2423,25 @@ async function savePaisDetail(ticketId) {
   if (message) message.textContent = "";
   clearCoordinationValidation();
   if (button) button.disabled = true;
+
+  if (technicianMode && selectedStatus === "נכשל" && !String(payload.details.failure_notes || "").trim()) {
+    if (message) message.textContent = "יש למלא סיבת כשל";
+    if (button) button.disabled = false;
+    return;
+  }
+  if (technicianMode && !selectedStatus) {
+    if (message) message.textContent = "יש לבחור סטטוס";
+    if (button) button.disabled = false;
+    return;
+  }
+
+  if (currentTicket.board_slug === "support" && payload.details.service_mode && !technicianMode) {
+    if (!payload.details.business_name || !payload.details.service_contact || !payload.details.service_address) {
+      if (message) message.textContent = "יש למלא שם העסק, איש קשר וכתובת";
+      if (button) button.disabled = false;
+      return;
+    }
+  }
 
   if (isNastyaQueuePage && !technicianMode && !isFinalStatus) {
     if (!coordinationPayload.coordinated_worker) {
@@ -1938,7 +2513,7 @@ function openTicketDetail(ticketId) {
   document.getElementById("detail-title").textContent = ticket.ticket_id || `#${String(ticket.id).padStart(4, "0")}`;
 
   const gridItems = [
-    detailItem("Board", isCoordinationTicket(ticket) ? (boardDisplayName(ticket.board_slug) || ticket.service_type || "") : "Support Tickets"),
+    detailItem("Board", isCoordinationTicket(ticket) ? (boardDisplayName(ticket.board_slug) || ticket.service_type || "") : "נימבוס"),
     detailItem("Status", displayTicketStatus(ticket)),
     detailItem("Assigned To", ticket.assigned_to || "Unassigned"),
     detailItem("Creator", ticket.creator),
@@ -1971,7 +2546,7 @@ function openTicketDetail(ticketId) {
       detailItem("שעת פתיחת תקלה", details.opened_at),
       detailItem("נציג מטפל", ticket.assigned_to || "—"),
       detailItem("תומך במוקד", details.opened_by),
-      detailItem("איש קשר במקום", details.on_site_contact),
+      detailItemHtml("איש קשר במקום", renderContactWithPhone(details.on_site_contact)),
       detailItem("איש קשר טכני", details.technical_contact),
       detailItem("זמינות לקוח", details.availability_hours),
       detailItem("טכנאי מתואם", details.coordinated_worker || "—"),
@@ -1984,10 +2559,18 @@ function openTicketDetail(ticketId) {
       detailItem("Service Type", ticket.service_type),
       detailItem("Domain", ticket.domain),
       detailItem("Priority", ticket.priority),
+      details.customer_type ? detailItem("סוג לקוח", details.customer_type) : "",
+      details.service_mode ? detailItem("סוג טיפול", details.service_mode) : "",
+      details.business_name ? detailItem("שם העסק", details.business_name) : "",
+      details.service_contact ? detailItemHtml("איש קשר", renderContactWithPhone(details.service_contact)) : "",
+      details.service_address ? detailItemHtml("כתובת", renderAddressValue(details.service_address)) : "",
+      detailItem("טכנאי מתואם", details.coordinated_worker || "—"),
+      detailItem("תאריך ביקור", details.visit_date || "—"),
+      detailItem("שעות ביקור", [details.visit_hour_from, details.visit_hour_to].filter(Boolean).join(" - ") || "—"),
     );
   }
 
-  document.getElementById("detail-grid").innerHTML = gridItems.join("");
+  document.getElementById("detail-grid").innerHTML = gridItems.filter(Boolean).join("");
   document.getElementById("detail-sections").innerHTML = renderDetailSections(ticket);
   const detailCopyButton = document.getElementById("detail-copy-btn");
   if (detailCopyButton) {
@@ -2010,6 +2593,8 @@ function openTicketDetail(ticketId) {
   if (isCoordinationTicket(ticket)) {
     clearCoordinationValidation();
     document.getElementById("detail-status-select")?.addEventListener("change", syncPaisDetailStatusFields);
+    const detailSections = document.getElementById("detail-sections");
+    setupServiceModeSelectors(detailSections || document);
     document.getElementById("detail-visit-hour-from")?.addEventListener("change", syncPaisDetailVisitRange);
     document.getElementById("detail-coordinated-worker")?.addEventListener("change", () => setFieldInvalid(document.getElementById("detail-coordinated-worker"), false));
     document.getElementById("detail-visit-date")?.addEventListener("input", () => setFieldInvalid(document.getElementById("detail-visit-date"), false));
@@ -2018,6 +2603,7 @@ function openTicketDetail(ticketId) {
     document.getElementById("detail-save-btn")?.addEventListener("click", () => savePaisDetail(ticket.id));
     syncPaisDetailStatusFields();
     syncPaisDetailVisitRange();
+    toggleSupportServiceDetails(detailSections);
   }
 
   const attachments = Array.isArray(ticket.attachments) ? ticket.attachments : [];
@@ -2025,10 +2611,15 @@ function openTicketDetail(ticketId) {
   attachmentHost.innerHTML = attachments.length
     ? attachments.map((file, index) => `
         <div class="detail-attachment-item">
-          <button class="detail-image-btn" type="button" data-image-url="${escapeHtml(file.url)}">
-            <i class="fa-regular fa-image"></i>
-            <span>Image ${index + 1}</span>
-          </button>
+          ${isImageAttachment(file)
+            ? `<button class="detail-image-btn" type="button" data-image-url="${escapeHtml(file.url)}">
+                <i class="fa-regular fa-image"></i>
+                <span>${escapeHtml(file.original_name || `Image ${index + 1}`)}</span>
+              </button>`
+            : `<a class="detail-file-btn" href="${escapeHtml(file.url)}" download>
+                <i class="fa-regular fa-file-pdf"></i>
+                <span>${escapeHtml(file.original_name || `File ${index + 1}`)}</span>
+              </a>`}
           <button
             class="detail-attachment-delete"
             type="button"
@@ -2046,6 +2637,9 @@ function openTicketDetail(ticketId) {
   attachmentHost.querySelectorAll(".detail-image-btn").forEach((button) => {
     button.addEventListener("click", () => openImagePreview(button.dataset.imageUrl || ""));
   });
+  attachmentHost.querySelectorAll(".open-field-report-btn").forEach((button) => {
+    button.addEventListener("click", () => openFieldReportModal(button.dataset.ticketId || ""));
+  });
   if (canDeleteTicketAttachments) {
     attachmentHost.querySelectorAll(".detail-attachment-delete").forEach((button) => {
       button.addEventListener("click", () => deleteDetailAttachment(
@@ -2059,6 +2653,9 @@ function openTicketDetail(ticketId) {
   const modal = document.getElementById("ticket-detail-modal");
   modal.classList.add("open");
   modal.setAttribute("aria-hidden", "false");
+  document.querySelectorAll(".open-field-report-btn").forEach((button) => {
+    button.addEventListener("click", () => openFieldReportModal(button.dataset.ticketId || ""));
+  });
 }
 
 function normalizeHotPasteLine(line) {
@@ -2253,6 +2850,9 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!event.target.closest(".ticket-create-controls")) {
       closeCreateMenu();
     }
+    if (!event.target.closest(".service-mode-selector")) {
+      closeServiceModeMenus();
+    }
   });
 
   document.getElementById("close-ticket-modal").addEventListener("click", closeModal);
@@ -2260,6 +2860,18 @@ document.addEventListener("DOMContentLoaded", () => {
     if (event.target.id === "ticket-modal") closeModal();
   });
   document.getElementById("close-detail-modal").addEventListener("click", closeTicketDetail);
+  document.getElementById("close-field-report-modal")?.addEventListener("click", closeFieldReportModal);
+  document.getElementById("field-report-modal")?.addEventListener("click", (event) => {
+    if (event.target.id === "field-report-modal") closeFieldReportModal();
+  });
+  document.getElementById("close-signature-modal")?.addEventListener("click", closeSignatureModal);
+  document.getElementById("cancel-signature-btn")?.addEventListener("click", closeSignatureModal);
+  document.getElementById("clear-signature-btn")?.addEventListener("click", clearSignatureCanvas);
+  document.getElementById("save-signature-btn")?.addEventListener("click", saveSignatureToFieldReport);
+  document.getElementById("open-signature-modal")?.addEventListener("click", openSignatureModal);
+  document.getElementById("signature-modal")?.addEventListener("click", (event) => {
+    if (event.target.id === "signature-modal") closeSignatureModal();
+  });
   document.getElementById("detail-copy-btn")?.addEventListener("click", async (event) => {
     const button = event.currentTarget;
     await copyTicketDetails(button.dataset.ticketId || "", button);
@@ -2297,14 +2909,23 @@ document.addEventListener("DOMContentLoaded", () => {
     serviceTypeInput.addEventListener("input", syncDomainRequirement);
     syncDomainRequirement();
   }
+  setupServiceModeSelectors(document.getElementById("ticket-form"));
 
   document.getElementById("attachment-input")?.addEventListener("change", syncAttachmentInputState);
   document.getElementById("detail-attachment-input")?.addEventListener("change", syncDetailAttachmentInputState);
+  document.getElementById("field-report-work-start")?.addEventListener("change", computeFieldReportTotalHours);
+  document.getElementById("field-report-work-end")?.addEventListener("change", computeFieldReportTotalHours);
+  document.getElementById("field-report-mobile-number")?.addEventListener("input", (event) => {
+    event.currentTarget.value = String(event.currentTarget.value || "").replace(/\D+/g, "");
+  });
   syncAttachmentInputState();
   syncDetailAttachmentInputState();
+  syncFieldReportSignatureStatus();
+  bindSignaturePad();
 
   document.getElementById("ticket-form").addEventListener("submit", submitTicket);
   document.getElementById("detail-upload-form")?.addEventListener("submit", uploadDetailAttachments);
+  document.getElementById("field-report-form")?.addEventListener("submit", submitFieldReport);
   document.getElementById("parse-board-paste")?.addEventListener("click", fillBoardFieldsFromPaste);
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) {
@@ -2314,6 +2935,14 @@ document.addEventListener("DOMContentLoaded", () => {
   document.addEventListener("keydown", (event) => {
     if (document.getElementById("notification-error-modal")?.classList.contains("open") && event.key === "Escape") {
       closeNotificationErrorModal();
+      return;
+    }
+    if (document.getElementById("signature-modal")?.classList.contains("open") && event.key === "Escape") {
+      closeSignatureModal();
+      return;
+    }
+    if (document.getElementById("field-report-modal")?.classList.contains("open") && event.key === "Escape") {
+      closeFieldReportModal();
       return;
     }
     if (!document.getElementById("image-modal")?.classList.contains("open")) return;
@@ -2338,7 +2967,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   loadTickets();
-  if (boardSlug === "pais") {
+  if (boardSupportsReport(boardSlug)) {
     ["pais-report-period", "pais-report-status", "pais-report-from", "pais-report-to"].forEach((id) => {
       document.getElementById(id)?.addEventListener("change", loadPaisReport);
     });

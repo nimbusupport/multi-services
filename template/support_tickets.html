@@ -32,7 +32,7 @@
         <a class="nav-link" href="/features-report"><span class="nav-icon"><i class="fa-solid fa-chart-simple"></i></span><span class="nav-label">Features Report</span></a>
         {% endif %}
         {% if can_access_support %}
-        <a class="nav-link {% if ticket_board.slug == 'support' and page_mode != 'nastia' %}active{% endif %}" href="/support-tickets"><span class="nav-icon"><i class="fa-solid fa-ticket"></i></span><span class="nav-label">Tickets</span></a>
+        <a class="nav-link {% if ticket_board.slug == 'support' and page_mode != 'nastia' %}active{% endif %}" href="/support-tickets"><span class="nav-icon"><img class="nav-pais-icon" src="https://tel1.nimbusip.com/themes/default/images/logo.png" alt=""></span><span class="nav-label">נימבוס</span></a>
         {% endif %}
         {% if can_access_pais %}
         <a class="nav-link {% if ticket_board.slug == 'pais' and page_mode != 'nastia' %}active{% endif %}" href="/pais-tickets"><span class="nav-icon"><img class="nav-pais-icon" src="/picture/pais.png" alt=""></span><span class="nav-label">מפעל הפיס</span></a>
@@ -70,8 +70,8 @@
       <div class="ticket-board-links">
         {% if can_access_support %}
         <a class="ticket-board-link {% if ticket_board.slug == 'support' and page_mode != 'nastia' %}active{% endif %}" href="/support-tickets">
-          <i class="fa-solid fa-ticket"></i>
-          <span>Support Tickets</span>
+          <img src="https://tel1.nimbusip.com/themes/default/images/logo.png" alt="">
+          <span>נימבוס</span>
         </a>
         {% endif %}
         {% if can_access_pais %}
@@ -178,7 +178,7 @@
           <button class="add-ticket-btn" id="open-ticket-modal" type="button"><i class="fa-solid fa-plus"></i><span>Add Ticket</span></button>
           <button class="icon-btn add-ticket-menu-toggle" id="open-create-menu" type="button" title="Ticket options"><i class="fa-solid fa-chevron-down"></i></button>
           <div class="add-ticket-menu" id="ticket-create-menu">
-            <button class="menu-item" id="create-regular-ticket" type="button"><i class="fa-solid fa-ticket"></i><span>New Ticket</span></button>
+            <button class="menu-item" id="create-regular-ticket" type="button"><img src="https://tel1.nimbusip.com/themes/default/images/logo.png" alt=""><span>נימבוס</span></button>
             {% if can_access_pais %}
             <a class="menu-item" href="/pais-tickets"><img src="/picture/pais.png" alt=""><span>מפעל הפיס</span></a>
             {% endif %}
@@ -204,7 +204,7 @@
             <option value="">All</option>
             {% if ticket_board.workflow == 'coordination' %}
             <option value="ממתין">ממתין</option>
-            <option value="ממתין לתאום">{% if page_mode == 'nastia' %}ממתין{% else %}ממתין לתאום{% endif %}</option>
+            <option value="ממתין לתיאום">{% if page_mode == 'nastia' %}ממתין{% else %}ממתין לתיאום{% endif %}</option>
             <option value="תואם">תואם</option>
             <option value="אין מענה">אין מענה</option>
             <option value="בוצע">בוצע</option>
@@ -244,7 +244,7 @@
         <label class="search-filter">
           <span>Search</span>
           <div class="search-input-wrap">
-            <input id="ticket-search" type="search" placeholder="{% if ticket_board.slug == 'pais' %}מסוף או כתובת{% elif ticket_board.slug == 'hot-kiryot' %}מספר קריאה, לקוח או כתובת{% else %}Search ticket, customer, text{% endif %}">
+            <input id="ticket-search" type="search" placeholder="{% if ticket_board.slug == 'pais' %}מסוף או כתובת{% elif ticket_board.slug == 'hot-kiryot' %}מספר קריאה, קוד קו, לקוח או כתובת{% else %}חפש כרטיס, לקוח, עסק או טקסט{% endif %}">
             <button class="icon-btn search-submit-btn" id="ticket-search-btn" type="submit" aria-label="Search tickets">
               <i class="fa-solid fa-magnifying-glass"></i>
             </button>
@@ -258,7 +258,7 @@
         <div class="pais-report-head">
           <div>
             <p>Report</p>
-            <h2>ביצועי עובדים</h2>
+            <h2>ביצועי עובדים - {{ page_title }}</h2>
           </div>
           <div class="report-export-group">
             <label class="report-format-field">
@@ -288,7 +288,7 @@
             <select id="pais-report-status">
               <option value="">All</option>
               <option value="ממתין">ממתין</option>
-              <option value="ממתין לתאום">ממתין לתאום</option>
+              <option value="ממתין לתיאום">ממתין לתיאום</option>
               <option value="תואם">תואם</option>
               <option value="אין מענה">אין מענה</option>
               <option value="בוצע">בוצע</option>
@@ -375,6 +375,47 @@
             <option value="{{ user }}">{{ user }}</option>
             {% endfor %}
           </select>
+        </label>
+      </div>
+
+      <section class="detail-description detail-edit-card service-mode-card">
+        <h3>סוג לקוח</h3>
+        <div class="choice-pill-selector customer-type-selector">
+          {% for option in support_customer_types %}
+          <label class="choice-pill">
+            <input type="radio" name="customer_type" value="{{ option }}">
+            <span>{{ option }}</span>
+          </label>
+          {% endfor %}
+        </div>
+
+        <h3>סוג טיפול</h3>
+        <div class="service-mode-selector" data-placeholder="בחר סוג טיפול">
+          <input type="hidden" name="service_mode" value="">
+          <button class="service-mode-toggle-btn servoption-ticket-menu-toggle" type="button" data-role="toggle" aria-expanded="false">
+            <span data-role="label">בחר סוג טיפול</span>
+            <i class="fa-solid fa-chevron-down"></i>
+          </button>
+          <div class="add-ticket-menu service-option-menu" data-role="menu">
+            {% for option in support_delivery_options %}
+            <button class="menu-item" type="button" data-service-mode="{{ option }}">{{ option }}</button>
+            {% endfor %}
+          </div>
+        </div>
+      </section>
+
+      <div class="form-grid support-service-details" id="support-create-service-details" hidden>
+        <label>
+          <span>שם העסק</span>
+          <input name="business_name" type="text">
+        </label>
+        <label>
+          <span>איש קשר</span>
+          <input name="service_contact" type="text">
+        </label>
+        <label>
+          <span>כתובת</span>
+          <input name="service_address" type="text">
         </label>
       </div>
 
@@ -601,6 +642,89 @@
       </section>
       {% endif %}
       <section class="detail-attachments" id="detail-attachments"></section>
+    </section>
+  </div>
+
+  <div class="ticket-modal" id="field-report-modal" aria-hidden="true">
+    <form class="ticket-detail-card field-report-card" id="field-report-form">
+      <header>
+        <div>
+          <p>הוט קריאות</p>
+          <h2>החתמת לקוח</h2>
+        </div>
+        <div class="detail-header-actions">
+          <button class="icon-btn" id="close-field-report-modal" type="button" title="Close"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+      </header>
+      <input type="hidden" id="field-report-ticket-id" name="ticket_id" value="">
+      <input type="hidden" id="field-report-signature-data" name="signature_data_url" value="">
+      <div class="detail-form-grid field-report-grid">
+        <label>
+          <span>נחתם על ידי</span>
+          <input id="field-report-signed-by" name="signed_by" type="text" required>
+        </label>
+        <label>
+          <span>נייד מספרים בלבד</span>
+          <input id="field-report-mobile-number" name="mobile_number" type="text" inputmode="numeric" required>
+        </label>
+        <label>
+          <span>שעת תחילת עבודה</span>
+          <input id="field-report-work-start" name="work_start" type="time" step="1800" required>
+        </label>
+        <label>
+          <span>שעת סיום עבודה</span>
+          <input id="field-report-work-end" name="work_end" type="time" step="1800" required>
+        </label>
+        <label>
+          <span>סה"כ שעות</span>
+          <input id="field-report-total-hours" name="total_hours_preview" type="text" readonly>
+        </label>
+      </div>
+      <label class="description-field">
+        <span>סיכום</span>
+        <textarea id="field-report-summary" name="summary" rows="4" required></textarea>
+      </label>
+      <label class="description-field">
+        <span>הערות</span>
+        <textarea id="field-report-notes" name="notes" rows="3"></textarea>
+      </label>
+      <section class="detail-description detail-edit-card">
+        <h3>חתימת לקוח</h3>
+        <div class="signature-launch-row">
+          <button class="create-ticket-btn" id="open-signature-modal" type="button">
+            <i class="fa-solid fa-signature"></i><span>חתימה</span>
+          </button>
+          <span class="signature-status" id="field-report-signature-status">לא נוספה חתימה</span>
+        </div>
+      </section>
+      <div class="detail-save-row">
+        <span id="field-report-message"></span>
+        <button class="create-ticket-btn" id="field-report-save-btn" type="submit">
+          <i class="fa-solid fa-file-signature"></i><span>שמור דוח</span>
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <div class="ticket-modal" id="signature-modal" aria-hidden="true">
+    <section class="signature-card">
+      <header>
+        <div>
+          <p>Signature</p>
+          <h2>חתימה</h2>
+        </div>
+        <div class="detail-header-actions">
+          <button class="icon-btn" id="close-signature-modal" type="button" title="Close"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+      </header>
+      <div class="signature-pad-shell">
+        <canvas id="signature-canvas" width="900" height="360"></canvas>
+      </div>
+      <div class="confirm-actions">
+        <button class="secondary-btn" id="clear-signature-btn" type="button">נקה</button>
+        <button class="secondary-btn" id="cancel-signature-btn" type="button">Cancel</button>
+        <button class="create-ticket-btn" id="save-signature-btn" type="button">Done</button>
+      </div>
     </section>
   </div>
 
