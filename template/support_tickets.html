@@ -57,7 +57,9 @@
 
   <main class="tickets-shell">
     <aside class="tickets-menu" aria-label="Ticket filters">
-      {% if page_mode == 'nastia' %}
+      {% if ticket_operator_mode == 'assigned_technician' %}
+      <button class="ticket-tab active" type="button" data-scope="my"><i class="fa-solid fa-user-check"></i><span>הקריאות שלי</span><strong id="stat-all">0</strong></button>
+      {% elif page_mode == 'nastia' %}
       <button class="ticket-tab active" type="button" data-scope="all"><i class="fa-solid fa-user-clock"></i><span>כל כרטיסי התאום</span><strong id="stat-all">0</strong></button>
       {% else %}
       <button class="ticket-tab active" type="button" data-scope="all"><i class="fa-solid fa-inbox"></i><span>All Tickets</span><strong id="stat-all">0</strong></button>
@@ -213,9 +215,9 @@
             {% endif %}
           </select>
         </label>
-        <label>
+        <label{% if ticket_operator_mode == 'assigned_technician' %} hidden{% endif %}>
           <span>Assignee</span>
-          <select id="assignee-filter">
+          <select id="assignee-filter"{% if ticket_operator_mode == 'assigned_technician' %} disabled{% endif %}>
             <option value="">All Users</option>
             {% for user in support_users %}
             <option value="{{ user }}">{{ user }}</option>
@@ -537,6 +539,7 @@
       </label>
       {% endif %}
 
+      {% if can_upload_ticket_attachments %}
       <section class="ticket-upload-panel">
         <div class="ticket-upload-copy">
           <h3>העלאת תמונה</h3>
@@ -549,6 +552,7 @@
           <small id="attachment-file-count">Drag images here or click to choose JPG, PNG, WEBP, GIF</small>
         </label>
       </section>
+      {% endif %}
 
       <footer>
         <span id="ticket-form-message"></span>
@@ -573,6 +577,7 @@
       </header>
       <div class="detail-grid" id="detail-grid"></div>
       <div id="detail-sections"></div>
+      {% if can_upload_ticket_attachments %}
       <section class="detail-upload-panel" id="detail-upload-panel">
         <div class="detail-upload-copy">
           <h3>Add Images</h3>
@@ -594,6 +599,7 @@
           </div>
         </form>
       </section>
+      {% endif %}
       <section class="detail-attachments" id="detail-attachments"></section>
     </section>
   </div>
@@ -651,7 +657,10 @@
       supportStatuses: {{ support_statuses|tojson }},
       paisStatuses: {{ pais_statuses|tojson }},
       pageMode: {{ page_mode|tojson }},
-      ticketQueue: {{ ticket_queue|tojson }}
+      ticketQueue: {{ ticket_queue|tojson }},
+      ticketOperatorMode: {{ ticket_operator_mode|tojson }},
+      canUploadTicketAttachments: {{ can_upload_ticket_attachments|tojson }},
+      defaultTicketScope: {{ default_ticket_scope|tojson }}
     };
   </script>
 

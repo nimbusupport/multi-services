@@ -295,6 +295,16 @@ LOGIN_USER_OVERRIDES = {
         "role": "tickets_only",
         "allowed_pages": sorted(TICKETS_ONLY_ALLOWED_PAGES),
     },
+    "golan@nimbusip.com": {
+        "password": "0503009456!",
+        "role": "assigned_technician",
+        "allowed_pages": ["pais_tickets", "hot_tickets"],
+    },
+    "assafh@nimbusip.com": {
+        "password": "0523111777!",
+        "role": "assigned_technician",
+        "allowed_pages": ["pais_tickets", "hot_tickets"],
+    },
 }
 SUPPORT_PRIORITIES = ["High", "Medium", "Low"]
 SUPPORT_TICKET_TYPES = ["תקלה", "שאלה", "שירות", "נוסף"]
@@ -429,7 +439,7 @@ def support_user_name():
         return "ניר"
     if local == "golan":
         return "גולן"
-    if local == "asaf":
+    if local in {"asaf", "assafh"}:
         return "אסף"
     if local in {"nastia", "nastya", "nastiya"}:
         return "נסטיה"
@@ -443,6 +453,23 @@ def support_user_is_admin():
     raw = (session.get("username") or session.get("email") or "").strip()
     local = raw.split("@")[0].lower()
     return local in {"admin", "isaac"}
+
+
+def support_user_is_assigned_technician():
+    return (session.get("role") or "").strip().lower() == "assigned_technician"
+
+
+def assigned_technician_allowed_statuses():
+    return {"בוצע", "נכשל"}
+
+
+def assigned_technician_can_access_ticket(ticket, actor_name=None):
+    actor_name = (actor_name or support_user_name()).strip()
+    return (
+        support_user_is_assigned_technician()
+        and board_supports_coordination(ticket.get("board_slug"))
+        and (ticket.get("assigned_to") or "").strip() == actor_name
+    )
 
 
 def normalize_support_ticket(ticket):
@@ -498,6 +525,8 @@ def allowed_pages_for_role(role):
     normalized_role = (role or "").strip().lower()
     if normalized_role == "tickets_only":
         return sorted(TICKETS_ONLY_ALLOWED_PAGES)
+    if normalized_role == "assigned_technician":
+        return ["hot_tickets", "pais_tickets"]
     return sorted(FULL_ACCESS_PAGES)
 
 
@@ -524,12 +553,50 @@ def first_allowed_route():
     return url_for("home")
 
 
+def support_page_key(board_slug=None, queue_slug=None):
+    normalized_queue = (queue_slug or "").strip().lower()
+    if normalized_queue == "nastia":
+        return "nastia_tickets"
+    normalized_board = (board_slug or "support").strip().lower()
+    if normalized_board == "pais":
+        return "pais_tickets"
+    if normalized_board == "hot-kiryot":
+        return "hot_tickets"
+    return "support_tickets"
+
+
 def route_page_key(path):
     normalized_path = (path or "").strip().lower()
     if normalized_path in {"", "/"}:
         return None
     if normalized_path.startswith("/support-ticket-attachment"):
         return "support_tickets"
+    if normalized_path == "/support-tickets-data":
+        return support_page_key(request.args.get("board"), request.args.get("queue"))
+    if normalized_path == "/support-tickets-create":
+        return support_page_key(request.form.get("board_slug"))
+    if normalized_path in {
+        "/support-tickets-update",
+        "/support-tickets-attachments",
+        "/support-tickets-attachment-delete",
+        "/support-tickets-delete",
+    }:
+        payload = request.get_json(silent=True) if request.is_json else None
+        ticket_id = ""
+        board_slug = ""
+        queue_slug = ""
+        if isinstance(payload, dict):
+            ticket_id = payload.get("ticket_id") or ""
+            board_slug = payload.get("board_slug") or ""
+            queue_slug = payload.get("source_ticket_queue") or ""
+        else:
+            ticket_id = request.form.get("ticket_id") or ""
+            board_slug = request.form.get("board_slug") or ""
+            queue_slug = request.form.get("queue") or ""
+        ticket = find_support_ticket(load_support_tickets(), ticket_id) if ticket_id else None
+        if ticket:
+            board_slug = ticket.get("board_slug") or board_slug
+        return support_page_key(board_slug, queue_slug)
     if normalized_path.startswith("/support-tickets"):
         return "support_tickets"
     if normalized_path.startswith("/pais-tickets"):
@@ -3705,6 +3772,7 @@ def render_ticket_board_page(board_slug):
     board = get_ticket_board(board_slug)
     register_service_activity(support_page_key(board_slug))
     allowed_pages = allowed_pages_for_current_user()
+    assigned_technician_mode = support_user_is_assigned_technician()
     return render_template(
         "support_tickets.html",
         current_user=session.get("username", ""),
@@ -3719,14 +3787,17 @@ def render_ticket_board_page(board_slug):
         page_subtitle=board["name"],
         page_icon_path=board.get("icon_path") or "",
         ticket_queue="",
-        show_create_button=True,
-        show_pais_report=board_has_coordination_report(board["slug"]),
+        show_create_button=not assigned_technician_mode,
+        show_pais_report=board_has_coordination_report(board["slug"]) and not assigned_technician_mode,
         service_types=SUPPORT_SERVICE_TYPES,
         ticket_types=SUPPORT_TICKET_TYPES,
         priorities=SUPPORT_PRIORITIES,
         support_statuses=SUPPORT_STATUSES,
         pais_statuses=PAIS_STATUSES,
         nastia_notification_email=NASTIA_NOTIFICATION_EMAIL,
+        ticket_operator_mode="assigned_technician" if assigned_technician_mode else "default",
+        can_upload_ticket_attachments=not assigned_technician_mode,
+        default_ticket_scope="my" if assigned_technician_mode else "all",
         can_access_home="home" in allowed_pages,
         can_access_support="support_tickets" in allowed_pages,
         can_access_pais="pais_tickets" in allowed_pages,
@@ -3792,6 +3863,8 @@ def hot_kiryot_tickets_page():
 def nastia_tickets_page():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
+    if support_user_is_assigned_technician():
+        return redirect(first_allowed_route())
     board = get_ticket_board("pais")
     register_service_activity("nastia_tickets")
     allowed_pages = allowed_pages_for_current_user()
@@ -3842,10 +3915,18 @@ def support_tickets_data():
     date_to = (request.args.get("date_to") or "").strip()
     search = (request.args.get("search") or "").strip().lower()
     current_support_user = support_user_name()
+    assigned_technician_mode = support_user_is_assigned_technician()
 
     base_tickets = list(tickets)
     if queue_slug == "nastia":
         base_tickets = [ticket for ticket in base_tickets if pais_ticket_is_coordination(ticket)]
+    if assigned_technician_mode:
+        base_tickets = [
+            ticket for ticket in base_tickets
+            if assigned_technician_can_access_ticket(ticket, current_support_user)
+        ]
+        scope = "my"
+        assignee_filter = ""
 
     filtered = list(base_tickets)
     if scope == "my":
@@ -3991,6 +4072,8 @@ def pais_tickets_report_export():
 def support_tickets_create():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
+    if support_user_is_assigned_technician():
+        return jsonify({"ok": False, "message": "Technician accounts cannot create tickets"}), 403
 
     board_slug = (request.form.get("board_slug") or "support").strip().lower()
     board = get_ticket_board(board_slug)
@@ -4132,6 +4215,29 @@ def support_tickets_update():
 
     payload = request.get_json(silent=True) or {}
     actor = support_user_name()
+    target_ticket = None
+
+    if support_user_is_assigned_technician():
+        target_ticket = find_support_ticket(load_support_tickets(), payload.get("ticket_id"))
+        if not target_ticket:
+            return jsonify({"ok": False, "message": "Ticket not found"}), 404
+        if not assigned_technician_can_access_ticket(target_ticket, actor):
+            return jsonify({"ok": False, "message": "Access denied"}), 403
+        if "assigned_to" in payload:
+            return jsonify({"ok": False, "message": "Technician accounts cannot reassign tickets"}), 403
+        status = (payload.get("status") or "").strip()
+        if status not in assigned_technician_allowed_statuses():
+            return jsonify({"ok": False, "message": "Technician accounts can only set status to בוצע או נכשל"}), 403
+        if "details" in payload:
+            details = payload.get("details")
+            if not isinstance(details, dict):
+                return jsonify({"ok": False, "message": "Invalid details payload"}), 400
+            disallowed_fields = {
+                field_name for field_name, value in details.items()
+                if field_name != "failure_notes" and str(value or "").strip()
+            }
+            if disallowed_fields:
+                return jsonify({"ok": False, "message": "Technician accounts can only update failure notes"}), 403
 
     if "details" in payload and isinstance(payload.get("details"), dict):
         details = payload["details"]
@@ -4190,6 +4296,8 @@ def support_tickets_update():
 def support_tickets_attachments():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
+    if support_user_is_assigned_technician():
+        return jsonify({"ok": False, "message": "Technician accounts cannot upload attachments"}), 403
 
     ticket_id = (request.form.get("ticket_id") or "").strip()
     attachment_files = [file_storage for file_storage in request.files.getlist("attachments") if file_storage and file_storage.filename]
@@ -4213,6 +4321,8 @@ def support_tickets_attachments():
 def support_tickets_attachment_delete():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
+    if support_user_is_assigned_technician():
+        return jsonify({"ok": False, "message": "Technician accounts cannot delete attachments"}), 403
 
     payload = request.get_json(silent=True) or {}
     try:

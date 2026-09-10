@@ -24,9 +24,14 @@ const supportStatuses = Array.isArray(supportTicketsContext.supportStatuses) ? s
 const paisStatuses = Array.isArray(supportTicketsContext.paisStatuses) ? supportTicketsContext.paisStatuses : ["ממתין", "ממתין לתאום", "תואם", "אין מענה", "בוצע", "נכשל"];
 const pageMode = String(supportTicketsContext.pageMode || "board");
 const ticketQueue = String(supportTicketsContext.ticketQueue || "");
+const ticketOperatorMode = String(supportTicketsContext.ticketOperatorMode || "default");
+const canUploadTicketAttachments = supportTicketsContext.canUploadTicketAttachments === true || supportTicketsContext.canUploadTicketAttachments === "true";
+const defaultTicketScope = String(supportTicketsContext.defaultTicketScope || "all");
 const isNastyaQueuePage = pageMode === "nastia" || ticketQueue === "nastia";
+const isAssignedTechnicianMode = ticketOperatorMode === "assigned_technician";
 const ticketBoards = Array.isArray(supportTicketsContext.ticketBoards) ? supportTicketsContext.ticketBoards : [];
 const ticketBoardsBySlug = new Map(ticketBoards.map((board) => [String(board?.slug || ""), board || {}]));
+currentScope = defaultTicketScope;
 
 function boardConfig(boardSlugValue) {
   return ticketBoardsBySlug.get(String(boardSlugValue || "")) || {};
@@ -50,6 +55,12 @@ function isPaisTicket(ticket) {
 
 function isHotTicket(ticket) {
   return ticket?.board_slug === "hot-kiryot";
+}
+
+function canAssignedTechnicianEditTicket(ticket) {
+  return isAssignedTechnicianMode
+    && isCoordinationTicket(ticket)
+    && String(ticket?.assigned_to || "") === currentSupportUser;
 }
 
 function escapeHtml(value) {
@@ -125,6 +136,12 @@ function displayTicketStatus(ticket) {
 }
 
 function statusOptionsForTicket(ticket) {
+  if (canAssignedTechnicianEditTicket(ticket)) {
+    const statuses = [ticket.status, ...NASTYA_FINAL_STATUSES.filter((status) => status !== ticket.status)];
+    return statuses.map((status) => `
+      <option value="${escapeHtml(status)}" ${ticket.status === status ? "selected" : ""}>${escapeHtml(displayTicketStatus({ ...ticket, status }))}</option>
+    `).join("");
+  }
   if (ticket.board_slug === "pais" && isNastyaQueuePage && NASTYA_EDITABLE_STATUSES.includes(ticket.status)) {
     const options = [
       { value: ticket.status, label: displayTicketStatus(ticket) },
@@ -512,6 +529,7 @@ function detailSection(title, value) {
 
 function renderPaisDetailSections(ticket) {
   const details = ticketDetails(ticket);
+  const technicianMode = canAssignedTechnicianEditTicket(ticket);
   const isCoordinatorView = isNastyaQueuePage;
   const technicianOptions = ['<option value="">בחר עובד</option>']
     .concat(technicianUsers.map((user) => `<option value="${escapeHtml(user)}" ${details.coordinated_worker === user ? "selected" : ""}>${escapeHtml(user)}</option>`))
@@ -527,6 +545,27 @@ function renderPaisDetailSections(ticket) {
   ]
     .map(({ value, label }) => `<option value="${escapeHtml(value)}" ${ticket.status === value ? "selected" : ""}>${escapeHtml(label)}</option>`)
     .join("");
+
+  if (technicianMode) {
+    return `
+      ${detailSection("פניית לקוח", details.customer_request)}
+      ${detailSection("פעולות", details.actions_taken)}
+      <section class="detail-description detail-edit-card">
+        <h3>סטטוס</h3>
+        <select id="detail-status-select">
+          ${statusOptionsForTicket(ticket)}
+        </select>
+      </section>
+      <section class="detail-description detail-edit-card ${showFailureNotes ? "" : "hidden"}" id="detail-failure-notes-wrap">
+        <h3>הערות</h3>
+        <textarea id="detail-failure-notes" rows="4">${escapeHtml(details.failure_notes || "")}</textarea>
+      </section>
+      <div class="detail-save-row">
+        <span id="detail-save-message"></span>
+        <button class="create-ticket-btn" id="detail-save-btn" type="button">שמור</button>
+      </div>
+    `;
+  }
 
   return `
     ${detailSection("פניית לקוח", details.customer_request)}
@@ -1562,6 +1601,7 @@ function renderTickets(tickets, users) {
     const row = document.createElement("article");
     row.className = `ticket-row ${isCoordinationTicket(ticket) ? "pais-row" : ""}`;
     row.dataset.ticketId = ticket.id;
+    const technicianCanUpdate = canAssignedTechnicianEditTicket(ticket);
     const assigneeOptions = ['<option value="">Unassigned</option>']
       .concat((users || []).map((user) => `<option value="${escapeHtml(user)}" ${ticket.assigned_to === user ? "selected" : ""}>${escapeHtml(user)}</option>`))
       .join("");
@@ -1595,8 +1635,8 @@ function renderTickets(tickets, users) {
         ${escapeHtml(ticket.creator)}<br>${escapeHtml(ticketListTimestamp(ticket))}
         ${coordinationText ? `<div class="ticket-meta-note">${escapeHtml(coordinationText)}</div>` : ""}
       </div>
-      <select class="assignee-select" data-ticket-id="${ticket.id}" ${isNastyaQueuePage && isCoordinationTicket(ticket) ? "disabled" : ""}>${assigneeOptions}</select>
-      <select class="status-select" data-ticket-id="${ticket.id}" ${(isNastyaQueuePage && isCoordinationTicket(ticket) && !canNastyaEditPaisInlineStatus(ticket)) ? "disabled" : ""}>${statusOptionsForTicket(ticket)}</select>
+      <select class="assignee-select" data-ticket-id="${ticket.id}" ${(isAssignedTechnicianMode || (isNastyaQueuePage && isCoordinationTicket(ticket))) ? "disabled" : ""}>${assigneeOptions}</select>
+      <select class="status-select" data-ticket-id="${ticket.id}" ${((isAssignedTechnicianMode && !technicianCanUpdate) || (isNastyaQueuePage && isCoordinationTicket(ticket) && !canNastyaEditPaisInlineStatus(ticket))) ? "disabled" : ""}>${statusOptionsForTicket(ticket)}</select>
       <div class="ticket-actions">
         <span class="pill ${statusClass}">${escapeHtml(displayTicketStatus(ticket))}</span>
         <span class="pill ${priorityClass(ticket.priority || "Medium")}">${escapeHtml(ticket.priority || "Medium")}</span>
@@ -1640,6 +1680,15 @@ function renderTickets(tickets, users) {
 }
 
 function coordinationStatusEditor(ticket) {
+  if (canAssignedTechnicianEditTicket(ticket)) {
+    return `
+    <section class="detail-description detail-edit-card">
+      <h3>סטטוס</h3>
+      <select id="detail-status-select">
+        ${statusOptionsForTicket(ticket)}
+      </select>
+    </section>`;
+  }
   const isCoordinatorView = isNastyaQueuePage;
   const showCoordinatorStatus = isCoordinatorView && NASTYA_EDITABLE_STATUSES.includes(ticket.status);
   const coordinatorStatusOptions = [
@@ -1673,6 +1722,7 @@ function coordinationStatusEditor(ticket) {
 }
 
 function coordinationSchedulingEditor(ticket, details) {
+  if (isAssignedTechnicianMode) return "";
   const isCoordinatorView = isNastyaQueuePage;
   const technicianOptions = ['<option value="">בחר עובד</option>']
     .concat(technicianUsers.map((user) => `<option value="${escapeHtml(user)}" ${details.coordinated_worker === user ? "selected" : ""}>${escapeHtml(user)}</option>`))
@@ -1706,7 +1756,27 @@ function coordinationSchedulingEditor(ticket, details) {
 
 function renderHotDetailSections(ticket) {
   const details = ticketDetails(ticket);
+  const technicianMode = canAssignedTechnicianEditTicket(ticket);
   const showFailureNotes = ticket.status === "נכשל";
+  if (technicianMode) {
+    return `
+      ${detailSection("מהות התקלה", details.issue_summary)}
+      ${detailSection("בדיקות שבוצעו מרחוק", details.remote_checks)}
+      ${detailSection("פעולות / בדיקות שטכנאי צריך לבצע", details.technician_actions)}
+      ${details.equipment_type ? detailSection("סוג ציוד קיים אצל הלקוח", details.equipment_type) : ""}
+      ${details.service_agreement ? detailSection("הסכם שירות ואיזה ציוד באחריות הוט", details.service_agreement) : ""}
+      ${details.technical_notes ? detailSection("פרטים טכניים נוספים", details.technical_notes) : ""}
+      ${coordinationStatusEditor(ticket)}
+      <section class="detail-description detail-edit-card ${showFailureNotes ? "" : "hidden"}" id="detail-failure-notes-wrap">
+        <h3>הערות</h3>
+        <textarea id="detail-failure-notes" rows="4">${escapeHtml(details.failure_notes || "")}</textarea>
+      </section>
+      <div class="detail-save-row">
+        <span id="detail-save-message"></span>
+        <button class="create-ticket-btn" id="detail-save-btn" type="button">שמור</button>
+      </div>
+    `;
+  }
   return `
     ${detailSection("מהות התקלה", details.issue_summary)}
     ${detailSection("בדיקות שבוצעו מרחוק", details.remote_checks)}
@@ -1746,6 +1816,7 @@ function renderDetailSections(ticket) {
 async function savePaisDetail(ticketId) {
   const currentTicket = getTicket(ticketId);
   const currentDetails = ticketDetails(currentTicket);
+  const technicianMode = canAssignedTechnicianEditTicket(currentTicket);
   const coordinatedWorkerField = document.getElementById("detail-coordinated-worker");
   const visitDateField = document.getElementById("detail-visit-date");
   const visitHourFromField = document.getElementById("detail-visit-hour-from");
@@ -1771,22 +1842,28 @@ async function savePaisDetail(ticketId) {
     source_page_mode: pageMode,
     source_ticket_queue: ticketQueue,
     status: nextStatus,
-    details: {
+  };
+  if (technicianMode) {
+    payload.details = {
+      failure_notes: document.getElementById("detail-failure-notes")?.value || "",
+    };
+  } else {
+    payload.details = {
       [detailFieldName]: detailFieldElement?.value || "",
       coordinated_worker: coordinationPayload.coordinated_worker,
       visit_date: coordinationPayload.visit_date,
       visit_hour_from: coordinationPayload.visit_hour_from,
       visit_hour_to: coordinationPayload.visit_hour_to,
       failure_notes: document.getElementById("detail-failure-notes")?.value || "",
-    },
-  };
+    };
+  }
   const message = document.getElementById("detail-save-message");
   const button = document.getElementById("detail-save-btn");
   if (message) message.textContent = "";
   clearCoordinationValidation();
   if (button) button.disabled = true;
 
-  if (isNastyaQueuePage && !isFinalStatus) {
+  if (isNastyaQueuePage && !technicianMode && !isFinalStatus) {
     if (!coordinationPayload.coordinated_worker) {
       setFieldInvalid(coordinatedWorkerField, true);
       if (message) message.textContent = "לא נבחר טכנאי מטפל";
@@ -1815,7 +1892,7 @@ async function savePaisDetail(ticketId) {
 
   const coordinationChanged = ["coordinated_worker", "visit_date", "visit_hour_from", "visit_hour_to"]
     .some((fieldName) => String(currentDetails?.[fieldName] || "") !== String(coordinationPayload[fieldName] || ""));
-  if (isNastyaQueuePage && shouldMarkCoordinated && coordinationChanged) {
+  if (isNastyaQueuePage && !technicianMode && shouldMarkCoordinated && coordinationChanged) {
     payload.send_nastia_notification = true;
   }
 
@@ -1911,10 +1988,20 @@ function openTicketDetail(ticketId) {
   if (detailCopyButton) {
     detailCopyButton.dataset.ticketId = ticket.id;
   }
-  document.getElementById("detail-upload-ticket-id").value = ticket.id;
+  const detailUploadTicketId = document.getElementById("detail-upload-ticket-id");
+  if (detailUploadTicketId) {
+    detailUploadTicketId.value = ticket.id;
+  }
   document.getElementById("detail-upload-form")?.reset();
-  document.getElementById("detail-upload-message").textContent = "";
+  const detailUploadMessage = document.getElementById("detail-upload-message");
+  if (detailUploadMessage) {
+    detailUploadMessage.textContent = "";
+  }
   syncDetailAttachmentInputState();
+  const detailUploadPanel = document.getElementById("detail-upload-panel");
+  if (detailUploadPanel) {
+    detailUploadPanel.hidden = !canUploadTicketAttachments;
+  }
   if (isCoordinationTicket(ticket)) {
     clearCoordinationValidation();
     document.getElementById("detail-status-select")?.addEventListener("change", syncPaisDetailStatusFields);
@@ -1944,6 +2031,7 @@ function openTicketDetail(ticketId) {
             data-folder="${escapeHtml(file.folder || "")}"
             data-saved-name="${escapeHtml(file.saved_name || "")}"
             title="Delete image"
+            ${canUploadTicketAttachments ? "" : "hidden"}
           >
             <i class="fa-solid fa-trash"></i>
           </button>
@@ -1953,6 +2041,12 @@ function openTicketDetail(ticketId) {
   attachmentHost.querySelectorAll(".detail-image-btn").forEach((button) => {
     button.addEventListener("click", () => openImagePreview(button.dataset.imageUrl || ""));
   });
+  if (!canUploadTicketAttachments) {
+    const modal = document.getElementById("ticket-detail-modal");
+    modal.classList.add("open");
+    modal.setAttribute("aria-hidden", "false");
+    return;
+  }
   attachmentHost.querySelectorAll(".detail-attachment-delete").forEach((button) => {
     button.addEventListener("click", () => deleteDetailAttachment(
       button.dataset.ticketId || "",
@@ -2107,6 +2201,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   document.querySelectorAll(".ticket-tab").forEach((button) => {
+    button.classList.toggle("active", (button.dataset.scope || "all") === currentScope);
     button.addEventListener("click", () => {
       document.querySelectorAll(".ticket-tab").forEach((tab) => tab.classList.remove("active"));
       button.classList.add("active");

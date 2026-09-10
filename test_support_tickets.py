@@ -1212,6 +1212,292 @@ class SupportTicketsTestCase(unittest.TestCase):
         tickets_response = self.client.get("/support-tickets", follow_redirects=False)
         self.assertEqual(tickets_response.status_code, 200)
 
+    def test_assigned_technician_login_redirects_to_tickets_menu_page(self):
+        response = self.login("golan@nimbusip.com", "0503009456!")
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response.headers["Location"].endswith("/pais-tickets"))
+
+        page_response = self.client.get("/pais-tickets", follow_redirects=False)
+        self.assertEqual(page_response.status_code, 200)
+        self.assertIn(b"tickets-menu", page_response.data)
+
+    def test_assigned_technician_support_user_name_matches_worker(self):
+        with self.app.test_request_context("/pais-tickets"):
+            from flask import session
+
+            session["logged_in"] = True
+            session["username"] = "assafh@nimbusip.com"
+            session["role"] = "assigned_technician"
+
+            self.assertEqual(self.app_module.support_user_name(), "אסף")
+
+    def test_assigned_technician_only_sees_own_coordination_tickets(self):
+        tickets = self.app_module.load_support_tickets()
+        tickets.extend([
+            {
+                "id": 2,
+                "board_slug": "pais",
+                "created_at": "2026-07-08T09:00:00+03:00",
+                "created_at_display": "08/07/2026 09:00",
+                "creator": "Admin",
+                "ticket_type": "שירות",
+                "service_type": "מפעל הפיס",
+                "domain": "",
+                "priority": "Medium",
+                "description": "",
+                "solution": "",
+                "status": "ממתין לתאום",
+                "assigned_to": "גולן",
+                "details": {
+                    "terminal_number": "9001",
+                    "address": "Golan street 1",
+                    "customer_request": "Need visit",
+                    "actions_taken": "",
+                    "coordinated_worker": "",
+                    "visit_date": "",
+                    "visit_hour_from": "",
+                    "visit_hour_to": "",
+                    "failure_notes": "",
+                },
+                "attachments": [],
+                "updates": [],
+            },
+            {
+                "id": 3,
+                "board_slug": "hot-kiryot",
+                "created_at": "2026-07-08T09:10:00+03:00",
+                "created_at_display": "08/07/2026 09:10",
+                "creator": "Admin",
+                "ticket_type": "שירות",
+                "service_type": "הוט קריאות",
+                "domain": "",
+                "priority": "Medium",
+                "description": "",
+                "solution": "",
+                "status": "תואם",
+                "assigned_to": "גולן",
+                "details": {
+                    "call_number": "275749117",
+                    "customer_name": "חיים",
+                    "address": "האופה 1, נתניה",
+                    "issue_summary": "PANCODE לא עובד",
+                    "technician_actions": "בדיקות",
+                    "coordinated_worker": "גולן",
+                    "visit_date": "2026-07-09",
+                    "visit_hour_from": "09:00",
+                    "visit_hour_to": "10:00",
+                    "failure_notes": "",
+                },
+                "attachments": [],
+                "updates": [],
+            },
+            {
+                "id": 4,
+                "board_slug": "pais",
+                "created_at": "2026-07-08T09:15:00+03:00",
+                "created_at_display": "08/07/2026 09:15",
+                "creator": "Admin",
+                "ticket_type": "שירות",
+                "service_type": "מפעל הפיס",
+                "domain": "",
+                "priority": "Medium",
+                "description": "",
+                "solution": "",
+                "status": "ממתין לתאום",
+                "assigned_to": "אסף",
+                "details": {
+                    "terminal_number": "9002",
+                    "address": "Assaf street 2",
+                    "customer_request": "Other visit",
+                    "actions_taken": "",
+                    "coordinated_worker": "",
+                    "visit_date": "",
+                    "visit_hour_from": "",
+                    "visit_hour_to": "",
+                    "failure_notes": "",
+                },
+                "attachments": [],
+                "updates": [],
+            },
+        ])
+        self.app_module.save_support_tickets(tickets)
+
+        self.login("golan@nimbusip.com", "0503009456!")
+
+        pais_response = self.client.get("/support-tickets-data?board=pais")
+        self.assertEqual(pais_response.status_code, 200)
+        pais_payload = pais_response.get_json()
+        self.assertEqual(len(pais_payload["tickets"]), 1)
+        self.assertEqual(pais_payload["tickets"][0]["assigned_to"], "גולן")
+        self.assertEqual(pais_payload["stats"]["all"], 1)
+
+        hot_response = self.client.get("/support-tickets-data?board=hot-kiryot")
+        self.assertEqual(hot_response.status_code, 200)
+        hot_payload = hot_response.get_json()
+        self.assertEqual(len(hot_payload["tickets"]), 1)
+        self.assertEqual(hot_payload["tickets"][0]["assigned_to"], "גולן")
+        self.assertEqual(hot_payload["stats"]["all"], 1)
+
+    def test_assigned_technician_can_only_set_final_status_on_own_ticket(self):
+        tickets = self.app_module.load_support_tickets()
+        tickets.extend([
+            {
+                "id": 2,
+                "board_slug": "hot-kiryot",
+                "created_at": "2026-07-08T09:10:00+03:00",
+                "created_at_display": "08/07/2026 09:10",
+                "creator": "Admin",
+                "ticket_type": "שירות",
+                "service_type": "הוט קריאות",
+                "domain": "",
+                "priority": "Medium",
+                "description": "",
+                "solution": "",
+                "status": "תואם",
+                "assigned_to": "גולן",
+                "details": {
+                    "call_number": "275749117",
+                    "customer_name": "חיים",
+                    "address": "האופה 1, נתניה",
+                    "issue_summary": "PANCODE לא עובד",
+                    "technician_actions": "בדיקות",
+                    "coordinated_worker": "גולן",
+                    "visit_date": "2026-07-09",
+                    "visit_hour_from": "09:00",
+                    "visit_hour_to": "10:00",
+                    "failure_notes": "",
+                },
+                "attachments": [],
+                "updates": [],
+            },
+            {
+                "id": 3,
+                "board_slug": "pais",
+                "created_at": "2026-07-08T09:15:00+03:00",
+                "created_at_display": "08/07/2026 09:15",
+                "creator": "Admin",
+                "ticket_type": "שירות",
+                "service_type": "מפעל הפיס",
+                "domain": "",
+                "priority": "Medium",
+                "description": "",
+                "solution": "",
+                "status": "ממתין לתאום",
+                "assigned_to": "אסף",
+                "details": {
+                    "terminal_number": "9002",
+                    "address": "Assaf street 2",
+                    "customer_request": "Other visit",
+                    "actions_taken": "",
+                    "coordinated_worker": "",
+                    "visit_date": "",
+                    "visit_hour_from": "",
+                    "visit_hour_to": "",
+                    "failure_notes": "",
+                },
+                "attachments": [],
+                "updates": [],
+            },
+        ])
+        self.app_module.save_support_tickets(tickets)
+
+        self.login("golan@nimbusip.com", "0503009456!")
+
+        success_response = self.client.post(
+            "/support-tickets-update",
+            json={
+                "ticket_id": 2,
+                "status": "בוצע",
+                "details": {
+                    "failure_notes": "",
+                },
+            },
+        )
+        self.assertEqual(success_response.status_code, 200)
+        self.assertEqual(success_response.get_json()["ticket"]["status"], "בוצע")
+
+        invalid_status_response = self.client.post(
+            "/support-tickets-update",
+            json={
+                "ticket_id": 2,
+                "status": "תואם",
+                "details": {
+                    "failure_notes": "",
+                },
+            },
+        )
+        self.assertEqual(invalid_status_response.status_code, 403)
+
+        foreign_ticket_response = self.client.post(
+            "/support-tickets-update",
+            json={
+                "ticket_id": 3,
+                "status": "נכשל",
+                "details": {
+                    "failure_notes": "No access",
+                },
+            },
+        )
+        self.assertEqual(foreign_ticket_response.status_code, 403)
+
+    def test_assigned_technician_cannot_create_or_upload_attachments(self):
+        tickets = self.app_module.load_support_tickets()
+        tickets.append({
+            "id": 2,
+            "board_slug": "hot-kiryot",
+            "created_at": "2026-07-08T09:10:00+03:00",
+            "created_at_display": "08/07/2026 09:10",
+            "creator": "Admin",
+            "ticket_type": "שירות",
+            "service_type": "הוט קריאות",
+            "domain": "",
+            "priority": "Medium",
+            "description": "",
+            "solution": "",
+            "status": "תואם",
+            "assigned_to": "גולן",
+            "details": {
+                "call_number": "275749117",
+                "customer_name": "חיים",
+                "address": "האופה 1, נתניה",
+                "issue_summary": "PANCODE לא עובד",
+                "technician_actions": "בדיקות",
+                "coordinated_worker": "גולן",
+                "visit_date": "2026-07-09",
+                "visit_hour_from": "09:00",
+                "visit_hour_to": "10:00",
+                "failure_notes": "",
+            },
+            "attachments": [],
+            "updates": [],
+        })
+        self.app_module.save_support_tickets(tickets)
+
+        self.login("golan@nimbusip.com", "0503009456!")
+
+        create_response = self.client.post(
+            "/support-tickets-create",
+            data={
+                "board_slug": "hot-kiryot",
+                "call_number": "999999",
+                "address": "Blocked 1",
+                "customer_name": "Blocked",
+                "issue_summary": "Blocked",
+            },
+        )
+        self.assertEqual(create_response.status_code, 403)
+
+        upload_response = self.client.post(
+            "/support-tickets-attachments",
+            data={
+                "ticket_id": "2",
+                "attachments": [(io.BytesIO(b"jpg"), "field.jpg")],
+            },
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(upload_response.status_code, 403)
+
     def test_slot_conflict_is_rejected(self):
         tickets = self.app_module.load_support_tickets()
         tickets.extend([
