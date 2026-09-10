@@ -64,7 +64,7 @@ insert into public.ticket_boards (slug, name, icon_path, route_path, sort_order)
 values
   ('support', 'Support Tickets', '', '/support-tickets', 1),
   ('pais', 'מפעל הפיס', '/picture/pais.png', '/pais-tickets', 2),
-  ('hot-kiryot', 'הוט קריות', 'https://hot.nimbusip.com/themes/default/images/logo.png', '/hot-kiryot-tickets', 3)
+  ('hot-kiryot', 'הוט קריאות', 'https://hot.nimbusip.com/themes/default/images/logo.png', '/hot-kiryot-tickets', 3)
 on conflict (slug) do update
 set
   name = excluded.name,

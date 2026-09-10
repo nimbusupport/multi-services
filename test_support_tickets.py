@@ -550,7 +550,7 @@ class SupportTicketsTestCase(unittest.TestCase):
         payload = response.get_json()
         self.assertTrue(payload["ok"])
         self.assertEqual(payload["ticket"]["board_slug"], "hot-kiryot")
-        self.assertEqual(payload["ticket"]["service_type"], "הוט קריות")
+        self.assertEqual(payload["ticket"]["service_type"], "הוט קריאות")
         self.assertEqual(payload["ticket"]["status"], "ממתין")
         self.assertEqual(payload["ticket"]["assigned_to"], "גולן")
         self.assertEqual(payload["ticket"]["details"]["call_number"], "275749117")
@@ -589,7 +589,7 @@ class SupportTicketsTestCase(unittest.TestCase):
                     "created_at_display": "08/07/2026 09:00",
                     "creator": "Admin",
                     "ticket_type": "שירות",
-                    "service_type": "הוט קריות",
+                    "service_type": "הוט קריאות",
                     "domain": "",
                     "priority": "Medium",
                     "description": "",
@@ -613,7 +613,7 @@ class SupportTicketsTestCase(unittest.TestCase):
                 "creator": "Admin",
                 "board_slug": "hot-kiryot",
                 "ticket_type": "שירות",
-                "service_type": "הוט קריות",
+                "service_type": "הוט קריאות",
                 "domain": "",
                 "priority": "Medium",
                 "description": "",
@@ -1164,7 +1164,7 @@ class SupportTicketsTestCase(unittest.TestCase):
             "created_at_display": "08/07/2026 09:00",
             "creator": "Admin",
             "ticket_type": "שירות",
-            "service_type": "הוט קריות",
+            "service_type": "הוט קריאות",
             "domain": "",
             "priority": "Medium",
             "description": "",
@@ -1704,7 +1704,7 @@ class SupportTicketsTestCase(unittest.TestCase):
             "created_at_display": "08/07/2026 09:00",
             "creator": "Admin",
             "ticket_type": "שירות",
-            "service_type": "הוט קריות",
+            "service_type": "הוט קריאות",
             "domain": "",
             "priority": "Medium",
             "description": "",

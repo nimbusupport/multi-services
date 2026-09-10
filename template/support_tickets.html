@@ -38,7 +38,7 @@
         <a class="nav-link {% if ticket_board.slug == 'pais' and page_mode != 'nastia' %}active{% endif %}" href="/pais-tickets"><span class="nav-icon"><img class="nav-pais-icon" src="/picture/pais.png" alt=""></span><span class="nav-label">מפעל הפיס</span></a>
         {% endif %}
         {% if can_access_hot %}
-        <a class="nav-link {% if ticket_board.slug == 'hot-kiryot' and page_mode != 'nastia' %}active{% endif %}" href="/hot-kiryot-tickets"><span class="nav-icon"><img class="nav-pais-icon" src="https://hot.nimbusip.com/themes/default/images/logo.png" alt=""></span><span class="nav-label">הוט קריות</span></a>
+        <a class="nav-link {% if ticket_board.slug == 'hot-kiryot' and page_mode != 'nastia' %}active{% endif %}" href="/hot-kiryot-tickets"><span class="nav-icon"><img class="nav-pais-icon" src="https://hot.nimbusip.com/themes/default/images/logo.png" alt=""></span><span class="nav-label">הוט קריאות</span></a>
         {% endif %}
         {% if can_access_nastia %}
         <a class="nav-link {% if page_mode == 'nastia' %}active{% endif %}" href="/nastia-tickets"><span class="nav-icon"><i class="fa-solid fa-user-clock"></i></span><span class="nav-label">נסטיה</span></a>
@@ -81,7 +81,7 @@
         {% if can_access_hot %}
         <a class="ticket-board-link {% if ticket_board.slug == 'hot-kiryot' and page_mode != 'nastia' %}active{% endif %}" href="/hot-kiryot-tickets">
           <img src="https://hot.nimbusip.com/themes/default/images/logo.png" alt="">
-          <span>הוט קריות</span>
+          <span>הוט קריאות</span>
         </a>
         {% endif %}
         {% if can_access_nastia %}
@@ -181,7 +181,7 @@
             <a class="menu-item" href="/pais-tickets"><img src="/picture/pais.png" alt=""><span>מפעל הפיס</span></a>
             {% endif %}
             {% if can_access_hot %}
-            <a class="menu-item" href="/hot-kiryot-tickets"><img src="https://hot.nimbusip.com/themes/default/images/logo.png" alt=""><span>הוט קריות</span></a>
+            <a class="menu-item" href="/hot-kiryot-tickets"><img src="https://hot.nimbusip.com/themes/default/images/logo.png" alt=""><span>הוט קריאות</span></a>
             {% endif %}
           </div>
         </div>
@@ -447,7 +447,7 @@
       {% else %}
       <section class="detail-description paste-import-card">
         <h3>הדבקה מהירה</h3>
-        <p>אפשר להדביק את כל גוף המייל, והמערכת תמלא את טופס הוט קריות.</p>
+        <p>אפשר להדביק את כל גוף המייל, והמערכת תמלא את טופס הוט קריאות.</p>
         <textarea id="board-paste-source" rows="12" placeholder="טופס מילוי חובה לתאום טכנאי אינטגרציה / נימבוס&#10;שעה ותאריך פתיחת תקלה&#10;14:12 08.09&#10;מספר קריאה שהוקצה&#10;פניה - 275749117&#10;שם לקוח&#10;חיים&#10;כתובת לקוח&#10;האופה 1, נתניה&#10;מהות התקלה&#10;PANCODE לא עובד"></textarea>
         <div class="detail-save-row">
           <span id="board-paste-message"></span>

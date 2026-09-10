@@ -356,7 +356,7 @@ TICKET_BOARD_DEFAULTS = {
     },
     "hot-kiryot": {
         "slug": "hot-kiryot",
-        "name": "הוט קריות",
+        "name": "הוט קריאות",
         "icon_path": "https://hot.nimbusip.com/themes/default/images/logo.png",
         "route_path": "/hot-kiryot-tickets",
         "workflow": "coordination",
@@ -1581,9 +1581,9 @@ def coordination_ticket_email_context(ticket):
             f"כתובת: {(details.get('address') or '').strip() or '-'}",
             f"טכנאי מתואם: {(details.get('coordinated_worker') or '').strip() or '-'}",
         ]
-        calendar_summary = f"קריאת שירות הוט קריות {ticket_label}"
-        location = (details.get("address") or "").strip() or "הוט קריות"
-        subject = f"קריאת שירות הוט קריות מס' קריאה : {ticket_label}"
+        calendar_summary = f"קריאת שירות הוט קריאות {ticket_label}"
+        location = (details.get("address") or "").strip() or "הוט קריאות"
+        subject = f"קריאת שירות הוט קריאות מס' קריאה : {ticket_label}"
     else:
         terminal_number = (details.get("terminal_number") or "").strip()
         detail_rows = [
