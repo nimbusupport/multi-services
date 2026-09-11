@@ -386,7 +386,7 @@ TICKET_BOARD_DEFAULTS = {
         "route_path": "/hot-kiryot-tickets",
         "workflow": "coordination",
         "paste_template": "hot-kiryot",
-        "report_enabled": False,
+        "report_enabled": True,
         "sort_order": 3,
     },
 }
@@ -3986,9 +3986,12 @@ def build_pdf_buffer(title, metadata_rows, headers, rows, rtl_columns=None, emph
     hebrew_bold_font = get_pdf_font_name("bold", "hebrew")
     hebrew_extra_bold_font = get_pdf_font_name("extra_bold", "hebrew")
     styles = getSampleStyleSheet()
+    normal_style = styles.get("Normal") if hasattr(styles, "get") else None
+    heading_style = styles.get("Heading1", normal_style) if hasattr(styles, "get") else normal_style
+    body_style = styles.get("BodyText", normal_style) if hasattr(styles, "get") else normal_style
     title_style = ParagraphStyle(
         "PdfTitle",
-        parent=styles["Heading1"],
+        parent=heading_style,
         fontName=hebrew_extra_bold_font,
         fontSize=19,
         leading=23,
@@ -3998,7 +4001,7 @@ def build_pdf_buffer(title, metadata_rows, headers, rows, rtl_columns=None, emph
     )
     meta_label_style = ParagraphStyle(
         "PdfMetaLabel",
-        parent=styles["BodyText"],
+        parent=body_style,
         fontName=latin_bold_font,
         fontSize=11,
         leading=14,
@@ -4007,7 +4010,7 @@ def build_pdf_buffer(title, metadata_rows, headers, rows, rtl_columns=None, emph
     )
     meta_value_style = ParagraphStyle(
         "PdfMetaValue",
-        parent=styles["BodyText"],
+        parent=body_style,
         fontName=latin_bold_font,
         fontSize=11,
         leading=14,
@@ -4024,7 +4027,7 @@ def build_pdf_buffer(title, metadata_rows, headers, rows, rtl_columns=None, emph
     )
     header_style = ParagraphStyle(
         "PdfHeader",
-        parent=styles["BodyText"],
+        parent=body_style,
         fontName=latin_extra_bold_font,
         fontSize=11,
         leading=13,
@@ -4033,7 +4036,7 @@ def build_pdf_buffer(title, metadata_rows, headers, rows, rtl_columns=None, emph
     )
     cell_style = ParagraphStyle(
         "PdfCell",
-        parent=styles["BodyText"],
+        parent=body_style,
         fontName=latin_bold_font,
         fontSize=10,
         leading=12,
@@ -4112,25 +4115,64 @@ def build_pdf_buffer(title, metadata_rows, headers, rows, rtl_columns=None, emph
     return buffer
 
 
-def build_pais_export_rows(report):
+def build_ticket_board_export_rows(report):
     rows = []
     for index, ticket in enumerate(report["tickets"], start=1):
         details = ticket.get("details") or {}
         if (ticket.get("board_slug") or "").strip().lower() == "support":
             reference_value = details.get("business_name") or ticket.get("service_type") or ""
-            address_value = details.get("service_address") or ""
+            secondary_value = details.get("service_address") or ""
         elif (ticket.get("board_slug") or "").strip().lower() == "hot-kiryot":
             reference_value = details.get("call_number") or ""
-            address_value = details.get("address") or ""
+            secondary_value = details.get("customer_name") or ""
         else:
             reference_value = details.get("terminal_number") or ""
-            address_value = details.get("address") or ""
+            secondary_value = details.get("address") or ""
         rows.append({
             "counter": index,
-            "terminal_number": reference_value,
-            "address": address_value,
+            "reference": reference_value,
+            "secondary": secondary_value,
         })
     return rows
+
+
+def ticket_board_export_config(board_slug):
+    normalized_board = (board_slug or "").strip().lower()
+    if normalized_board == "hot-kiryot":
+        return {
+            "headers": ["#", "מספר קריאה", "שם לקוח"],
+            "csv_fields": ["counter", "call_number", "customer_name"],
+            "row_mapper": lambda row: {
+                "counter": row["counter"],
+                "call_number": row["reference"],
+                "customer_name": row["secondary"],
+            },
+            "pdf_row_mapper": lambda row: [row["counter"], row["reference"], row["secondary"]],
+            "rtl_columns": {1, 2},
+        }
+    if normalized_board == "support":
+        return {
+            "headers": ["#", "Business", "Address"],
+            "csv_fields": ["counter", "business_name", "address"],
+            "row_mapper": lambda row: {
+                "counter": row["counter"],
+                "business_name": row["reference"],
+                "address": row["secondary"],
+            },
+            "pdf_row_mapper": lambda row: [row["counter"], row["reference"], row["secondary"]],
+            "rtl_columns": {2},
+        }
+    return {
+        "headers": ["#", "Terminal Number", "Address"],
+        "csv_fields": ["counter", "terminal_number", "address"],
+        "row_mapper": lambda row: {
+            "counter": row["counter"],
+            "terminal_number": row["reference"],
+            "address": row["secondary"],
+        },
+        "pdf_row_mapper": lambda row: [row["counter"], row["reference"], row["secondary"]],
+        "rtl_columns": {2},
+    }
 
 
 def build_features_export_rows(report):
@@ -4750,8 +4792,10 @@ def pais_tickets_report_export():
         date_to_raw=date_to,
     )
 
-    rows = build_pais_export_rows(report)
     board = get_ticket_board(board_slug)
+    rows = build_ticket_board_export_rows(report)
+    export_config = ticket_board_export_config(board_slug)
+    csv_rows = [export_config["row_mapper"](row) for row in rows]
 
     if export_format == "pdf":
         pdf_buffer = build_pdf_buffer(
@@ -4762,9 +4806,9 @@ def pais_tickets_report_export():
                 ("Status", report.get("status") or "All"),
                 ("Rows", len(rows)),
             ],
-            headers=["#", "Terminal Number", "Address"],
-            rows=[[row["counter"], row["terminal_number"], row["address"]] for row in rows] or [["-", "-", "No rows found for this report."]],
-            rtl_columns={2},
+            headers=export_config["headers"],
+            rows=[export_config["pdf_row_mapper"](row) for row in rows] or [["-", "-", "No rows found for this report."]],
+            rtl_columns=export_config["rtl_columns"],
             emphasis_columns={0},
             emphasis_meta_labels={"Dates", "Rows"},
         )
@@ -4776,11 +4820,15 @@ def pais_tickets_report_export():
         )
 
     csv_text = io.StringIO()
-    writer = csv.DictWriter(csv_text, fieldnames=["counter", "terminal_number", "address"])
+    writer = csv.DictWriter(csv_text, fieldnames=export_config["csv_fields"])
     writer.writeheader()
-    for row in rows:
+    for row in csv_rows:
         writer.writerow(row)
-    writer.writerow({"counter": "TOTAL", "terminal_number": len(rows), "address": ""})
+    total_row = {field_name: "" for field_name in export_config["csv_fields"]}
+    total_row[export_config["csv_fields"][0]] = "TOTAL"
+    if len(export_config["csv_fields"]) > 1:
+        total_row[export_config["csv_fields"][1]] = len(rows)
+    writer.writerow(total_row)
 
     output = io.BytesIO(("\ufeff" + csv_text.getvalue()).encode("utf-8"))
     output.seek(0)

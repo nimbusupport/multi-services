@@ -122,8 +122,20 @@ class SupportTicketsTestCase(unittest.TestCase):
 
         if "reportlab.lib.styles" not in sys.modules:
             styles = types.ModuleType("reportlab.lib.styles")
-            styles.ParagraphStyle = lambda *args, **kwargs: {"args": args, "kwargs": kwargs}
-            styles.getSampleStyleSheet = lambda: {}
+
+            class FakeParagraphStyle:
+                def __init__(self, name, parent=None, **kwargs):
+                    self.name = name
+                    self.parent = parent
+                    for key, value in kwargs.items():
+                        setattr(self, key, value)
+
+            styles.ParagraphStyle = FakeParagraphStyle
+            styles.getSampleStyleSheet = lambda: {
+                "Normal": FakeParagraphStyle("Normal"),
+                "Heading1": FakeParagraphStyle("Heading1"),
+                "BodyText": FakeParagraphStyle("BodyText"),
+            }
             sys.modules["reportlab.lib.styles"] = styles
 
         if "reportlab.lib.units" not in sys.modules:
@@ -153,9 +165,28 @@ class SupportTicketsTestCase(unittest.TestCase):
         if "reportlab.platypus" not in sys.modules:
             platypus = types.ModuleType("reportlab.platypus")
             platypus.Paragraph = lambda *args, **kwargs: ("Paragraph", args, kwargs)
-            platypus.SimpleDocTemplate = object
+
+            class FakeSimpleDocTemplate:
+                def __init__(self, buffer, *args, **kwargs):
+                    self.buffer = buffer
+                    self.args = args
+                    self.kwargs = kwargs
+
+                def build(self, story, *args, **kwargs):
+                    self.buffer.write(b"%PDF-FAKE")
+
+            class FakeTable:
+                def __init__(self, *args, **kwargs):
+                    self.args = args
+                    self.kwargs = kwargs
+                    self.styles = []
+
+                def setStyle(self, style):
+                    self.styles.append(style)
+
+            platypus.SimpleDocTemplate = FakeSimpleDocTemplate
             platypus.Spacer = lambda *args, **kwargs: ("Spacer", args, kwargs)
-            platypus.Table = lambda *args, **kwargs: ("Table", args, kwargs)
+            platypus.Table = FakeTable
             platypus.TableStyle = lambda *args, **kwargs: ("TableStyle", args, kwargs)
             platypus.Image = lambda *args, **kwargs: ("Image", args, kwargs)
             sys.modules["reportlab.platypus"] = platypus
@@ -1009,6 +1040,78 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertIn("pais_tickets_monthly_", response.headers["Content-Disposition"])
         body = response.data.decode("utf-8-sig")
         self.assertIn("1,3001,C", body)
+
+    def test_hot_csv_export_contains_call_number_and_customer_name(self):
+        self.app_module.israel_now = lambda: datetime(2026, 7, 15, 10, 0, tzinfo=ZoneInfo("Asia/Jerusalem"))
+        tickets = self.app_module.load_support_tickets()
+        tickets.append({
+            "id": 2,
+            "board_slug": "hot-kiryot",
+            "created_at": "2026-07-08T09:00:00+03:00",
+            "created_at_display": "08/07/2026 09:00",
+            "creator": "Admin",
+            "ticket_type": "שירות",
+            "service_type": self.app_module.TICKET_BOARD_DEFAULTS["hot-kiryot"]["name"],
+            "domain": "",
+            "priority": "Medium",
+            "description": "",
+            "solution": "",
+            "status": "ממתין לתיאום",
+            "assigned_to": "נסטיה",
+            "details": {
+                "call_number": "275749117",
+                "customer_name": "חיים",
+                "address": "נתניה",
+            },
+            "attachments": [],
+            "updates": [],
+        })
+        self.app_module.save_support_tickets(tickets)
+
+        self.login("admin@nimbusip.com")
+        response = self.client.get("/pais-tickets-report-export?board=hot-kiryot&period=monthly&format=csv")
+
+        self.assertEqual(response.status_code, 200)
+        body = response.data.decode("utf-8-sig")
+        self.assertIn("counter,call_number,customer_name", body)
+        self.assertIn("1,275749117,חיים", body)
+        self.assertIn("TOTAL,1,", body)
+
+    def test_hot_pdf_export_downloads_attachment(self):
+        self.app_module.israel_now = lambda: datetime(2026, 7, 15, 10, 0, tzinfo=ZoneInfo("Asia/Jerusalem"))
+        tickets = self.app_module.load_support_tickets()
+        tickets.append({
+            "id": 2,
+            "board_slug": "hot-kiryot",
+            "created_at": "2026-07-08T09:00:00+03:00",
+            "created_at_display": "08/07/2026 09:00",
+            "creator": "Admin",
+            "ticket_type": "שירות",
+            "service_type": self.app_module.TICKET_BOARD_DEFAULTS["hot-kiryot"]["name"],
+            "domain": "",
+            "priority": "Medium",
+            "description": "",
+            "solution": "",
+            "status": "ממתין לתיאום",
+            "assigned_to": "נסטיה",
+            "details": {
+                "call_number": "275749117",
+                "customer_name": "חיים",
+                "address": "נתניה",
+            },
+            "attachments": [],
+            "updates": [],
+        })
+        self.app_module.save_support_tickets(tickets)
+
+        self.login("admin@nimbusip.com")
+        response = self.client.get("/pais-tickets-report-export?board=hot-kiryot&period=monthly&format=pdf")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.mimetype, "application/pdf")
+        self.assertTrue(response.headers["Content-Disposition"].startswith("attachment;"))
+        self.assertIn(".pdf", response.headers["Content-Disposition"])
+        self.assertTrue(response.data.startswith(b"%PDF"))
 
     def test_features_pdf_export_downloads_attachment(self):
         self.app_module.get_feature_report_counts = lambda month: {
