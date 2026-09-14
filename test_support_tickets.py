@@ -7,6 +7,7 @@ import tempfile
 import types
 import unittest
 from datetime import datetime
+from urllib.parse import parse_qs, unquote, urlparse
 from zoneinfo import ZoneInfo
 
 
@@ -2527,6 +2528,47 @@ class SupportTicketsTestCase(unittest.TestCase):
 
         self.assertIsNotNone(calendar_link)
         self.assertIn("add=golan%40nimbusip.com", calendar_link)
+
+    def test_new_worker_coordination_calendar_link_includes_worker_guest_email(self):
+        calendar_link = self.app_module.build_pais_google_calendar_link({
+            "id": 45,
+            "details": {
+                "terminal_number": "5678",
+                "address": "Worker road 5",
+                "customer_request": "Need installer",
+                "coordinated_worker": "איציק",
+                "visit_date": "2026-07-10",
+                "visit_hour_from": "11:00",
+                "visit_hour_to": "12:00",
+            },
+        })
+
+        self.assertIsNotNone(calendar_link)
+        self.assertIn("add=isaace%40nimbusip.com", calendar_link)
+
+    def test_calendar_link_includes_address_and_contact_details(self):
+        calendar_link = self.app_module.build_pais_google_calendar_link({
+            "id": 46,
+            "board_slug": "pais",
+            "details": {
+                "terminal_number": "9988",
+                "address": "Email street 4",
+                "contact_name": "Dana",
+                "contact_phone": "0501234567",
+                "customer_request": "Need visit",
+                "coordinated_worker": "אסף",
+                "visit_date": "2026-07-09",
+                "visit_hour_from": "09:00",
+                "visit_hour_to": "10:00",
+            },
+        })
+
+        self.assertIsNotNone(calendar_link)
+        query = parse_qs(urlparse(calendar_link).query)
+        details_value = unquote(query["details"][0])
+        self.assertIn("כתובת: Email street 4", details_value)
+        self.assertIn("איש קשר: Dana 0501234567", details_value)
+        self.assertEqual(query["location"][0], "Email street 4")
 
     def test_hot_coordination_changes_trigger_notification_email(self):
         tickets = self.app_module.load_support_tickets()

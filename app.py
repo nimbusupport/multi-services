@@ -350,6 +350,10 @@ PAIS_NOTIFICATION_FROM = (
 PAIS_CALENDAR_GUEST_EMAILS = {
     "גולן": "golan@nimbusip.com",
     "אסף": "assafh@nimbusip.com",
+    "מוסטפה.ח": "pelecom2016@gmail.com",
+    "מוסטפה.א": "mostpc55@gmail.com",
+    "איציק": "isaace@nimbusip.com",
+    "זורה": "zura@nimbusip.com",
 }
 SMTP_HOST = (os.environ.get("SMTP_HOST") or "").strip()
 SMTP_PORT = int((os.environ.get("SMTP_PORT") or "587").strip())
@@ -2198,12 +2202,40 @@ def _pais_email_multiline_html(value):
     return xml_escape(_pais_email_value(value)).replace("\n", "<br>")
 
 
+def coordination_ticket_calendar_contact(ticket):
+    details = ticket.get("details") or {}
+    board_slug = (ticket.get("board_slug") or "").strip().lower()
+    if board_slug == "support":
+        return (details.get("service_contact") or "").strip()
+    if board_slug == "hot-kiryot":
+        primary = (details.get("on_site_contact") or "").strip()
+        secondary = (details.get("technical_contact") or "").strip()
+        if primary and secondary and primary != secondary:
+            return f"{primary} | {secondary}"
+        return primary or secondary
+    name = (details.get("contact_name") or "").strip()
+    phone = (details.get("contact_phone") or "").strip()
+    if name and phone:
+        return f"{name} {phone}"
+    return name or phone
+
+
+def coordination_ticket_calendar_address(ticket):
+    details = ticket.get("details") or {}
+    board_slug = (ticket.get("board_slug") or "").strip().lower()
+    if board_slug == "support":
+        return (details.get("service_address") or details.get("address") or "").strip()
+    return (details.get("address") or "").strip()
+
+
 def coordination_ticket_email_context(ticket):
     board_slug = (ticket.get("board_slug") or "").strip().lower()
     board = get_ticket_board(board_slug)
     board_name = (ticket.get("service_type") or board["name"]).strip() or board["name"]
     ticket_label = ticket.get("ticket_id") or f"#{int(ticket.get('id') or 0):04d}"
     details = ticket.get("details") or {}
+    calendar_contact = coordination_ticket_calendar_contact(ticket)
+    calendar_address = coordination_ticket_calendar_address(ticket)
 
     top_rows = [
         ("מספר קריאה", ticket_label),
@@ -2238,11 +2270,12 @@ def coordination_ticket_email_context(ticket):
             f"סוג לקוח: {(details.get('customer_type') or '').strip() or '-'}",
             f"שם העסק: {(details.get('business_name') or '').strip() or '-'}",
             f"תיאור: {(ticket.get('description') or '').strip() or '-'}",
-            f"כתובת: {(details.get('service_address') or '').strip() or '-'}",
+            f"כתובת: {calendar_address or '-'}",
+            f"איש קשר: {calendar_contact or '-'}",
             f"טכנאי מתואם: {(details.get('coordinated_worker') or '').strip() or '-'}",
         ]
         calendar_summary = f"קריאת שירות נימבוס {ticket_label}"
-        location = (details.get("service_address") or details.get("address") or "").strip() or "נימבוס"
+        location = calendar_address or "נימבוס"
         subject = f"קריאת שירות נימבוס מס' קריאה : {ticket_label}"
     elif board_slug == "hot-kiryot":
         detail_rows = [
@@ -2272,11 +2305,12 @@ def coordination_ticket_email_context(ticket):
             f"מספר קריאה: {ticket_label}",
             f"לקוח: {(details.get('customer_name') or '').strip() or '-'}",
             f"מהות התקלה: {(details.get('issue_summary') or '').strip() or '-'}",
-            f"כתובת: {(details.get('address') or '').strip() or '-'}",
+            f"כתובת: {calendar_address or '-'}",
+            f"איש קשר: {calendar_contact or '-'}",
             f"טכנאי מתואם: {(details.get('coordinated_worker') or '').strip() or '-'}",
         ]
         calendar_summary = f"קריאת שירות הוט קריאות {ticket_label}"
-        location = (details.get("address") or "").strip() or "הוט קריאות"
+        location = calendar_address or "הוט קריאות"
         subject = f"קריאת שירות הוט קריאות מס' קריאה : {ticket_label}"
     else:
         terminal_number = (details.get("terminal_number") or "").strip()
@@ -2300,11 +2334,12 @@ def coordination_ticket_email_context(ticket):
             f"מספר קריאה: {ticket_label}",
             f"מספר מסוף: {terminal_number or '-'}",
             f"פניית לקוח: {(details.get('customer_request') or '').strip() or '-'}",
-            f"כתובת: {(details.get('address') or '').strip() or '-'}",
+            f"כתובת: {calendar_address or '-'}",
+            f"איש קשר: {calendar_contact or '-'}",
             f"טכנאי מתואם: {(details.get('coordinated_worker') or '').strip() or '-'}",
         ]
         calendar_summary = f"קריאת שירות מפעל הפיס {ticket_label}"
-        location = (details.get("address") or "").strip() or "מפעל הפיס"
+        location = calendar_address or "מפעל הפיס"
         subject = f"קריאת שירות מפעל הפיס מס' קריאה : {ticket_label}"
 
     return {
