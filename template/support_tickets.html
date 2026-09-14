@@ -314,8 +314,21 @@
       </section>
       {% endif %}
 
-      <section class="ticket-list" id="ticket-list"></section>
-      <div class="tickets-empty" id="tickets-empty">No tickets found</div>
+      <div class="ticket-list-stage" id="ticket-list-stage">
+        <div class="tickets-loading" id="tickets-loading" hidden aria-live="polite" aria-busy="true">
+          <div class="tickets-loading-copy">
+            <span class="tickets-loading-spinner" aria-hidden="true"></span>
+            <strong>Loading tickets...</strong>
+          </div>
+          <div class="tickets-loading-skeleton" aria-hidden="true">
+            <div class="tickets-loading-row"></div>
+            <div class="tickets-loading-row"></div>
+            <div class="tickets-loading-row"></div>
+          </div>
+        </div>
+        <section class="ticket-list" id="ticket-list"></section>
+        <div class="tickets-empty" id="tickets-empty">No tickets found</div>
+      </div>
     </section>
   </main>
 

@@ -671,6 +671,57 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertEqual(calls[0]["json_body"][0]["slug"], "hot-kiryot")
         self.assertEqual(calls[1]["path"], "support_tickets")
 
+    def test_support_tickets_data_still_loads_when_supabase_attachment_queries_fail(self):
+        original_request = self.app_module._supabase_request
+        self.app_module.SUPABASE_URL = "https://supabase.example"
+        self.app_module.SUPABASE_KEY = "service-key"
+
+        class FakeResponse:
+            def __init__(self, payload):
+                self._payload = payload
+
+            def json(self):
+                return self._payload
+
+        def fake_supabase_request(method, path, *, params=None, json_body=None, prefer=None):
+            if path == "support_tickets":
+                return FakeResponse([{
+                    "id": 22,
+                    "board_slug": "pais",
+                    "created_at": "2026-07-08T09:00:00+03:00",
+                    "created_at_display": "08/07/2026 09:00",
+                    "creator": "Admin",
+                    "ticket_type": "שירות",
+                    "service_type": "מפעל הפיס",
+                    "domain": "",
+                    "priority": "Medium",
+                    "description": "",
+                    "solution": "",
+                    "status": "ממתין",
+                    "assigned_to": "",
+                    "details": {
+                        "terminal_number": "603884",
+                        "address": "בדיקה 6",
+                    },
+                }])
+            if path in {"ticket_attachments", "ticket_updates"}:
+                raise RuntimeError(f"{path} unavailable")
+            raise AssertionError(f"Unexpected Supabase path: {path}")
+
+        self.app_module._supabase_request = fake_supabase_request
+        self.login("admin@nimbusip.com")
+        try:
+            response = self.client.get("/support-tickets-data?board=pais")
+        finally:
+            self.app_module._supabase_request = original_request
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(len(payload["tickets"]), 1)
+        self.assertEqual(payload["tickets"][0]["id"], 22)
+        self.assertEqual(payload["tickets"][0]["attachments"], [])
+        self.assertEqual(payload["tickets"][0]["updates"], [])
+
     def test_can_create_ticket_with_multiple_image_attachments(self):
         self.login("admin@nimbusip.com")
         response = self.client.post(

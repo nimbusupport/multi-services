@@ -404,6 +404,22 @@ function clearCoordinationValidation() {
   setFieldInvalid(document.getElementById("detail-visit-hour-to"), false);
 }
 
+function setTicketsLoading(isLoading) {
+  const stage = document.getElementById("ticket-list-stage");
+  const loading = document.getElementById("tickets-loading");
+  const empty = document.getElementById("tickets-empty");
+  const showBlockingLoader = Boolean(isLoading) && lastTickets.length === 0;
+  if (stage) {
+    stage.classList.toggle("is-loading", showBlockingLoader);
+  }
+  if (loading) {
+    loading.hidden = !showBlockingLoader;
+  }
+  if (showBlockingLoader && empty) {
+    empty.style.display = "none";
+  }
+}
+
 function renderStats(stats) {
   const statAll = document.getElementById("stat-all");
   const statUnassigned = document.getElementById("stat-unassigned");
@@ -449,10 +465,10 @@ function renderTickets(tickets, users) {
             class="ticket-attachment-indicator"
             type="button"
             data-image-url="${escapeHtml(firstAttachment.url)}"
-            title="${attachmentCount > 1 ? `${attachmentCount} images attached` : "1 image attached"}"
-            aria-label="${attachmentCount > 1 ? `${attachmentCount} images attached` : "1 image attached"}"
+            title="${attachmentCount > 1 ? `${attachmentCount} files attached` : "1 file attached"}"
+            aria-label="${attachmentCount > 1 ? `${attachmentCount} files attached` : "1 file attached"}"
           >
-            <i class="fa-regular fa-image"></i>
+            <i class="fa-solid fa-paperclip"></i>
             <span>${escapeHtml(attachmentCount)}</span>
           </button>
         ` : ""}
@@ -1147,8 +1163,8 @@ function openTicketDetail(ticketId) {
     ? attachments.map((file, index) => `
         <div class="detail-attachment-item">
           <button class="detail-image-btn" type="button" data-image-url="${escapeHtml(file.url)}">
-            <i class="fa-regular fa-image"></i>
-            <span>Image ${index + 1}</span>
+            <i class="fa-solid fa-paperclip"></i>
+            <span>File ${index + 1}</span>
           </button>
           <button
             class="detail-attachment-delete"
@@ -1156,7 +1172,7 @@ function openTicketDetail(ticketId) {
             data-ticket-id="${escapeHtml(ticket.id)}"
             data-folder="${escapeHtml(file.folder || "")}"
             data-saved-name="${escapeHtml(file.saved_name || "")}"
-            title="Delete image"
+            title="Delete file"
           >
             <i class="fa-solid fa-trash"></i>
           </button>
@@ -1274,6 +1290,7 @@ function closeImagePreview() {
 async function loadTickets() {
   if (ticketsLoading) return;
   ticketsLoading = true;
+  setTicketsLoading(true);
   const params = new URLSearchParams({
     board: boardSlug,
     scope: currentScope,
@@ -1294,6 +1311,7 @@ async function loadTickets() {
     document.getElementById("next-ticket-id").textContent = data.next_id || "#0001";
   } finally {
     ticketsLoading = false;
+    setTicketsLoading(false);
   }
 }
 
@@ -2287,10 +2305,10 @@ function renderTickets(tickets, users) {
             class="ticket-attachment-indicator"
             type="button"
             data-image-url="${escapeHtml(firstAttachment.url)}"
-            title="${attachmentCount > 1 ? `${attachmentCount} images attached` : "1 image attached"}"
-            aria-label="${attachmentCount > 1 ? `${attachmentCount} images attached` : "1 image attached"}"
+            title="${attachmentCount > 1 ? `${attachmentCount} files attached` : "1 file attached"}"
+            aria-label="${attachmentCount > 1 ? `${attachmentCount} files attached` : "1 file attached"}"
           >
-            <i class="fa-regular fa-image"></i>
+            <i class="fa-solid fa-paperclip"></i>
             <span>${escapeHtml(attachmentCount)}</span>
           </button>
         ` : ""}
@@ -2839,8 +2857,8 @@ function openTicketDetail(ticketId) {
         <div class="detail-attachment-item">
           ${isImageAttachment(file)
             ? `<button class="detail-image-btn" type="button" data-image-url="${escapeHtml(file.url)}">
-                <i class="fa-regular fa-image"></i>
-                <span>${escapeHtml(file.original_name || `Image ${index + 1}`)}</span>
+                <i class="fa-solid fa-paperclip"></i>
+                <span>${escapeHtml(file.original_name || `File ${index + 1}`)}</span>
               </button>`
             : `<a class="detail-file-btn" href="${escapeHtml(file.url)}" download>
                 <i class="fa-regular fa-file-pdf"></i>
@@ -2852,7 +2870,7 @@ function openTicketDetail(ticketId) {
             data-ticket-id="${escapeHtml(ticket.id)}"
             data-folder="${escapeHtml(file.folder || "")}"
             data-saved-name="${escapeHtml(file.saved_name || "")}"
-            title="Delete image"
+            title="Delete file"
             ${canDeleteTicketAttachments ? "" : "hidden"}
           >
             <i class="fa-solid fa-trash"></i>

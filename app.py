@@ -1266,24 +1266,34 @@ def _load_supabase_tickets(board_slug=None):
 
     ticket_ids = [str(int(ticket.get("id") or 0)) for ticket in ticket_rows if int(ticket.get("id") or 0) > 0]
     id_filter = f"in.({','.join(ticket_ids)})"
-    attachments = _supabase_request(
-        "GET",
-        "ticket_attachments",
-        params={
-            "select": "ticket_id,original_name,saved_name,folder,url",
-            "ticket_id": id_filter,
-            "order": "id.asc",
-        },
-    ).json()
-    updates = _supabase_request(
-        "GET",
-        "ticket_updates",
-        params={
-            "select": "ticket_id,changed_at,actor,field_name,old_value,new_value",
-            "ticket_id": id_filter,
-            "order": "id.asc",
-        },
-    ).json()
+    attachments = []
+    try:
+        attachments = _supabase_request(
+            "GET",
+            "ticket_attachments",
+            params={
+                "select": "ticket_id,original_name,saved_name,folder,url",
+                "ticket_id": id_filter,
+                "order": "id.asc",
+            },
+        ).json()
+    except Exception as exc:
+        print(f"Supabase ticket attachments warning for board {board_slug or 'all'}: {exc}")
+
+    updates = []
+    try:
+        updates = _supabase_request(
+            "GET",
+            "ticket_updates",
+            params={
+                "select": "ticket_id,changed_at,actor,field_name,old_value,new_value",
+                "ticket_id": id_filter,
+                "order": "id.asc",
+            },
+        ).json()
+    except Exception as exc:
+        print(f"Supabase ticket updates warning for board {board_slug or 'all'}: {exc}")
+
     return _merge_supabase_ticket_rows(ticket_rows, attachments, updates)
 
 
@@ -1291,8 +1301,8 @@ def load_support_tickets(board_slug=None):
     if supabase_ticketing_enabled():
         try:
             return _load_supabase_tickets(board_slug=board_slug)
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"Supabase ticket load warning for board {board_slug or 'all'}: {exc}")
 
     ensure_support_log_file()
     tickets = []

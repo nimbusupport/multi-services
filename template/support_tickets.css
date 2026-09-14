@@ -639,6 +639,71 @@ textarea {
   gap: 10px;
 }
 
+.ticket-list-stage {
+  position: relative;
+  min-height: 220px;
+}
+
+.ticket-list-stage.is-loading .ticket-list,
+.ticket-list-stage.is-loading .tickets-empty {
+  opacity: 0.28;
+}
+
+.tickets-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  padding: 12px 0;
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(251, 250, 247, 0.96) 0%, rgba(245, 241, 234, 0.92) 100%);
+  backdrop-filter: blur(2px);
+}
+
+.tickets-loading[hidden] {
+  display: none;
+}
+
+.tickets-loading-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  margin-inline: auto;
+  border: 1px solid #d8cfc1;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #4a433b;
+  font-weight: 800;
+}
+
+.tickets-loading-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid #d4e1de;
+  border-top-color: #2874b8;
+  border-radius: 50%;
+  animation: tickets-spin 0.85s linear infinite;
+}
+
+.tickets-loading-skeleton {
+  display: grid;
+  gap: 10px;
+}
+
+.tickets-loading-row {
+  height: 82px;
+  border: 1px solid #e1d8ca;
+  border-radius: 10px;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.72) 50%, rgba(255, 255, 255, 0) 100%),
+    linear-gradient(180deg, #f1ebe2 0%, #ece4d8 100%);
+  background-size: 240px 100%, 100% 100%;
+  animation: tickets-shimmer 1.15s ease-in-out infinite;
+}
+
 .ticket-row {
   display: grid;
   grid-template-columns: 86px minmax(220px, 1fr) 56px 132px 132px minmax(148px, auto) minmax(196px, auto);
@@ -833,6 +898,21 @@ textarea {
   border: 1px dashed #d8cfc1;
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.56);
+}
+
+@keyframes tickets-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes tickets-shimmer {
+  0% {
+    background-position: -240px 0, 0 0;
+  }
+  100% {
+    background-position: calc(100% + 240px) 0, 0 0;
+  }
 }
 
 .ticket-modal {
