@@ -132,6 +132,7 @@ def install_import_stubs():
 
     if "reportlab.platypus" not in sys.modules:
         platypus = types.ModuleType("reportlab.platypus")
+        platypus.Image = lambda *args, **kwargs: {"args": args, "kwargs": kwargs}
         platypus.Paragraph = lambda *args, **kwargs: {"args": args, "kwargs": kwargs}
         platypus.SimpleDocTemplate = object
         platypus.Spacer = lambda *args, **kwargs: {"args": args, "kwargs": kwargs}
@@ -205,6 +206,7 @@ class SmsStatusDoneTests(unittest.TestCase):
         self.original_inforu_table_cache = self.app_module._INFORU_LOG_TABLE_CACHE
         self.original_parse_local_inforu_log_entries = self.app_module.parse_local_inforu_log_entries
         self.original_append_local_inforu_log_entries = self.app_module.append_local_inforu_log_entries
+        self.original_inforu_sent_numbers = self.app_module.inforu_sent_numbers
         self.original_token_inforu = self.app_module.TOKEN_INFORU
         self.original_requests_post = self.app_module.requests.post
 
@@ -220,6 +222,7 @@ class SmsStatusDoneTests(unittest.TestCase):
         self.app_module._INFORU_LOG_TABLE_CACHE = self.original_inforu_table_cache
         self.app_module.parse_local_inforu_log_entries = self.original_parse_local_inforu_log_entries
         self.app_module.append_local_inforu_log_entries = self.original_append_local_inforu_log_entries
+        self.app_module.inforu_sent_numbers = self.original_inforu_sent_numbers
         self.app_module.TOKEN_INFORU = self.original_token_inforu
         self.app_module.requests.post = self.original_requests_post
         if self.original_gspread_utils is None:
@@ -312,6 +315,150 @@ class SmsStatusDoneTests(unittest.TestCase):
             spreadsheet.cgr.updates,
             [{"range": "C7:E7", "values": [["6404", today, True]]}],
         )
+
+    def test_load_data_marks_empty_sms_text_as_not_transferred_and_hides_row(self):
+        class FakeSmsWorksheet:
+            def __init__(self, rows):
+                self.rows = rows
+                self.updates = []
+
+            def get_all_values(self):
+                return self.rows
+
+            def batch_update(self, updates):
+                self.updates.extend(updates)
+
+        class FakeCgrWorksheet:
+            def get(self, _range):
+                return [["0772135377", "TRUE", ""]]
+
+        class FakeSpreadsheet:
+            def __init__(self, app_module):
+                self.app_module = app_module
+                self.sms = FakeSmsWorksheet(
+                    [
+                        ["name", "id", "", "", "", "", "", "status", "", "text", "k"],
+                        ["Empty Text Customer", "123", "", "", "", "", "", app_module.STATUS_PENDING, "", "", app_module.K_REQUIRED_VALUE],
+                        ["Ready Customer", "456", "", "", "", "", "", app_module.STATUS_PENDING, "", "Hello SMS", app_module.K_REQUIRED_VALUE],
+                    ]
+                )
+                self.cgr = FakeCgrWorksheet()
+
+            def worksheet(self, name):
+                if name == self.app_module.SHEET_NAME:
+                    return self.sms
+                if name == self.app_module.CGR_SHEET_NAME:
+                    return self.cgr
+                raise AssertionError(f"Unexpected worksheet request: {name}")
+
+        class FakeClient:
+            def __init__(self, spreadsheet):
+                self.spreadsheet = spreadsheet
+
+            def open_by_key(self, key):
+                self.last_key = key
+                return self.spreadsheet
+
+        spreadsheet = FakeSpreadsheet(self.app_module)
+        self.app_module.get_gspread_client = lambda: FakeClient(spreadsheet)
+        self.app_module.inforu_sent_numbers = lambda: set()
+        self.app_module.gspread.utils = types.SimpleNamespace(
+            rowcol_to_a1=lambda row, col: f"{chr(64 + col)}{row}"
+        )
+
+        self.login()
+        response = self.client.get("/load-data")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(len(payload["customers"]), 1)
+        self.assertEqual(payload["customers"][0]["name"], "Ready Customer")
+        self.assertEqual(payload["customers"][0]["text"], "Hello SMS")
+        self.assertEqual(payload["customers"][0]["numbercgr"], "0772135377")
+        self.assertEqual(
+            spreadsheet.sms.updates,
+            [{"range": "H2", "values": [[self.app_module.STATUS_NO_SMS_TEXT]]}],
+        )
+
+    def test_export_marks_empty_sms_text_as_not_transferred(self):
+        class FakeWorksheet:
+            def __init__(self):
+                self.updates = []
+
+            def batch_update(self, updates):
+                self.updates.extend(updates)
+
+        class FakeSpreadsheet:
+            def __init__(self, app_module):
+                self.app_module = app_module
+                self.sms = FakeWorksheet()
+                self.cgr = FakeWorksheet()
+
+            def worksheet(self, name):
+                if name == self.app_module.SHEET_NAME:
+                    return self.sms
+                if name == self.app_module.CGR_SHEET_NAME:
+                    return self.cgr
+                raise AssertionError(f"Unexpected worksheet request: {name}")
+
+        class FakeClient:
+            def __init__(self, spreadsheet):
+                self.spreadsheet = spreadsheet
+
+            def open_by_key(self, key):
+                self.last_key = key
+                return self.spreadsheet
+
+        today = datetime.now().strftime("%Y-%m-%d")
+        spreadsheet = FakeSpreadsheet(self.app_module)
+        self.app_module.get_gspread_client = lambda: FakeClient(spreadsheet)
+        self.app_module.gspread.utils = types.SimpleNamespace(
+            rowcol_to_a1=lambda row, col: f"{chr(64 + col)}{row}"
+        )
+
+        response = self.client.post(
+            "/export",
+            json=[
+                {
+                    "Domain": "6404",
+                    "DID": "046116362",
+                    "NumberCGR": "5467890",
+                    "cgr_row": 7,
+                    "Text": "",
+                    "Name": "Client One",
+                    "sheet_row": 5,
+                },
+                {
+                    "Domain": "6405",
+                    "DID": "046116363",
+                    "NumberCGR": "05467891",
+                    "cgr_row": 8,
+                    "Text": "Hello",
+                    "Name": "Client Two",
+                    "sheet_row": 6,
+                },
+            ],
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            spreadsheet.sms.updates,
+            [{"range": "H5", "values": [[self.app_module.STATUS_NO_SMS_TEXT]]}],
+        )
+        self.assertEqual(
+            spreadsheet.cgr.updates,
+            [
+                {"range": "C7:E7", "values": [["6404", today, True]]},
+                {"range": "C8:E8", "values": [["6405", today, True]]},
+            ],
+        )
+        self.assertEqual(response.headers["X-SMS-Empty-Text-Status-Count"], "1")
+
+        lines = response.data.decode("utf-8-sig").splitlines()
+        self.assertEqual(lines[0], "name,caller_id_number,number,template")
+        self.assertEqual(lines[1], "6404,046116362,05467890,")
+        self.assertEqual(lines[2], "6405,046116363,05467891,Hello")
 
     def test_inforu_log_data_returns_supabase_entries(self):
         self.app_module.SUPABASE_URL = "https://example.supabase.co"

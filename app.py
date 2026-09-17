@@ -211,6 +211,7 @@ COL_K = 11         # K
 
 STATUS_PENDING = "\u05de\u05de\u05ea\u05d9\u05df"
 STATUS_DONE = "\u05d1\u05d5\u05e6\u05e2"
+STATUS_NO_SMS_TEXT = "\u05dc\u05d0 \u05d4\u05d5\u05e2\u05d1\u05e8 \u05e0\u05d5\u05e1\u05d7"
 STATUS_NOT_INTERESTED = "\u05dc\u05d0 \u05de\u05e2\u05d5\u05e0\u05d9\u05d9\u05df"
 K_REQUIRED_VALUE = "\u05dc\u05e7\u05d5\u05d7 \u05d4\u05d5\u05ea\u05e7\u05df"
 
@@ -3456,6 +3457,7 @@ def get_pending_customers():
 
     rows = data[1:]
     pending = []
+    missing_text_rows = []
 
     for i, row in enumerate(rows, start=2):
         status = row[COL_STATUS - 1].strip() if len(row) >= COL_STATUS else ""
@@ -3468,6 +3470,10 @@ def get_pending_customers():
         idnumber = row[COL_IDNUMBER - 1].strip() if len(row) >= COL_IDNUMBER else ""
         sms_text = row[COL_SMS_TEXT - 1].strip() if len(row) >= COL_SMS_TEXT else ""
 
+        if not sms_text:
+            missing_text_rows.append(i)
+            continue
+
         pending.append({
             "sheet_row": i,
             "name": name,
@@ -3475,6 +3481,18 @@ def get_pending_customers():
             "text": sms_text,
             "status": status
         })
+
+    if missing_text_rows:
+        try:
+            ws.batch_update([
+                {
+                    "range": gspread.utils.rowcol_to_a1(row_number, COL_STATUS),
+                    "values": [[STATUS_NO_SMS_TEXT]],
+                }
+                for row_number in missing_text_rows
+            ])
+        except Exception as exc:
+            print(f"SMS missing-text status update warning: {exc}")
 
     # Attach NumberCGR from ׳—׳™׳₪_׳¡׳׳¡ (ONLY rows where column C empty)
     try:
@@ -5782,7 +5800,8 @@ def export_csv():
     
 
     rows_out = []
-    updates = []
+    cgr_updates = []
+    status_updates = []
 
     for r in data:
         if not isinstance(r, dict):
@@ -5793,6 +5812,7 @@ def export_csv():
         numbercgr = (r.get("NumberCGR") or "").strip()
         template_txt = (r.get("Text") or "").strip()
         cgr_row = int(r.get("cgr_row") or 0)
+        sheet_row = int(r.get("sheet_row") or 0)
 
         num_digits = digits_only(numbercgr)
         if num_digits:
@@ -5807,7 +5827,7 @@ def export_csv():
         )
         # Update ׳—׳™׳₪_׳¡׳׳¡ columns C:E with Domain, date, and used checkbox.
         if isinstance(cgr_row, int) and cgr_row >= 1 and domain:
-            updates.append({
+            cgr_updates.append({
                 "range": (
                     f"{gspread.utils.rowcol_to_a1(cgr_row, CGR_COL_DOMAIN)}:"
                     f"{gspread.utils.rowcol_to_a1(cgr_row, CGR_COL_USED)}"
@@ -5815,24 +5835,53 @@ def export_csv():
                 "values": [[domain, datetime.now().strftime("%Y-%m-%d"), True]]
             })
 
-    # Update Google Sheet ׳—׳™׳₪_׳¡׳׳¡
+        if isinstance(sheet_row, int) and sheet_row >= 2 and not template_txt:
+            status_updates.append({
+                "range": gspread.utils.rowcol_to_a1(sheet_row, COL_STATUS),
+                "values": [[STATUS_NO_SMS_TEXT]],
+            })
+
+    spreadsheet = None
     try:
-        if updates:
+        if cgr_updates or status_updates:
             client = get_gspread_client()
-            cgr_ws = client.open_by_key(SPREADSHEET_ID).worksheet(CGR_SHEET_NAME)
-            cgr_ws.batch_update(updates)
+            spreadsheet = client.open_by_key(SPREADSHEET_ID)
     except Exception as e:
-        print ("CGR UPDATE ERROR:", e)
-        print("CGR sheet updated successfully")
+        print("SHEET OPEN ERROR:", e)
 
-    df = pd.DataFrame(rows_out, columns=["name", "caller_id_number", "did", "template"])
-    df.rename(columns={"did": "number"}, inplace=True)
+    if spreadsheet and status_updates:
+        try:
+            ws = spreadsheet.worksheet(SHEET_NAME)
+            ws.batch_update(status_updates)
+        except Exception as e:
+            print("SMS STATUS UPDATE ERROR:", e)
 
-    output = io.BytesIO()
-    df.to_csv(output, index=False, encoding="utf-8-sig")
-    output.seek(0)
+    if spreadsheet and cgr_updates:
+        try:
+            cgr_ws = spreadsheet.worksheet(CGR_SHEET_NAME)
+            cgr_ws.batch_update(cgr_updates)
+        except Exception as e:
+            print("CGR UPDATE ERROR:", e)
 
-    return send_file(output, mimetype="text/csv", as_attachment=True, download_name="sms_export.csv")
+    output = io.StringIO(newline="")
+    writer = csv.DictWriter(output, fieldnames=["name", "caller_id_number", "number", "template"])
+    writer.writeheader()
+    for row in rows_out:
+        writer.writerow({
+            "name": row["name"],
+            "caller_id_number": row["caller_id_number"],
+            "number": row["did"],
+            "template": row["template"],
+        })
+
+    csv_bytes = io.BytesIO()
+    csv_bytes.write("\ufeff".encode("utf-8"))
+    csv_bytes.write(output.getvalue().encode("utf-8"))
+    csv_bytes.seek(0)
+
+    response = send_file(csv_bytes, mimetype="text/csv", as_attachment=True, download_name="sms_export.csv")
+    response.headers["X-SMS-Empty-Text-Status-Count"] = str(len(status_updates))
+    return response
 
 def normalize_voipappz_sms_url(url):
     if not url:

@@ -695,6 +695,8 @@ async function exportSelected(){
     return;
   }
 
+  const emptyTextCount = selected.filter(x => !(x.text || "").trim()).length;
+
   const exportData = selected.map(x => ({
     Domain: (x.domain || "").trim(),
     DID: (x.did || "").trim(),
@@ -729,6 +731,11 @@ async function exportSelected(){
     a.remove();
 
     setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+    await loadData();
+
+    if(emptyTextCount > 0){
+      showAppNotice(`Updated status to לא הועבר נוסח for ${emptyTextCount} customer(s) with empty SMS text.`, "info");
+    }
 
   }catch(e){
     alert("שגיאה ביצוא: " + e);
