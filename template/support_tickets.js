@@ -372,6 +372,44 @@ function coordinationSummary(ticket) {
   return parts.join(" | ");
 }
 
+function todayIsraelDateValue() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Jerusalem",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const getPart = (type) => parts.find((part) => part.type === type)?.value || "";
+  return `${getPart("year")}-${getPart("month")}-${getPart("day")}`;
+}
+
+function formatCoordinationVisitDate(dateValue) {
+  const value = String(dateValue || "").trim();
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return value;
+  const [, year, month, day] = match;
+  return `${day}/${month}/${year.slice(-2)}`;
+}
+
+function coordinationMetaMarkup(ticket) {
+  const details = ticketDetails(ticket);
+  const worker = String(details.coordinated_worker || "").trim();
+  const visitDate = String(details.visit_date || "").trim();
+  const hourRange = [details.visit_hour_from, details.visit_hour_to].filter(Boolean).join(" - ");
+  if (!worker && !visitDate && !hourRange) return "";
+
+  const isTodayVisit = Boolean(visitDate) && visitDate === todayIsraelDateValue();
+  const dateLabel = visitDate ? `${isTodayVisit ? "היום" : "ביקור"} | ${formatCoordinationVisitDate(visitDate)}` : "";
+
+  return `
+    <div class="ticket-meta-note ${isTodayVisit ? "is-today" : ""}">
+      ${worker ? `<span class="ticket-meta-note-line ticket-meta-note-worker">תואם: ${escapeHtml(worker)}</span>` : ""}
+      ${dateLabel ? `<span class="ticket-meta-note-line ticket-meta-note-date ${isTodayVisit ? "today" : ""}">${escapeHtml(dateLabel)}</span>` : ""}
+      ${hourRange ? `<span class="ticket-meta-note-line ticket-meta-note-hours">${escapeHtml(hourRange)}</span>` : ""}
+    </div>
+  `;
+}
+
 function applyReportQuickFilter(tickets) {
   if (!Array.isArray(tickets)) return [];
   if (reportQuickFilter === "done") {
@@ -451,7 +489,7 @@ function renderTickets(tickets, users) {
     const firstAttachment = Array.isArray(ticket.attachments) ? ticket.attachments[0] : null;
     const attachmentCount = Array.isArray(ticket.attachments) ? ticket.attachments.length : 0;
     const statusClass = statusClassName(ticket.status);
-    const coordinationText = coordinationSummary(ticket);
+    const coordinationMarkup = coordinationMetaMarkup(ticket);
 
     row.innerHTML = `
       <div class="ticket-id">${escapeHtml(ticket.ticket_id)}</div>
@@ -476,7 +514,7 @@ function renderTickets(tickets, users) {
       <div class="ticket-meta">
         <strong>${escapeHtml(ticketTypeLabel(ticket))}</strong><br>
         ${escapeHtml(ticket.creator)}<br>${escapeHtml(ticketListTimestamp(ticket))}
-        ${coordinationText ? `<div class="ticket-meta-note">${escapeHtml(coordinationText)}</div>` : ""}
+        ${coordinationMarkup || ""}
       </div>
       <select class="assignee-select" data-ticket-id="${ticket.id}" ${isNastyaQueuePage && ticket.board_slug === "pais" ? "disabled" : ""}>${assigneeOptions}</select>
       <select class="status-select" data-ticket-id="${ticket.id}" ${(isNastyaQueuePage && ticket.board_slug === "pais" && !canNastyaEditPaisInlineStatus(ticket)) ? "disabled" : ""}>${statusOptionsForTicket(ticket)}</select>
@@ -2291,7 +2329,7 @@ function renderTickets(tickets, users) {
     const firstAttachment = Array.isArray(ticket.attachments) ? ticket.attachments[0] : null;
     const attachmentCount = Array.isArray(ticket.attachments) ? ticket.attachments.length : 0;
     const statusClass = statusClassName(ticket.status);
-    const coordinationText = coordinationSummary(ticket);
+    const coordinationMarkup = coordinationMetaMarkup(ticket);
 
     row.innerHTML = `
       <div class="ticket-id">${escapeHtml(ticket.ticket_id)}</div>
@@ -2316,7 +2354,7 @@ function renderTickets(tickets, users) {
       <div class="ticket-meta">
         <strong>${escapeHtml(ticketTypeLabel(ticket))}</strong><br>
         ${escapeHtml(ticket.creator)}<br>${escapeHtml(ticketListTimestamp(ticket))}
-        ${coordinationText ? `<div class="ticket-meta-note">${escapeHtml(coordinationText)}</div>` : ""}
+        ${coordinationMarkup || ""}
       </div>
       <select class="assignee-select" data-ticket-id="${ticket.id}" ${(isAssignedTechnicianMode || (isNastyaQueuePage && isCoordinationTicket(ticket))) ? "disabled" : ""}>${assigneeOptions}</select>
       <select class="status-select" data-ticket-id="${ticket.id}" ${((isAssignedTechnicianMode && !technicianCanUpdate) || (isNastyaQueuePage && isCoordinationTicket(ticket) && !canNastyaEditPaisInlineStatus(ticket))) ? "disabled" : ""}>${statusOptionsForTicket(ticket)}</select>
@@ -3029,6 +3067,190 @@ function fillBoardFieldsFromPaste() {
   if (message) {
     message.textContent = filledCount > 0 ? `מולאו ${filledCount} שדות` : "לא זוהו שדות למילוי";
   }
+}
+
+function fieldReportSignatureStatusText(target) {
+  const dataValue = document.getElementById(fieldReportSignatureFieldId(target))?.value || "";
+  const label = target === "technician" ? "חתימת טכנאי" : "חתימת לקוח";
+  const optionalSuffix = target === "customer" ? " (לא חובה)" : "";
+  return dataValue ? `${label} נוספה` : `לא נוספה ${label}${optionalSuffix}`;
+}
+
+function renderPaisDetailSections(ticket) {
+  const details = ticketDetails(ticket);
+  const technicianMode = canAssignedTechnicianEditTicket(ticket);
+  const isCoordinatorView = isNastyaQueuePage;
+  const technicianOptions = ['<option value="">בחר עובד</option>']
+    .concat(technicianUsers.map((user) => `<option value="${escapeHtml(user)}" ${details.coordinated_worker === user ? "selected" : ""}>${escapeHtml(user)}</option>`))
+    .join("");
+  const showCoordination = isCoordinatorView || pageMode === "nastia" || normalizePendingStatus(ticket.status) === "ממתין לתיאום" || Boolean(details.coordinated_worker || details.visit_date || details.visit_hour_from || details.visit_hour_to);
+  const showFailureNotes = ticket.status === "נכשל";
+  const showCoordinatorStatus = isCoordinatorView && NASTYA_EDITABLE_STATUSES.includes(ticket.status);
+  const coordinatorStatusOptions = [
+    { value: ticket.status, label: displayTicketStatus(ticket) },
+    ...NASTYA_FINAL_STATUSES
+      .filter((status) => status !== ticket.status)
+      .map((status) => ({ value: status, label: status })),
+  ]
+    .map(({ value, label }) => `<option value="${escapeHtml(value)}" ${ticket.status === value ? "selected" : ""}>${escapeHtml(label)}</option>`)
+    .join("");
+
+  if (technicianMode) {
+    return `
+      ${detailSection("פניית לקוח", details.customer_request)}
+      <section class="detail-description detail-edit-card">
+        <h3>פעולות / טקסט חופשי</h3>
+        <textarea id="detail-actions-taken" rows="4" placeholder="לא חובה למלא">${escapeHtml(details.actions_taken || "")}</textarea>
+      </section>
+      ${fieldReportSummaryCard(ticket, true) || `
+      <section class="detail-description detail-edit-card">
+        <h3>החתמת לקוח</h3>
+        <div class="field-report-actions">
+          <button class="create-ticket-btn open-field-report-btn" type="button" data-ticket-id="${escapeHtml(ticket.id)}">
+            <i class="fa-solid fa-file-signature"></i><span>החתמת לקוח (לא חובה)</span>
+          </button>
+        </div>
+      </section>`}
+      <section class="detail-description detail-edit-card">
+        <h3>סטטוס</h3>
+        <select id="detail-status-select">
+          ${statusOptionsForTicket(ticket)}
+        </select>
+      </section>
+      <section class="detail-description detail-edit-card ${showFailureNotes ? "" : "hidden"}" id="detail-failure-notes-wrap">
+        <h3>הערות</h3>
+        <textarea id="detail-failure-notes" rows="4">${escapeHtml(details.failure_notes || "")}</textarea>
+      </section>
+      <div class="detail-save-row">
+        <span id="detail-save-message"></span>
+        <button class="create-ticket-btn" id="detail-save-btn" type="button">שמור</button>
+      </div>
+    `;
+  }
+
+  return `
+    ${detailSection("פניית לקוח", details.customer_request)}
+    <section class="detail-description detail-edit-card">
+      <h3>פעולות</h3>
+      <textarea id="detail-actions-taken" rows="4">${escapeHtml(details.actions_taken || "")}</textarea>
+    </section>
+    ${details.field_report ? fieldReportSummaryCard(ticket, false) : ""}
+    ${showCoordinatorStatus ? `
+    <section class="detail-description detail-edit-card">
+      <h3>סטטוס</h3>
+      <select id="detail-status-select">
+        ${coordinatorStatusOptions}
+      </select>
+    </section>` : ""}
+    ${!isCoordinatorView ? `
+    <section class="detail-description detail-edit-card">
+      <h3>סטטוס</h3>
+      <select id="detail-status-select">
+        ${paisStatuses.map((status) => `<option value="${escapeHtml(status)}" ${ticket.status === status ? "selected" : ""}>${escapeHtml(status)}</option>`).join("")}
+      </select>
+    </section>` : ""}
+    ${showCoordination ? `
+    <section class="detail-description detail-edit-card">
+      <h3>לאחר טיפול נציג</h3>
+      <div class="detail-form-grid">
+        <label>
+          <span>טכנאי מתואם</span>
+          <select id="detail-coordinated-worker">${technicianOptions}</select>
+        </label>
+        <label>
+          <span>תאריך ביקור טכנאי</span>
+          <input id="detail-visit-date" type="date" value="${escapeHtml(details.visit_date || "")}">
+        </label>
+        <label>
+          <span>משעה</span>
+          <select id="detail-visit-hour-from">${hourOptions(9, 17, details.visit_hour_from || "")}</select>
+        </label>
+        <label>
+          <span>עד שעה</span>
+          <select id="detail-visit-hour-to">${hourOptions(10, 18, details.visit_hour_to || "")}</select>
+        </label>
+      </div>
+      <p class="detail-hint">חלונות התיאום הם של שעה אחת, החל מ-09:00.</p>
+    </section>` : ""}
+    <section class="detail-description detail-edit-card ${showFailureNotes ? "" : "hidden"}" id="detail-failure-notes-wrap">
+      <h3>הערות</h3>
+      <textarea id="detail-failure-notes" rows="4">${escapeHtml(details.failure_notes || "")}</textarea>
+    </section>
+    <div class="detail-save-row">
+      <span id="detail-save-message"></span>
+      <button class="create-ticket-btn" id="detail-save-btn" type="button">שמור</button>
+    </div>
+  `;
+}
+
+async function submitFieldReport(event) {
+  event.preventDefault();
+  setFieldReportMessage("", "");
+  setFieldReportLoading(true);
+
+  const lineItems = collectFieldReportLineItems()
+    .filter((row) => Object.values(row).some((value) => String(value || "").trim()));
+
+  const payload = {
+    ticket_id: document.getElementById("field-report-ticket-id")?.value || "",
+    nimbus_customer_name: document.getElementById("field-report-nimbus-customer-name")?.value || "",
+    contact_first_name: document.getElementById("field-report-contact-first-name")?.value || "",
+    contact_last_name: document.getElementById("field-report-contact-last-name")?.value || "",
+    role: document.getElementById("field-report-role")?.value || "",
+    installation_address: document.getElementById("field-report-installation-address")?.value || "",
+    phone: document.getElementById("field-report-phone")?.value || "",
+    customer_notes: document.getElementById("field-report-customer-notes")?.value || "",
+    additional_notes: document.getElementById("field-report-additional-notes")?.value || "",
+    line_items: lineItems,
+    installation_date: document.getElementById("field-report-installation-date")?.value || "",
+    technician_name: document.getElementById("field-report-technician-name")?.value || "",
+    technician_signature_data_url: document.getElementById("field-report-technician-signature-data")?.value || "",
+    customer_signature_data_url: document.getElementById("field-report-customer-signature-data")?.value || "",
+  };
+  const areaPhotoInput = document.getElementById("field-report-area-photos");
+  const selectedPhotos = Array.from(areaPhotoInput?.files || []);
+
+  if (!payload.technician_signature_data_url) {
+    setFieldReportMessage("יש להוסיף חתימת טכנאי", "error");
+    setFieldReportLoading(false);
+    return;
+  }
+
+  try {
+    const formData = new FormData();
+    formData.append("payload", JSON.stringify(payload));
+    selectedPhotos.forEach((file) => {
+      formData.append("area_photos", file);
+    });
+    const res = await fetch("/support-tickets-field-report", {
+      method: "POST",
+      body: formData,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) {
+      throw new Error(data.message || "Save failed");
+    }
+    if (data?.ticket?.field_report_error) {
+      setFieldReportMessage(`הטופס נשמר, אך שליחת המייל נכשלה: ${data.ticket.field_report_error}`, "error");
+      closeSignatureModal();
+      closeFieldReportModal();
+      closeTicketDetail();
+      await loadTickets();
+      openNotificationErrorModal(`הטופס נשמר, אך שליחת המייל נכשלה: ${data.ticket.field_report_error}`);
+      return;
+    }
+    closeSignatureModal();
+    closeFieldReportModal();
+    closeTicketDetail();
+    showSendSuccessToast();
+    await loadTickets();
+  } catch (error) {
+    setFieldReportMessage(error.message || "שמירת הטופס נכשלה", "error");
+    setFieldReportLoading(false);
+    return;
+  }
+
+  setFieldReportLoading(false);
 }
 
 document.addEventListener("DOMContentLoaded", () => {

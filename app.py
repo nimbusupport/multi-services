@@ -336,6 +336,7 @@ SUPABASE_BUCKET_SECRET_KEY = (os.environ.get("SUPABASE_BUCKET_SECRET_KEY") or ""
 NASTIA_NOTIFICATION_EMAIL = (os.environ.get("NASTIA_NOTIFICATION_EMAIL") or "nastya@nimbusip.com").strip()
 RACHELI_NOTIFICATION_EMAIL = (os.environ.get("RACHELI_NOTIFICATION_EMAIL") or "racheli@nimbusip.com").strip()
 HOT_FIELD_REPORT_CUSTOMER_EMAIL = (os.environ.get("HOT_FIELD_REPORT_CUSTOMER_EMAIL") or NASTIA_NOTIFICATION_EMAIL).strip()
+FIELD_REPORT_SUPPORTED_BOARD_SLUGS = {"hot-kiryot", "pais"}
 NIMBUS_LOGO_PATH = next((
     path for path in [
         os.path.join(app.static_folder or "template", "brand", "nimbus-logo-pdf.png"),
@@ -1672,7 +1673,7 @@ def hot_field_report_photo_rows(photo_attachments):
     return rows
 
 
-def build_hot_field_report_pdf(ticket, report, technician_signature_bytes, customer_signature_bytes):
+def build_hot_field_report_pdf(ticket, report, technician_signature_bytes, customer_signature_bytes=None):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -1880,13 +1881,18 @@ def build_hot_field_report_pdf(ticket, report, technician_signature_bytes, custo
     else:
         story.append(pdf_paragraph("-", text_style, rtl=True, latin_font_name=latin_regular_font, hebrew_font_name=hebrew_regular_font))
 
+    customer_signature_cell = (
+        Image(io.BytesIO(customer_signature_bytes), width=72 * mm, height=28 * mm, hAlign="CENTER")
+        if customer_signature_bytes
+        else pdf_paragraph("לא נדרשה חתימת לקוח", text_style, rtl=True, latin_font_name=latin_regular_font, hebrew_font_name=hebrew_regular_font)
+    )
     signature_table = Table([
         [
             pdf_paragraph("חתימת הלקוח", section_title_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
             pdf_paragraph("חתימת טכנאי", section_title_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
         ],
         [
-            Image(io.BytesIO(customer_signature_bytes), width=72 * mm, height=28 * mm, hAlign="CENTER"),
+            customer_signature_cell,
             Image(io.BytesIO(technician_signature_bytes), width=72 * mm, height=28 * mm, hAlign="CENTER"),
         ],
     ], colWidths=[85 * mm, 85 * mm], hAlign="RIGHT")
@@ -1979,8 +1985,9 @@ def save_hot_field_report(ticket_id, actor, payload, area_photo_files=None):
     ticket = find_support_ticket(tickets, ticket_id)
     if not ticket:
         raise LookupError("Ticket not found")
-    if (ticket.get("board_slug") or "").strip().lower() != "hot-kiryot":
-        raise ValueError("Customer signature is supported only for הוט קריאות")
+    board_slug = (ticket.get("board_slug") or "").strip().lower()
+    if board_slug not in FIELD_REPORT_SUPPORTED_BOARD_SLUGS:
+        raise ValueError("טופס החתמה נתמך רק בקריאות הוט ופיס")
 
     details = dict(ticket.get("details") or {})
     previous_report = details.get("field_report") if isinstance(details.get("field_report"), dict) else {}
@@ -2010,7 +2017,9 @@ def save_hot_field_report(ticket_id, actor, payload, area_photo_files=None):
         raise ValueError("יש למלא טכנאי מבצע")
 
     technician_signature_bytes, _ = parse_signature_data_url(technician_signature_data_url, "חתימת הטכנאי")
-    customer_signature_bytes, _ = parse_signature_data_url(customer_signature_data_url, "חתימת הלקוח")
+    customer_signature_bytes = None
+    if customer_signature_data_url:
+        customer_signature_bytes, _ = parse_signature_data_url(customer_signature_data_url, "חתימת הלקוח")
     now = israel_now()
     submitted_display = now.strftime("%d/%m/%Y %H:%M")
     merged_photo_attachments = list(previous_report.get("area_photo_attachments") or [])
@@ -2101,13 +2110,14 @@ def save_hot_field_report(ticket_id, actor, payload, area_photo_files=None):
         save_support_tickets(persisted)
         normalized_ticket = normalize_support_ticket(local_ticket)
 
-    try:
-        send_hot_field_report_email(normalized_ticket, report, pdf_filename, pdf_content)
-        normalized_ticket["field_report_sent"] = True
-        normalized_ticket["field_report_error"] = ""
-    except Exception as exc:
-        normalized_ticket["field_report_sent"] = False
-        normalized_ticket["field_report_error"] = str(exc)
+    normalized_ticket["field_report_sent"] = False
+    normalized_ticket["field_report_error"] = ""
+    if board_slug == "hot-kiryot":
+        try:
+            send_hot_field_report_email(normalized_ticket, report, pdf_filename, pdf_content)
+            normalized_ticket["field_report_sent"] = True
+        except Exception as exc:
+            normalized_ticket["field_report_error"] = str(exc)
     return normalized_ticket
 
 
@@ -2172,6 +2182,18 @@ def coordination_ticket_details_changed(previous_ticket, updated_ticket):
     )
 
 
+def coordination_ticket_status_changed(previous_ticket, updated_ticket):
+    previous_status = normalize_ticket_status(
+        (previous_ticket or {}).get("board_slug"),
+        (previous_ticket or {}).get("status"),
+    )
+    updated_status = normalize_ticket_status(
+        (updated_ticket or {}).get("board_slug"),
+        (updated_ticket or {}).get("status"),
+    )
+    return previous_status != updated_status
+
+
 def actor_can_trigger_nastia_notification(actor):
     return (actor or "").strip() in COORDINATION_USERS
 
@@ -2189,9 +2211,12 @@ def should_notify_nastia(previous_ticket, updated_ticket, enabled=False):
     if not board_supports_coordination((updated_ticket.get("board_slug") or "").strip().lower()):
         return False
 
-    return coordination_ticket_has_complete_details(updated_ticket) and coordination_ticket_details_changed(
-        previous_ticket,
-        updated_ticket,
+    if not coordination_ticket_has_complete_details(updated_ticket):
+        return False
+
+    return (
+        coordination_ticket_details_changed(previous_ticket, updated_ticket)
+        or coordination_ticket_status_changed(previous_ticket, updated_ticket)
     )
 
 
@@ -2530,6 +2555,12 @@ def find_support_ticket(tickets, ticket_id):
 
 def nastia_notification_enabled(previous_ticket, updated_ticket, actor, changes):
     if bool((changes or {}).get("send_nastia_notification", False)):
+        return True
+    if (
+        (updated_ticket.get("board_slug") or "").strip().lower() == "pais"
+        and coordination_ticket_status_changed(previous_ticket, updated_ticket)
+        and (actor or "").strip() in TECHNICIAN_SUPPORT_USERS
+    ):
         return True
     if not (coordination_ticket_has_complete_details(updated_ticket) and coordination_ticket_details_changed(
         previous_ticket,
@@ -5102,12 +5133,15 @@ def support_tickets_update():
             details = payload.get("details")
             if not isinstance(details, dict):
                 return jsonify({"ok": False, "message": "Invalid details payload"}), 400
+            allowed_detail_fields = {"failure_notes"}
+            if (target_ticket.get("board_slug") or "").strip().lower() == "pais":
+                allowed_detail_fields.add("actions_taken")
             disallowed_fields = {
                 field_name for field_name, value in details.items()
-                if field_name != "failure_notes" and str(value or "").strip()
+                if field_name not in allowed_detail_fields and str(value or "").strip()
             }
             if disallowed_fields:
-                return jsonify({"ok": False, "message": "Technician accounts can only update failure notes"}), 403
+                return jsonify({"ok": False, "message": "Technician accounts can only update allowed ticket notes"}), 403
             if status == "נכשל" and not str(details.get("failure_notes") or "").strip():
                 return jsonify({"ok": False, "message": "יש למלא סיבת כשל"}), 400
 
@@ -5240,8 +5274,8 @@ def support_tickets_field_report():
         return jsonify({"ok": False, "message": "Ticket not found"}), 404
     if not assigned_technician_can_access_ticket(target_ticket):
         return jsonify({"ok": False, "message": "Access denied"}), 403
-    if (target_ticket.get("board_slug") or "").strip().lower() != "hot-kiryot":
-        return jsonify({"ok": False, "message": "Customer signature is supported only for הוט קריאות"}), 400
+    if (target_ticket.get("board_slug") or "").strip().lower() not in FIELD_REPORT_SUPPORTED_BOARD_SLUGS:
+        return jsonify({"ok": False, "message": "טופס החתמה נתמך רק בקריאות הוט ופיס"}), 400
 
     try:
         ticket = save_hot_field_report(ticket_id, support_user_name(), payload, area_photo_files=area_photo_files)
