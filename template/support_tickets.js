@@ -1190,7 +1190,7 @@ function openTicketDetail(ticketId) {
     document.getElementById("detail-visit-date")?.addEventListener("input", () => setFieldInvalid(document.getElementById("detail-visit-date"), false));
     document.getElementById("detail-visit-hour-from")?.addEventListener("change", () => setFieldInvalid(document.getElementById("detail-visit-hour-from"), false));
     document.getElementById("detail-visit-hour-to")?.addEventListener("change", () => setFieldInvalid(document.getElementById("detail-visit-hour-to"), false));
-    document.getElementById("detail-save-btn")?.addEventListener("click", () => savePaisDetail(ticket.id));
+    document.getElementById("detail-save-btn")?.addEventListener("click", () => saveTicketDetailWithFeedback(ticket.id));
     syncPaisDetailStatusFields();
     syncPaisDetailVisitRange();
   }
@@ -2641,6 +2641,19 @@ function renderDetailSections(ticket) {
   ].join("");
 }
 
+function setDetailSaveMessageState(message, text = "", kind = "") {
+  if (!message) return;
+  message.textContent = text || "";
+  message.classList.remove("saving", "success", "error");
+  if (kind) {
+    message.classList.add(kind);
+  }
+}
+
+function waitForUi(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
 async function savePaisDetail(ticketId) {
   const currentTicket = getTicket(ticketId);
   const currentDetails = ticketDetails(currentTicket);
@@ -2674,6 +2687,7 @@ async function savePaisDetail(ticketId) {
   };
   if (technicianMode) {
     payload.details = {
+      ...(detailFieldName === "actions_taken" ? { actions_taken: detailFieldElement?.value || "" } : {}),
       failure_notes: document.getElementById("detail-failure-notes")?.value || "",
     };
   } else {
@@ -2702,9 +2716,14 @@ async function savePaisDetail(ticketId) {
   }
   const message = document.getElementById("detail-save-message");
   const button = document.getElementById("detail-save-btn");
-  if (message) message.textContent = "";
+  const originalButtonContent = button?.innerHTML || "";
+  setDetailSaveMessageState(message, "שומר נתונים...", "saving");
   clearCoordinationValidation();
-  if (button) button.disabled = true;
+  if (button) {
+    button.disabled = true;
+    button.classList.add("is-saving");
+    button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i><span>שומר נתונים...</span>';
+  }
 
   if (technicianMode && selectedStatus === "נכשל" && !String(payload.details.failure_notes || "").trim()) {
     if (message) message.textContent = "יש למלא סיבת כשל";
@@ -2783,6 +2802,170 @@ async function savePaisDetail(ticketId) {
     if (message) message.textContent = err.message;
   } finally {
     if (button) button.disabled = false;
+  }
+}
+
+async function saveTicketDetailWithFeedback(ticketId) {
+  const currentTicket = getTicket(ticketId);
+  if (!currentTicket) return;
+
+  const currentDetails = ticketDetails(currentTicket);
+  const technicianMode = canAssignedTechnicianEditTicket(currentTicket);
+  const coordinatedWorkerField = document.getElementById("detail-coordinated-worker");
+  const visitDateField = document.getElementById("detail-visit-date");
+  const visitHourFromField = document.getElementById("detail-visit-hour-from");
+  const visitHourToField = document.getElementById("detail-visit-hour-to");
+  const statusSelect = document.getElementById("detail-status-select");
+  const detailFieldName = isHotTicket(currentTicket) ? "technician_actions" : "actions_taken";
+  const detailFieldElement = document.getElementById(isHotTicket(currentTicket) ? "detail-technician-actions" : "detail-actions-taken");
+  const detailSections = document.getElementById("detail-sections");
+  const message = document.getElementById("detail-save-message");
+  const button = document.getElementById("detail-save-btn");
+  const originalButtonContent = button?.innerHTML || "";
+  const coordinationPayload = {
+    coordinated_worker: coordinatedWorkerField?.value || "",
+    visit_date: visitDateField?.value || "",
+    visit_hour_from: visitHourFromField?.value || "",
+    visit_hour_to: visitHourToField?.value || "",
+  };
+  const selectedStatus = statusSelect?.value || "";
+  const shouldMarkCoordinated = Object.values(coordinationPayload).every(Boolean);
+  let nextStatus = selectedStatus;
+  if (shouldMarkCoordinated && (!selectedStatus || selectedStatus === "ממתין לתיאום" || selectedStatus === "תואם")) {
+    nextStatus = "תואם";
+  }
+  const isFinalStatus = NASTYA_FINAL_STATUSES.includes(selectedStatus);
+  const payload = {
+    ticket_id: ticketId,
+    source_page_mode: pageMode,
+    source_ticket_queue: ticketQueue,
+    status: nextStatus,
+  };
+  const resetSaveButton = () => {
+    if (!button) return;
+    button.disabled = false;
+    button.classList.remove("is-saving");
+    button.innerHTML = originalButtonContent;
+  };
+
+  if (technicianMode) {
+    payload.details = {
+      ...(detailFieldName === "actions_taken" ? { actions_taken: detailFieldElement?.value || "" } : {}),
+      failure_notes: document.getElementById("detail-failure-notes")?.value || "",
+    };
+  } else {
+    if (currentTicket.board_slug === "support") {
+      payload.description = document.getElementById("detail-support-description")?.value || "";
+      payload.solution = document.getElementById("detail-support-solution")?.value || "";
+    }
+    payload.details = {
+      ...(currentTicket.board_slug === "support"
+        ? {
+            service_mode: selectedSupportServiceMode(detailSections || document),
+            customer_type: selectedSupportCustomerType(detailSections || document),
+            business_name: document.getElementById("detail-business-name")?.value || "",
+            service_contact: document.getElementById("detail-service-contact")?.value || "",
+            service_address: document.getElementById("detail-service-address")?.value || "",
+          }
+        : {
+            [detailFieldName]: detailFieldElement?.value || "",
+          }),
+      coordinated_worker: coordinationPayload.coordinated_worker,
+      visit_date: coordinationPayload.visit_date,
+      visit_hour_from: coordinationPayload.visit_hour_from,
+      visit_hour_to: coordinationPayload.visit_hour_to,
+      failure_notes: document.getElementById("detail-failure-notes")?.value || "",
+    };
+  }
+
+  clearCoordinationValidation();
+  setDetailSaveMessageState(message, "שומר נתונים...", "saving");
+  if (button) {
+    button.disabled = true;
+    button.classList.add("is-saving");
+    button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i><span>שומר נתונים...</span>';
+  }
+
+  if (technicianMode && selectedStatus === "נכשל" && !String(payload.details.failure_notes || "").trim()) {
+    setDetailSaveMessageState(message, "יש למלא סיבת כשל", "error");
+    resetSaveButton();
+    return;
+  }
+  if (technicianMode && !selectedStatus) {
+    setDetailSaveMessageState(message, "יש לבחור סטטוס", "error");
+    resetSaveButton();
+    return;
+  }
+  if (currentTicket.board_slug === "support" && payload.details.service_mode && !technicianMode) {
+    if (!payload.details.business_name || !payload.details.service_contact || !payload.details.service_address) {
+      setDetailSaveMessageState(message, "יש למלא שם העסק, איש קשר וכתובת", "error");
+      resetSaveButton();
+      return;
+    }
+  }
+  if (isNastyaQueuePage && !technicianMode && !isFinalStatus) {
+    if (!coordinationPayload.coordinated_worker) {
+      setFieldInvalid(coordinatedWorkerField, true);
+      setDetailSaveMessageState(message, "לא נבחר טכנאי מטפל", "error");
+      resetSaveButton();
+      return;
+    }
+    if (!coordinationPayload.visit_date) {
+      setFieldInvalid(visitDateField, true);
+      setDetailSaveMessageState(message, "לא נבחר תאריך ביקור", "error");
+      resetSaveButton();
+      return;
+    }
+    if (!coordinationPayload.visit_hour_from) {
+      setFieldInvalid(visitHourFromField, true);
+      setDetailSaveMessageState(message, "לא נבחרה שעת התחלה", "error");
+      resetSaveButton();
+      return;
+    }
+    if (!coordinationPayload.visit_hour_to) {
+      setFieldInvalid(visitHourToField, true);
+      setDetailSaveMessageState(message, "לא נבחרה שעת סיום", "error");
+      resetSaveButton();
+      return;
+    }
+  }
+
+  const coordinationChanged = ["coordinated_worker", "visit_date", "visit_hour_from", "visit_hour_to"]
+    .some((fieldName) => String(currentDetails?.[fieldName] || "") !== String(coordinationPayload[fieldName] || ""));
+  if (isNastyaQueuePage && !technicianMode && shouldMarkCoordinated && coordinationChanged) {
+    payload.send_nastia_notification = true;
+  }
+
+  try {
+    const res = await fetch("/support-tickets-update", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) {
+      throw new Error(data.message || "Save failed");
+    }
+    if (data?.ticket?.notification_error) {
+      openNotificationErrorModal(`הסטטוס עודכן אבל שליחת המייל נכשלה: ${data.ticket.notification_error}`);
+    } else if (data?.ticket?.notification_sent === true) {
+      showSendSuccessToast();
+    } else if (payload.send_nastia_notification === true) {
+      openNotificationErrorModal("הסטטוס עודכן אבל טריגר המייל לא הופעל.");
+    }
+    setDetailSaveMessageState(message, "נשמר בהצלחה", "success");
+    if (button) {
+      button.innerHTML = '<i class="fa-solid fa-check"></i><span>נשמר</span>';
+    }
+    await waitForUi(650);
+    closeTicketDetail();
+    await loadTickets();
+    await loadPaisReport();
+  } catch (err) {
+    openNotificationErrorModal(err.message || "Save failed");
+    setDetailSaveMessageState(message, err.message || "שמירה נכשלה", "error");
+  } finally {
+    resetSaveButton();
   }
 }
 
@@ -2882,7 +3065,7 @@ function openTicketDetail(ticketId) {
     document.getElementById("detail-visit-date")?.addEventListener("input", () => setFieldInvalid(document.getElementById("detail-visit-date"), false));
     document.getElementById("detail-visit-hour-from")?.addEventListener("change", () => setFieldInvalid(document.getElementById("detail-visit-hour-from"), false));
     document.getElementById("detail-visit-hour-to")?.addEventListener("change", () => setFieldInvalid(document.getElementById("detail-visit-hour-to"), false));
-    document.getElementById("detail-save-btn")?.addEventListener("click", () => savePaisDetail(ticket.id));
+    document.getElementById("detail-save-btn")?.addEventListener("click", () => saveTicketDetailWithFeedback(ticket.id));
     syncPaisDetailStatusFields();
     syncPaisDetailVisitRange();
     toggleSupportServiceDetails(detailSections);

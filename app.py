@@ -2293,6 +2293,7 @@ def coordination_ticket_email_context(ticket):
         ]
         calendar_description_lines = [
             f"מספר קריאה: {ticket_label}",
+            f"סטטוס: {(ticket.get('status') or '').strip() or '-'}",
             f"סוג לקוח: {(details.get('customer_type') or '').strip() or '-'}",
             f"שם העסק: {(details.get('business_name') or '').strip() or '-'}",
             f"תיאור: {(ticket.get('description') or '').strip() or '-'}",
@@ -2329,6 +2330,7 @@ def coordination_ticket_email_context(ticket):
         ]
         calendar_description_lines = [
             f"מספר קריאה: {ticket_label}",
+            f"סטטוס: {(ticket.get('status') or '').strip() or '-'}",
             f"לקוח: {(details.get('customer_name') or '').strip() or '-'}",
             f"מהות התקלה: {(details.get('issue_summary') or '').strip() or '-'}",
             f"כתובת: {calendar_address or '-'}",
@@ -2358,8 +2360,10 @@ def coordination_ticket_email_context(ticket):
         ]
         calendar_description_lines = [
             f"מספר קריאה: {ticket_label}",
+            f"סטטוס: {(ticket.get('status') or '').strip() or '-'}",
             f"מספר מסוף: {terminal_number or '-'}",
             f"פניית לקוח: {(details.get('customer_request') or '').strip() or '-'}",
+            f"פעולות: {(details.get('actions_taken') or '').strip() or '-'}",
             f"כתובת: {calendar_address or '-'}",
             f"איש קשר: {calendar_contact or '-'}",
             f"טכנאי מתואם: {(details.get('coordinated_worker') or '').strip() or '-'}",
