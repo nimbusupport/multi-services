@@ -207,6 +207,7 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.original_get_gspread_client = self.app_module.get_gspread_client
         self.original_get_feature_report_counts = self.app_module.get_feature_report_counts
         self.original_send_nastia_ticket_email = self.app_module.send_nastia_ticket_email
+        self.original_send_nastia_waiting_alert_email = self.app_module.send_nastia_waiting_alert_email
         self.original_send_plain_email = self.app_module.send_plain_email
         self.original_build_hot_field_report_pdf = self.app_module.build_hot_field_report_pdf
         self.original_smtp_from = self.app_module.SMTP_FROM
@@ -232,6 +233,7 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.app_module.get_gspread_client = self.original_get_gspread_client
         self.app_module.get_feature_report_counts = self.original_get_feature_report_counts
         self.app_module.send_nastia_ticket_email = self.original_send_nastia_ticket_email
+        self.app_module.send_nastia_waiting_alert_email = self.original_send_nastia_waiting_alert_email
         self.app_module.send_plain_email = self.original_send_plain_email
         self.app_module.build_hot_field_report_pdf = self.original_build_hot_field_report_pdf
         self.app_module.SMTP_FROM = self.original_smtp_from
@@ -794,7 +796,7 @@ class SupportTicketsTestCase(unittest.TestCase):
         ticket_folder = os.path.join(self.screens_dir, "TicketID0001")
         self.assertFalse(os.path.exists(os.path.join(ticket_folder, "example.jpg")))
 
-    def test_pais_coordination_status_only_moves_ticket_to_nastia_queue(self):
+    def test_pais_coordination_status_change_sends_waiting_alert_to_nastya(self):
         tickets = self.app_module.load_support_tickets()
         tickets.append({
             "id": 2,
@@ -821,7 +823,7 @@ class SupportTicketsTestCase(unittest.TestCase):
         })
         self.app_module.save_support_tickets(tickets)
         sent_tickets = []
-        self.app_module.send_nastia_ticket_email = lambda ticket: sent_tickets.append(ticket)
+        self.app_module.send_nastia_waiting_alert_email = lambda ticket: sent_tickets.append(ticket)
 
         self.login("admin@nimbusip.com")
         response = self.client.post(
@@ -835,7 +837,9 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.get_json()
         self.assertEqual(payload["ticket"]["status"], "ממתין לתאום")
-        self.assertEqual(len(sent_tickets), 0)
+        self.assertTrue(payload["ticket"]["notification_attempted"])
+        self.assertTrue(payload["ticket"]["notification_sent"])
+        self.assertEqual(len(sent_tickets), 1)
 
     def test_extended_assignee_list_is_available(self):
         self.assertIn("איציק", self.app_module.SUPPORT_USERS)
@@ -917,6 +921,69 @@ class SupportTicketsTestCase(unittest.TestCase):
         payload = response.get_json()
         self.assertEqual(len(payload["tickets"]), 1)
         self.assertEqual(payload["tickets"][0]["details"]["terminal_number"], "6001")
+
+    def test_nastia_queue_prioritizes_waiting_tickets_at_top(self):
+        tickets = self.app_module.load_support_tickets()
+        tickets.extend([
+            {
+                "id": 2,
+                "board_slug": "pais",
+                "created_at": "2026-07-08T09:00:00+03:00",
+                "created_at_display": "08/07/2026 09:00",
+                "creator": "Admin",
+                "ticket_type": "שירות",
+                "service_type": "מפעל הפיס",
+                "domain": "",
+                "priority": "Medium",
+                "description": "",
+                "solution": "",
+                "status": "ממתין לתיאום",
+                "assigned_to": "ניר",
+                "details": {
+                    "terminal_number": "6001",
+                    "address": "Waiting address",
+                    "customer_request": "R4",
+                    "actions_taken": "",
+                },
+                "attachments": [],
+                "updates": [],
+            },
+            {
+                "id": 3,
+                "board_slug": "pais",
+                "created_at": "2026-07-08T10:00:00+03:00",
+                "created_at_display": "08/07/2026 10:00",
+                "creator": "Admin",
+                "ticket_type": "שירות",
+                "service_type": "מפעל הפיס",
+                "domain": "",
+                "priority": "Medium",
+                "description": "",
+                "solution": "",
+                "status": "תואם",
+                "assigned_to": "גולן",
+                "details": {
+                    "terminal_number": "6002",
+                    "address": "Scheduled address",
+                    "customer_request": "R5",
+                    "actions_taken": "",
+                    "coordinated_worker": "גולן",
+                    "visit_date": "2026-07-09",
+                    "visit_hour_from": "09:00",
+                    "visit_hour_to": "10:00",
+                },
+                "attachments": [],
+                "updates": [],
+            },
+        ])
+        self.app_module.save_support_tickets(tickets)
+
+        self.login("admin@nimbusip.com")
+        response = self.client.get("/support-tickets-data?board=pais&queue=nastia")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual([ticket["id"] for ticket in payload["tickets"]], [2, 3])
 
     def test_pais_report_filters_by_status_and_date(self):
         tickets = self.app_module.load_support_tickets()
@@ -2492,7 +2559,7 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertEqual(payload["ticket"]["status"], "נכשל")
         self.assertEqual(payload["ticket"]["details"]["failure_notes"], "לא הצליח")
 
-    def test_nastya_coordination_save_sends_email_only_after_worker_and_visit_are_set(self):
+    def test_nastya_coordination_save_sends_waiting_alert_then_full_email_after_worker_and_visit_are_set(self):
         tickets = self.app_module.load_support_tickets()
         tickets.append({
             "id": 2,
@@ -2519,7 +2586,9 @@ class SupportTicketsTestCase(unittest.TestCase):
         })
         self.app_module.save_support_tickets(tickets)
         sent_tickets = []
+        waiting_alerts = []
         self.app_module.send_nastia_ticket_email = lambda ticket: sent_tickets.append(ticket)
+        self.app_module.send_nastia_waiting_alert_email = lambda ticket: waiting_alerts.append(ticket)
 
         self.login("admin@nimbusip.com")
         response = self.client.post(
@@ -2531,6 +2600,7 @@ class SupportTicketsTestCase(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(waiting_alerts), 1)
         self.assertEqual(len(sent_tickets), 0)
 
         self.client.get("/logout")
@@ -2732,6 +2802,44 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertIn("add=assafh%40nimbusip.com", captured["html_body"])
         self.assertEqual(captured["attachments"], [])
 
+    def test_send_nastia_waiting_alert_email_includes_terminal_and_address(self):
+        captured = {}
+        self.app_module.PAIS_NOTIFICATION_FROM = ""
+        self.app_module.SMTP_FROM = "nimbuskonan@gmail.com"
+        self.app_module.SMTP_USERNAME = "nimbuskonan@gmail.com"
+
+        def fake_send_plain_email(to_address, subject, body, from_address=None, html_body=None, attachments=None):
+            captured["to_address"] = to_address
+            captured["subject"] = subject
+            captured["body"] = body
+            captured["from_address"] = from_address
+            captured["html_body"] = html_body or ""
+            captured["attachments"] = attachments or []
+
+        self.app_module.send_plain_email = fake_send_plain_email
+
+        self.app_module.send_nastia_waiting_alert_email({
+            "id": 44,
+            "board_slug": "pais",
+            "service_type": "מפעל הפיס",
+            "status": "ממתין לתיאום",
+            "details": {
+                "terminal_number": "7788",
+                "address": "Alert street 7",
+            },
+        })
+
+        self.assertEqual(captured["to_address"], self.app_module.NASTIA_NOTIFICATION_EMAIL)
+        self.assertEqual(captured["from_address"], "nimbuskonan@gmail.com")
+        self.assertIn("#0044", captured["subject"])
+        self.assertIn("ממתין לתיאום", captured["subject"])
+        self.assertIn("סטטוס: ממתין לתיאום", captured["body"])
+        self.assertIn("מספר מסוף: 7788", captured["body"])
+        self.assertIn("כתובת: Alert street 7", captured["body"])
+        self.assertIn("Alert street 7", captured["html_body"])
+        self.assertIn("7788", captured["html_body"])
+        self.assertEqual(captured["attachments"], [])
+
     def test_golan_coordination_calendar_link_includes_worker_guest_email(self):
         calendar_link = self.app_module.build_pais_google_calendar_link({
             "id": 44,
@@ -2897,6 +3005,125 @@ class SupportTicketsTestCase(unittest.TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertIn("הוט ופיס", response.get_json()["message"])
+
+    def test_pais_coordination_status_change_sends_waiting_alert_to_nastya(self):
+        tickets = self.app_module.load_support_tickets()
+        tickets.append({
+            "id": 2,
+            "board_slug": "pais",
+            "created_at": "2026-07-08T09:00:00+03:00",
+            "created_at_display": "08/07/2026 09:00",
+            "creator": "Admin",
+            "ticket_type": "שירות",
+            "service_type": "מפעל הפיס",
+            "domain": "",
+            "priority": "Medium",
+            "description": "",
+            "solution": "",
+            "status": "ממתין",
+            "assigned_to": "ניר",
+            "details": {
+                "terminal_number": "9988",
+                "address": "Email street 4",
+                "customer_request": "לקוח מבקש תיאום",
+                "actions_taken": "",
+            },
+            "attachments": [],
+            "updates": [],
+        })
+        self.app_module.save_support_tickets(tickets)
+        sent_tickets = []
+        self.app_module.send_nastia_waiting_alert_email = lambda ticket: sent_tickets.append(ticket)
+
+        self.login("admin@nimbusip.com")
+        response = self.client.post(
+            "/support-tickets-update",
+            json={
+                "ticket_id": 2,
+                "status": self.app_module.COORDINATION_PENDING_STATUS,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["ticket"]["status"], self.app_module.COORDINATION_PENDING_STATUS)
+        self.assertTrue(payload["ticket"]["notification_attempted"])
+        self.assertTrue(payload["ticket"]["notification_sent"])
+        self.assertEqual(len(sent_tickets), 1)
+
+    def test_extended_assignee_list_is_available(self):
+        self.assertIn("איציק", self.app_module.SUPPORT_USERS)
+        self.assertIn("זורה", self.app_module.SUPPORT_USERS)
+        self.assertIn("מוסטפה.א", self.app_module.SUPPORT_USERS)
+        self.assertIn("מוסטפה.ח", self.app_module.SUPPORT_USERS)
+        self.assertIn("נסטיה", self.app_module.SUPPORT_USERS)
+        self.assertIn(self.app_module.COORDINATION_PENDING_STATUS, self.app_module.PAIS_STATUSES)
+        self.assertIn("אין מענה", self.app_module.PAIS_STATUSES)
+
+    def test_pais_report_filters_by_status_and_date(self):
+        tickets = self.app_module.load_support_tickets()
+        tickets.extend([
+            {
+                "id": 2,
+                "board_slug": "pais",
+                "created_at": "2026-07-08T09:00:00+03:00",
+                "created_at_display": "08/07/2026 09:00",
+                "creator": "Admin",
+                "ticket_type": "שירות",
+                "service_type": "מפעל הפיס",
+                "domain": "",
+                "priority": "Medium",
+                "description": "",
+                "solution": "",
+                "status": "בוצע",
+                "assigned_to": "ניר",
+                "details": {
+                    "terminal_number": "2001",
+                    "address": "A",
+                    "customer_request": "R1",
+                    "actions_taken": "A1",
+                },
+                "attachments": [],
+                "updates": [],
+            },
+            {
+                "id": 3,
+                "board_slug": "pais",
+                "created_at": "2026-07-08T10:00:00+03:00",
+                "created_at_display": "08/07/2026 10:00",
+                "creator": "Admin",
+                "ticket_type": "שירות",
+                "service_type": "מפעל הפיס",
+                "domain": "",
+                "priority": "Medium",
+                "description": "",
+                "solution": "",
+                "status": "ממתין",
+                "assigned_to": "זורה",
+                "details": {
+                    "terminal_number": "2002",
+                    "address": "B",
+                    "customer_request": "R2",
+                    "actions_taken": "A2",
+                },
+                "attachments": [],
+                "updates": [],
+            },
+        ])
+        self.app_module.save_support_tickets(tickets)
+
+        self.login("admin@nimbusip.com")
+        response = self.client.get(
+            "/pais-tickets-report-data?period=daily&status=בוצע&date_from=2026-07-08&date_to=2026-07-08"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["summary"]["done"], 1)
+        self.assertEqual(payload["summary"]["total"], 1)
+        self.assertEqual(len(payload["tickets"]), 1)
+        self.assertEqual(payload["tickets"][0]["details"]["terminal_number"], "2001")
 
 if __name__ == "__main__":
     unittest.main()

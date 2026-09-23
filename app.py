@@ -2470,6 +2470,68 @@ def build_pais_email_html(ticket, calendar_link=None):
 """
 
 
+def should_send_nastia_waiting_alert(previous_ticket, updated_ticket, actor):
+    if (updated_ticket.get("board_slug") or "").strip().lower() != "pais":
+        return False
+    if (actor or "").strip() in COORDINATION_USERS:
+        return False
+    if normalize_ticket_status(updated_ticket.get("board_slug"), updated_ticket.get("status")) != COORDINATION_PENDING_STATUS:
+        return False
+    previous_status = normalize_ticket_status(
+        (previous_ticket or {}).get("board_slug"),
+        (previous_ticket or {}).get("status"),
+    )
+    return previous_status != COORDINATION_PENDING_STATUS
+
+
+def build_nastia_waiting_alert_email(ticket):
+    details = ticket.get("details") or {}
+    board = get_ticket_board((ticket.get("board_slug") or "").strip().lower())
+    ticket_label = ticket.get("ticket_id") or f"#{int(ticket.get('id') or 0):04d}"
+    terminal_number = (details.get("terminal_number") or "").strip()
+    address = coordination_ticket_calendar_address(ticket)
+    subject = f"התראה: {ticket_label} ממתין לתיאום"
+    body_lines = [
+        "קריאה ממתינה לתיאום אצל נסטיה.",
+        f"מספר קריאה: {ticket_label}",
+        f"לוח: {(ticket.get('service_type') or board['name']).strip() or board['name']}",
+        f"סטטוס: {normalize_ticket_status(ticket.get('board_slug'), ticket.get('status'))}",
+        f"מספר מסוף: {_pais_email_value(terminal_number)}",
+        f"כתובת: {_pais_email_value(address)}",
+    ]
+    html_body = f"""\
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+  <body style="margin:0;padding:24px;background:#f5f1ea;font-family:Arial,'Noto Sans Hebrew',sans-serif;color:#1f2f46;">
+    <div style="max-width:540px;margin:0 auto;background:#fbfaf7;border:1px solid #ded5c9;border-radius:14px;overflow:hidden;">
+      <div style="padding:20px 24px;background:linear-gradient(135deg,#fff2d8 0%,#eef4ff 100%);border-bottom:1px solid #ded5c9;">
+        <div style="font-size:13px;color:#7b7267;font-weight:700;">התראת תיאום</div>
+        <div style="font-size:28px;font-weight:800;margin-top:6px;">{xml_escape(ticket_label)}</div>
+      </div>
+      <div style="padding:24px;">
+        <p style="margin:0 0 16px;font-size:16px;font-weight:700;">הקריאה ממתינה לתיאום.</p>
+        <table role="presentation" style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #e7dfd2;border-radius:10px;overflow:hidden;">
+          <tr>
+            <td style="padding:10px 12px;border-bottom:1px solid #e7dfd2;color:#6a6258;font-weight:700;width:34%;">סטטוס</td>
+            <td style="padding:10px 12px;border-bottom:1px solid #e7dfd2;color:#1f2f46;">{xml_escape(normalize_ticket_status(ticket.get('board_slug'), ticket.get('status')))}</td>
+          </tr>
+          <tr>
+            <td style="padding:10px 12px;border-bottom:1px solid #e7dfd2;color:#6a6258;font-weight:700;">מספר מסוף</td>
+            <td style="padding:10px 12px;border-bottom:1px solid #e7dfd2;color:#1f2f46;">{_pais_email_multiline_html(terminal_number)}</td>
+          </tr>
+          <tr>
+            <td style="padding:10px 12px;color:#6a6258;font-weight:700;">כתובת</td>
+            <td style="padding:10px 12px;color:#1f2f46;">{_pais_email_multiline_html(address)}</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+  </body>
+</html>
+"""
+    return subject, "\n".join(body_lines), html_body
+
+
 def should_notify_racheli(previous_ticket, updated_ticket, actor, changes):
     if (updated_ticket.get("board_slug") or "").strip().lower() != "support":
         return False
@@ -2510,21 +2572,42 @@ def send_nastia_ticket_email(ticket):
     )
 
 
-def process_nastia_ticket_notification(previous_ticket, updated_ticket, enabled=True):
-    attempted = should_notify_nastia(previous_ticket, updated_ticket, enabled=enabled)
+def send_nastia_waiting_alert_email(ticket):
+    subject, body, html_body = build_nastia_waiting_alert_email(ticket)
+    send_plain_email(
+        NASTIA_NOTIFICATION_EMAIL,
+        subject,
+        body,
+        from_address=PAIS_NOTIFICATION_FROM or SMTP_FROM or SMTP_USERNAME,
+        html_body=html_body,
+    )
+
+
+def process_nastia_ticket_notification(previous_ticket, updated_ticket, actor="", enabled=True):
     result = {
-        "notification_attempted": attempted,
+        "notification_attempted": False,
         "notification_sent": False,
         "notification_error": "",
     }
-    if not attempted:
+    if should_send_nastia_waiting_alert(previous_ticket, updated_ticket, actor):
+        result["notification_attempted"] = True
+        try:
+            send_nastia_waiting_alert_email(updated_ticket)
+            result["notification_sent"] = True
+        except Exception as exc:
+            print(f"Nastia waiting alert email warning for ticket {updated_ticket.get('id')}: {exc}")
+            result["notification_error"] = str(exc)
         return result
-    try:
-        send_nastia_ticket_email(updated_ticket)
-        result["notification_sent"] = True
-    except Exception as exc:
-        print(f"Nastia notification email warning for ticket {updated_ticket.get('id')}: {exc}")
-        result["notification_error"] = str(exc)
+
+    attempted = should_notify_nastia(previous_ticket, updated_ticket, enabled=enabled)
+    result["notification_attempted"] = attempted
+    if attempted:
+        try:
+            send_nastia_ticket_email(updated_ticket)
+            result["notification_sent"] = True
+        except Exception as exc:
+            print(f"Nastia notification email warning for ticket {updated_ticket.get('id')}: {exc}")
+            result["notification_error"] = str(exc)
     return result
 
 
@@ -2957,6 +3040,7 @@ def update_support_ticket_record(ticket_id, changes, actor):
         notification_result = process_nastia_ticket_notification(
             previous_ticket,
             normalized_ticket,
+            actor,
             enabled=notification_enabled,
         )
         normalized_ticket.update(notification_result)
@@ -2997,6 +3081,7 @@ def update_support_ticket_record(ticket_id, changes, actor):
     notification_result = process_nastia_ticket_notification(
         previous_ticket,
         normalized_ticket,
+        actor,
         enabled=notification_enabled,
     )
     normalized_ticket.update(notification_result)
@@ -4825,7 +4910,15 @@ def support_tickets_data():
                 if search in json.dumps(t, ensure_ascii=False).lower()
             ]
 
-    filtered.sort(key=lambda item: int(item.get("id") or 0), reverse=True)
+    if queue_slug == "nastia":
+        filtered.sort(
+            key=lambda item: (
+                0 if normalize_ticket_status(item.get("board_slug"), item.get("status")) in {"ממתין", COORDINATION_PENDING_STATUS} else 1,
+                -int(item.get("id") or 0),
+            )
+        )
+    else:
+        filtered.sort(key=lambda item: int(item.get("id") or 0), reverse=True)
     return jsonify({
         "tickets": filtered,
         "stats": support_ticket_stats(base_tickets),
