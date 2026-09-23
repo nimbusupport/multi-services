@@ -2840,6 +2840,47 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertIn("7788", captured["html_body"])
         self.assertEqual(captured["attachments"], [])
 
+    def test_send_nastia_waiting_alert_email_for_hot_includes_call_number_customer_and_address(self):
+        captured = {}
+        self.app_module.PAIS_NOTIFICATION_FROM = ""
+        self.app_module.SMTP_FROM = "nimbuskonan@gmail.com"
+        self.app_module.SMTP_USERNAME = "nimbuskonan@gmail.com"
+
+        def fake_send_plain_email(to_address, subject, body, from_address=None, html_body=None, attachments=None):
+            captured["to_address"] = to_address
+            captured["subject"] = subject
+            captured["body"] = body
+            captured["from_address"] = from_address
+            captured["html_body"] = html_body or ""
+            captured["attachments"] = attachments or []
+
+        self.app_module.send_plain_email = fake_send_plain_email
+
+        self.app_module.send_nastia_waiting_alert_email({
+            "id": 45,
+            "board_slug": "hot-kiryot",
+            "service_type": "הוט קריות",
+            "status": "ממתין לתיאום",
+            "details": {
+                "call_number": "275749117",
+                "customer_name": "חיים",
+                "address": "Hot street 9",
+            },
+        })
+
+        self.assertEqual(captured["to_address"], self.app_module.NASTIA_NOTIFICATION_EMAIL)
+        self.assertEqual(captured["from_address"], "nimbuskonan@gmail.com")
+        self.assertIn("#0045", captured["subject"])
+        self.assertIn("ממתין לתיאום", captured["subject"])
+        self.assertIn("סטטוס: ממתין לתיאום", captured["body"])
+        self.assertIn("מספר קריאה: 275749117", captured["body"])
+        self.assertIn("שם לקוח: חיים", captured["body"])
+        self.assertIn("כתובת: Hot street 9", captured["body"])
+        self.assertIn("275749117", captured["html_body"])
+        self.assertIn("חיים", captured["html_body"])
+        self.assertIn("Hot street 9", captured["html_body"])
+        self.assertEqual(captured["attachments"], [])
+
     def test_golan_coordination_calendar_link_includes_worker_guest_email(self):
         calendar_link = self.app_module.build_pais_google_calendar_link({
             "id": 44,
@@ -3050,6 +3091,52 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertTrue(payload["ticket"]["notification_attempted"])
         self.assertTrue(payload["ticket"]["notification_sent"])
         self.assertEqual(len(sent_tickets), 1)
+
+    def test_hot_coordination_status_change_sends_waiting_alert_to_nastya(self):
+        tickets = self.app_module.load_support_tickets()
+        tickets.append({
+            "id": 2,
+            "board_slug": "hot-kiryot",
+            "created_at": "2026-07-08T09:00:00+03:00",
+            "created_at_display": "08/07/2026 09:00",
+            "creator": "Admin",
+            "ticket_type": "שירות",
+            "service_type": "הוט קריות",
+            "domain": "",
+            "priority": "Medium",
+            "description": "",
+            "solution": "",
+            "status": "ממתין",
+            "assigned_to": "ניר",
+            "details": {
+                "call_number": "275749117",
+                "customer_name": "חיים",
+                "address": "Hot street 9",
+                "issue_summary": "PANCODE לא עובד",
+            },
+            "attachments": [],
+            "updates": [],
+        })
+        self.app_module.save_support_tickets(tickets)
+        sent_tickets = []
+        self.app_module.send_nastia_waiting_alert_email = lambda ticket: sent_tickets.append(ticket)
+
+        self.login("admin@nimbusip.com")
+        response = self.client.post(
+            "/support-tickets-update",
+            json={
+                "ticket_id": 2,
+                "status": self.app_module.COORDINATION_PENDING_STATUS,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["ticket"]["status"], self.app_module.COORDINATION_PENDING_STATUS)
+        self.assertTrue(payload["ticket"]["notification_attempted"])
+        self.assertTrue(payload["ticket"]["notification_sent"])
+        self.assertEqual(len(sent_tickets), 1)
+        self.assertEqual(sent_tickets[0]["details"]["call_number"], "275749117")
 
     def test_extended_assignee_list_is_available(self):
         self.assertIn("איציק", self.app_module.SUPPORT_USERS)

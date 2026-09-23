@@ -2471,11 +2471,12 @@ def build_pais_email_html(ticket, calendar_link=None):
 
 
 def should_send_nastia_waiting_alert(previous_ticket, updated_ticket, actor):
-    if (updated_ticket.get("board_slug") or "").strip().lower() != "pais":
+    board_slug = (updated_ticket.get("board_slug") or "").strip().lower()
+    if board_slug not in {"pais", "hot-kiryot"}:
         return False
     if (actor or "").strip() in COORDINATION_USERS:
         return False
-    if normalize_ticket_status(updated_ticket.get("board_slug"), updated_ticket.get("status")) != COORDINATION_PENDING_STATUS:
+    if normalize_ticket_status(board_slug, updated_ticket.get("status")) != COORDINATION_PENDING_STATUS:
         return False
     previous_status = normalize_ticket_status(
         (previous_ticket or {}).get("board_slug"),
@@ -2484,21 +2485,45 @@ def should_send_nastia_waiting_alert(previous_ticket, updated_ticket, actor):
     return previous_status != COORDINATION_PENDING_STATUS
 
 
-def build_nastia_waiting_alert_email(ticket):
+def nastia_waiting_alert_rows(ticket):
     details = ticket.get("details") or {}
+    board_slug = (ticket.get("board_slug") or "").strip().lower()
+    rows = [
+        ("סטטוס", normalize_ticket_status(ticket.get("board_slug"), ticket.get("status"))),
+    ]
+    if board_slug == "hot-kiryot":
+        rows.extend([
+            ("מספר קריאה", details.get("call_number")),
+            ("שם לקוח", details.get("customer_name")),
+            ("כתובת", coordination_ticket_calendar_address(ticket)),
+        ])
+    else:
+        rows.extend([
+            ("מספר מסוף", details.get("terminal_number")),
+            ("כתובת", coordination_ticket_calendar_address(ticket)),
+        ])
+    return rows
+
+
+def build_nastia_waiting_alert_email(ticket):
     board = get_ticket_board((ticket.get("board_slug") or "").strip().lower())
     ticket_label = ticket.get("ticket_id") or f"#{int(ticket.get('id') or 0):04d}"
-    terminal_number = (details.get("terminal_number") or "").strip()
-    address = coordination_ticket_calendar_address(ticket)
     subject = f"התראה: {ticket_label} ממתין לתיאום"
+    rows = nastia_waiting_alert_rows(ticket)
     body_lines = [
         "קריאה ממתינה לתיאום אצל נסטיה.",
         f"מספר קריאה: {ticket_label}",
         f"לוח: {(ticket.get('service_type') or board['name']).strip() or board['name']}",
-        f"סטטוס: {normalize_ticket_status(ticket.get('board_slug'), ticket.get('status'))}",
-        f"מספר מסוף: {_pais_email_value(terminal_number)}",
-        f"כתובת: {_pais_email_value(address)}",
-    ]
+    ] + [f"{label}: {_pais_email_value(value)}" for label, value in rows]
+    rendered_rows = "".join(
+        f"""
+          <tr>
+            <td style="padding:10px 12px{';border-bottom:1px solid #e7dfd2' if index < len(rows) - 1 else ''};color:#6a6258;font-weight:700;width:34%;">{xml_escape(label)}</td>
+            <td style="padding:10px 12px{';border-bottom:1px solid #e7dfd2' if index < len(rows) - 1 else ''};color:#1f2f46;">{_pais_email_multiline_html(value)}</td>
+          </tr>
+        """
+        for index, (label, value) in enumerate(rows)
+    )
     html_body = f"""\
 <!DOCTYPE html>
 <html lang="he" dir="rtl">
@@ -2511,18 +2536,7 @@ def build_nastia_waiting_alert_email(ticket):
       <div style="padding:24px;">
         <p style="margin:0 0 16px;font-size:16px;font-weight:700;">הקריאה ממתינה לתיאום.</p>
         <table role="presentation" style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #e7dfd2;border-radius:10px;overflow:hidden;">
-          <tr>
-            <td style="padding:10px 12px;border-bottom:1px solid #e7dfd2;color:#6a6258;font-weight:700;width:34%;">סטטוס</td>
-            <td style="padding:10px 12px;border-bottom:1px solid #e7dfd2;color:#1f2f46;">{xml_escape(normalize_ticket_status(ticket.get('board_slug'), ticket.get('status')))}</td>
-          </tr>
-          <tr>
-            <td style="padding:10px 12px;border-bottom:1px solid #e7dfd2;color:#6a6258;font-weight:700;">מספר מסוף</td>
-            <td style="padding:10px 12px;border-bottom:1px solid #e7dfd2;color:#1f2f46;">{_pais_email_multiline_html(terminal_number)}</td>
-          </tr>
-          <tr>
-            <td style="padding:10px 12px;color:#6a6258;font-weight:700;">כתובת</td>
-            <td style="padding:10px 12px;color:#1f2f46;">{_pais_email_multiline_html(address)}</td>
-          </tr>
+          {rendered_rows}
         </table>
       </div>
     </div>
