@@ -258,6 +258,123 @@ body.dashboard-page {
   vertical-align: middle;
 }
 
+.ticket-board-waiting-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.board-waiting-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  border: 0;
+  padding: 5px 8px 5px 6px;
+  border-radius: 999px;
+  background: #fff7e0;
+  color: #5f4a09;
+  box-shadow: inset 0 0 0 1px rgba(228, 189, 72, 0.32);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+}
+
+.board-waiting-chip img {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+  border-radius: 999px;
+  background: #fff;
+  padding: 3px;
+  box-shadow: inset 0 0 0 1px rgba(207, 194, 172, 0.7);
+}
+
+.board-waiting-chip strong {
+  min-width: 22px;
+  border-radius: 999px;
+  padding: 2px 7px;
+  background: #f3cc57;
+  color: #443815;
+  text-align: center;
+}
+
+.board-waiting-chip.hot {
+  background: #edf5ff;
+  color: #23548d;
+  box-shadow: inset 0 0 0 1px rgba(87, 143, 214, 0.26);
+}
+
+.board-waiting-chip.hot strong {
+  background: #d4e7ff;
+  color: #1d4f91;
+}
+
+.board-waiting-chip:hover {
+  transform: translateY(-1px);
+  box-shadow: inset 0 0 0 1px rgba(228, 189, 72, 0.4), 0 8px 18px rgba(132, 110, 38, 0.14);
+}
+
+.board-waiting-chip.hot:hover {
+  box-shadow: inset 0 0 0 1px rgba(87, 143, 214, 0.34), 0 8px 18px rgba(46, 98, 168, 0.12);
+}
+
+.board-waiting-chip.is-active {
+  background: linear-gradient(135deg, #f8d463 0%, #efb934 100%);
+  color: #46360b;
+  box-shadow: 0 10px 22px rgba(175, 130, 25, 0.22);
+}
+
+.board-waiting-chip.is-active strong {
+  background: #fff4cb;
+  color: #584300;
+}
+
+.board-waiting-chip.hot.is-active {
+  background: linear-gradient(135deg, #d9eaff 0%, #9dc4fb 100%);
+  color: #123f72;
+  box-shadow: 0 10px 22px rgba(54, 101, 173, 0.18);
+}
+
+.board-waiting-chip.hot.is-active strong {
+  background: #ffffff;
+  color: #1d4f91;
+}
+
+.tickets-refresh-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(47, 123, 114, 0.12);
+  color: #225c55;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.tickets-refresh-indicator[hidden] {
+  display: none !important;
+}
+
+.tickets-refresh-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(34, 92, 85, 0.22);
+  border-top-color: #2f7b72;
+  border-radius: 50%;
+  animation: tickets-spin 0.75s linear infinite;
+}
+
+@keyframes tickets-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .add-ticket-btn,
 .create-ticket-btn,
 .icon-btn {

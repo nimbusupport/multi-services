@@ -10,6 +10,7 @@ let imagePreviewScale = 1;
 let sendSuccessToastTimer = null;
 let signaturePadDirty = false;
 let activeFieldReportSignatureTarget = "customer";
+let nastyaBoardFilter = "all";
 
 const AUTO_REFRESH_INTERVAL_MS = 10000;
 const NASTYA_EDITABLE_STATUSES = ["ממתין לתיאום", "תואם", "בוצע", "נכשל"];
@@ -430,6 +431,22 @@ function applyReportQuickFilter(tickets) {
   return tickets;
 }
 
+function applyNastyaBoardFilter(tickets) {
+  if (!Array.isArray(tickets)) return [];
+  if (!isNastyaQueuePage || nastyaBoardFilter === "all") {
+    return tickets;
+  }
+  return tickets.filter((ticket) => String(ticket?.board_slug || "") === nastyaBoardFilter);
+}
+
+function syncNastyaBoardFilterButtons() {
+  document.querySelectorAll("[data-board-filter]").forEach((button) => {
+    const isActive = String(button.dataset.boardFilter || "") === nastyaBoardFilter;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-pressed", isActive ? "true" : "false");
+  });
+}
+
 function setFieldInvalid(element, isInvalid) {
   if (!element) return;
   element.classList.toggle("field-invalid", Boolean(isInvalid));
@@ -446,12 +463,16 @@ function setTicketsLoading(isLoading) {
   const stage = document.getElementById("ticket-list-stage");
   const loading = document.getElementById("tickets-loading");
   const empty = document.getElementById("tickets-empty");
+  const refreshIndicator = document.getElementById("tickets-refresh-indicator");
   const showBlockingLoader = Boolean(isLoading) && lastTickets.length === 0;
   if (stage) {
     stage.classList.toggle("is-loading", showBlockingLoader);
   }
   if (loading) {
     loading.hidden = !showBlockingLoader;
+  }
+  if (refreshIndicator) {
+    refreshIndicator.hidden = !isLoading;
   }
   if (showBlockingLoader && empty) {
     empty.style.display = "none";
@@ -465,6 +486,13 @@ function renderStats(stats) {
   if (statAll) statAll.textContent = stats?.all ?? 0;
   if (statUnassigned) statUnassigned.textContent = stats?.unassigned ?? 0;
   if (statWaiting) statWaiting.textContent = `${stats?.waiting ?? 0} Open`;
+  document.querySelectorAll("[data-board-counter]").forEach((chip) => {
+    const boardCounter = String(chip.dataset.boardCounter || "");
+    const value = stats?.board_waiting?.[boardCounter] ?? 0;
+    const counter = chip.querySelector("strong");
+    if (counter) counter.textContent = String(value);
+  });
+  syncNastyaBoardFilterButtons();
 }
 
 function renderTickets(tickets, users) {
@@ -1345,7 +1373,7 @@ async function loadTickets() {
     if (!res.ok) return;
     const data = await res.json();
     renderStats(data.stats);
-    renderTickets(applyReportQuickFilter(data.tickets), data.users);
+    renderTickets(applyNastyaBoardFilter(applyReportQuickFilter(data.tickets)), data.users);
     document.getElementById("next-ticket-id").textContent = data.next_id || "#0001";
   } finally {
     ticketsLoading = false;
@@ -3453,6 +3481,16 @@ document.addEventListener("DOMContentLoaded", () => {
       document.querySelectorAll(".ticket-tab").forEach((tab) => tab.classList.remove("active"));
       button.classList.add("active");
       currentScope = button.dataset.scope || "all";
+      loadTickets();
+    });
+  });
+
+  syncNastyaBoardFilterButtons();
+  document.querySelectorAll("[data-board-filter]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const selectedBoard = String(button.dataset.boardFilter || "all");
+      nastyaBoardFilter = nastyaBoardFilter === selectedBoard ? "all" : selectedBoard;
+      syncNastyaBoardFilterButtons();
       loadTickets();
     });
   });

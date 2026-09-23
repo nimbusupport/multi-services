@@ -21,7 +21,12 @@ from email.message import EmailMessage
 from zoneinfo import ZoneInfo
 from urllib.parse import quote, urlparse, urlunparse
 from xml.sax.saxutils import escape as xml_escape
-from bidi.algorithm import get_display
+try:
+    from bidi.algorithm import get_display
+except ImportError:
+    # Allow the app to boot even when optional PDF bidi shaping is unavailable.
+    def get_display(text):
+        return text
 from google.auth.exceptions import RefreshError
 from google.auth.transport.requests import Request
 from google.oauth2.service_account import Credentials
@@ -1351,12 +1356,25 @@ def next_support_ticket_id():
 
 
 def support_ticket_stats(tickets):
+    board_waiting = {
+        "pais": len([
+            t for t in tickets
+            if (t.get("board_slug") or "").strip().lower() == "pais"
+            and status_is_coordination_pending(t.get("status"))
+        ]),
+        "hot-kiryot": len([
+            t for t in tickets
+            if (t.get("board_slug") or "").strip().lower() == "hot-kiryot"
+            and status_is_coordination_pending(t.get("status"))
+        ]),
+    }
     return {
         "all": len(tickets),
         "waiting": len([t for t in tickets if support_ticket_is_open(t)]),
         "done": len([t for t in tickets if support_ticket_is_done(t)]),
         "coordination": len([t for t in tickets if status_is_coordination_pending(t.get("status"))]),
         "unassigned": len([t for t in tickets if not t.get("assigned_to")]),
+        "board_waiting": board_waiting,
     }
 
 

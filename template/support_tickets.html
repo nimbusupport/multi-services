@@ -168,13 +168,31 @@
     <section class="tickets-workspace">
       <div class="tickets-toolbar">
       <header class="tickets-header">
-        <div class="ticket-board-brand {% if page_icon_path %}has-logo{% endif %}">
-          {% if page_icon_path %}
+        <div class="ticket-board-brand {% if page_icon_path and page_mode != 'nastia' %}has-logo{% endif %}">
+          {% if page_icon_path and page_mode != 'nastia' %}
           <img src="{{ page_icon_path }}" alt="{{ page_title }}">
           {% endif %}
           <div>
             <p>{{ page_subtitle }}</p>
             <h1>{{ page_title }} <span id="stat-waiting">0 Waiting</span></h1>
+            {% if page_mode == 'nastia' %}
+            <div class="ticket-board-waiting-strip" id="nastya-board-waiting">
+              <button class="board-waiting-chip" type="button" data-board-counter="pais" data-board-filter="pais" aria-pressed="false">
+                <img src="/picture/pais.png" alt="מפעל הפיס">
+                <span>פיס</span>
+                <strong>0</strong>
+              </button>
+              <button class="board-waiting-chip hot" type="button" data-board-counter="hot-kiryot" data-board-filter="hot-kiryot" aria-pressed="false">
+                <img src="https://hot.nimbusip.com/themes/default/images/logo.png" alt="HOT">
+                <span>HOT</span>
+                <strong>0</strong>
+              </button>
+              <span class="tickets-refresh-indicator" id="tickets-refresh-indicator" hidden aria-live="polite">
+                <span class="tickets-refresh-spinner" aria-hidden="true"></span>
+                <span>Loading...</span>
+              </span>
+            </div>
+            {% endif %}
           </div>
         </div>
 

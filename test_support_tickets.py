@@ -1027,6 +1027,93 @@ class SupportTicketsTestCase(unittest.TestCase):
         payload = response.get_json()
         self.assertEqual([ticket["id"] for ticket in payload["tickets"]], [2, 3])
 
+    def test_nastia_queue_stats_include_waiting_counts_by_board(self):
+        tickets = self.app_module.load_support_tickets()
+        tickets.extend([
+            {
+                "id": 2,
+                "board_slug": "pais",
+                "created_at": "2026-07-08T09:00:00+03:00",
+                "created_at_display": "08/07/2026 09:00",
+                "creator": "Admin",
+                "ticket_type": "׳שירות",
+                "service_type": "מפעל הפיס",
+                "domain": "",
+                "priority": "Medium",
+                "description": "",
+                "solution": "",
+                "status": "ממתין לתיאום",
+                "assigned_to": "ניר",
+                "details": {
+                    "terminal_number": "6001",
+                    "address": "Pais waiting",
+                    "customer_request": "R4",
+                    "actions_taken": "",
+                },
+                "attachments": [],
+                "updates": [],
+            },
+            {
+                "id": 3,
+                "board_slug": "hot-kiryot",
+                "created_at": "2026-07-08T10:00:00+03:00",
+                "created_at_display": "08/07/2026 10:00",
+                "creator": "Admin",
+                "ticket_type": "׳שירות",
+                "service_type": "הוט קריאות",
+                "domain": "",
+                "priority": "Medium",
+                "description": "",
+                "solution": "",
+                "status": "ממתין לתיאום",
+                "assigned_to": "ניר",
+                "details": {
+                    "call_number": "275749117",
+                    "customer_name": "חיים",
+                    "address": "Hot waiting",
+                    "issue_summary": "PANCODE לא עובד",
+                },
+                "attachments": [],
+                "updates": [],
+            },
+            {
+                "id": 4,
+                "board_slug": "hot-kiryot",
+                "created_at": "2026-07-08T11:00:00+03:00",
+                "created_at_display": "08/07/2026 11:00",
+                "creator": "Admin",
+                "ticket_type": "׳שירות",
+                "service_type": "הוט קריאות",
+                "domain": "",
+                "priority": "Medium",
+                "description": "",
+                "solution": "",
+                "status": "תואם",
+                "assigned_to": "גולן",
+                "details": {
+                    "call_number": "275749118",
+                    "customer_name": "לקוח",
+                    "address": "Hot scheduled",
+                    "issue_summary": "Issue",
+                    "coordinated_worker": "גולן",
+                    "visit_date": "2026-07-09",
+                    "visit_hour_from": "09:00",
+                    "visit_hour_to": "10:00",
+                },
+                "attachments": [],
+                "updates": [],
+            },
+        ])
+        self.app_module.save_support_tickets(tickets)
+
+        self.login("admin@nimbusip.com")
+        response = self.client.get("/support-tickets-data?board=pais&queue=nastia")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["stats"]["board_waiting"]["pais"], 1)
+        self.assertEqual(payload["stats"]["board_waiting"]["hot-kiryot"], 1)
+
     def test_pais_report_filters_by_status_and_date(self):
         tickets = self.app_module.load_support_tickets()
         tickets.extend([
