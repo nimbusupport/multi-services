@@ -334,6 +334,7 @@ SUPABASE_BUCKET_REGION = (os.environ.get("SUPABASE_BUCKET_REGION") or "").strip(
 SUPABASE_BUCKET_ACCESS_KEY = (os.environ.get("SUPABASE_BUCKET_ACCESS_KEY") or "").strip()
 SUPABASE_BUCKET_SECRET_KEY = (os.environ.get("SUPABASE_BUCKET_SECRET_KEY") or "").strip()
 NASTIA_NOTIFICATION_EMAIL = (os.environ.get("NASTIA_NOTIFICATION_EMAIL") or "nastya@nimbusip.com").strip()
+NASTIA_APP_LOGIN_URL = (os.environ.get("NASTIA_APP_LOGIN_URL") or "https://multi-services-gilt.vercel.app/login").strip()
 RACHELI_NOTIFICATION_EMAIL = (os.environ.get("RACHELI_NOTIFICATION_EMAIL") or "racheli@nimbusip.com").strip()
 HOT_FIELD_REPORT_CUSTOMER_EMAIL = (os.environ.get("HOT_FIELD_REPORT_CUSTOMER_EMAIL") or NASTIA_NOTIFICATION_EMAIL).strip()
 FIELD_REPORT_SUPPORTED_BOARD_SLUGS = {"hot-kiryot", "pais"}
@@ -2421,7 +2422,7 @@ def build_pais_google_calendar_link(ticket):
     return f"https://calendar.google.com/calendar/render?{query}"
 
 
-def build_pais_email_html(ticket, calendar_link=None):
+def build_pais_email_html(ticket, calendar_link=None, app_link=None):
     email_context = coordination_ticket_email_context(ticket)
 
     def render_rows(rows):
@@ -2445,6 +2446,19 @@ def build_pais_email_html(ticket, calendar_link=None):
         </div>
         """
 
+    app_button = ""
+    if app_link:
+        app_button = f"""
+        <div style="margin:16px 0 0;text-align:center;">
+          <a href="{xml_escape(app_link)}" style="display:inline-block;background:#1f4f8f;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:700;">
+            מעבר לאפליקציה
+          </a>
+        </div>
+        <div style="margin:12px 0 0;text-align:center;font-size:13px;color:#6a6258;">
+          <a href="{xml_escape(app_link)}" style="color:#1f4f8f;text-decoration:none;">{xml_escape(app_link)}</a>
+        </div>
+        """
+
     return f"""\
 <!DOCTYPE html>
 <html lang="he" dir="rtl">
@@ -2463,6 +2477,7 @@ def build_pais_email_html(ticket, calendar_link=None):
           {render_rows(email_context["detail_rows"])}
         </table>
         {calendar_button}
+        {app_button}
       </div>
     </div>
   </body>
@@ -2515,6 +2530,11 @@ def build_nastia_waiting_alert_email(ticket):
         f"מספר קריאה: {ticket_label}",
         f"לוח: {(ticket.get('service_type') or board['name']).strip() or board['name']}",
     ] + [f"{label}: {_pais_email_value(value)}" for label, value in rows]
+    if NASTIA_APP_LOGIN_URL:
+        body_lines.extend([
+            "",
+            f"קישור לאפליקציה: {NASTIA_APP_LOGIN_URL}",
+        ])
     rendered_rows = "".join(
         f"""
           <tr>
@@ -2538,6 +2558,14 @@ def build_nastia_waiting_alert_email(ticket):
         <table role="presentation" style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #e7dfd2;border-radius:10px;overflow:hidden;">
           {rendered_rows}
         </table>
+        <div style="margin:18px 0 0;text-align:center;">
+          <a href="{xml_escape(NASTIA_APP_LOGIN_URL)}" style="display:inline-block;background:#1f4f8f;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:700;">
+            מעבר לאפליקציה
+          </a>
+        </div>
+        <div style="margin:12px 0 0;text-align:center;font-size:13px;color:#6a6258;">
+          <a href="{xml_escape(NASTIA_APP_LOGIN_URL)}" style="color:#1f4f8f;text-decoration:none;">{xml_escape(NASTIA_APP_LOGIN_URL)}</a>
+        </div>
       </div>
     </div>
   </body>
@@ -2577,12 +2605,17 @@ def send_nastia_ticket_email(ticket):
             "",
             f"הוספה ליומן Google: {calendar_link}",
         ])
+    if NASTIA_APP_LOGIN_URL:
+        body_lines.extend([
+            "",
+            f"קישור לאפליקציה: {NASTIA_APP_LOGIN_URL}",
+        ])
     send_plain_email(
         NASTIA_NOTIFICATION_EMAIL,
         email_context["subject"],
         "\n".join(body_lines),
         from_address=PAIS_NOTIFICATION_FROM or SMTP_FROM or SMTP_USERNAME,
-        html_body=build_pais_email_html(ticket, calendar_link=calendar_link),
+        html_body=build_pais_email_html(ticket, calendar_link=calendar_link, app_link=NASTIA_APP_LOGIN_URL),
     )
 
 

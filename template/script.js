@@ -846,7 +846,17 @@ async function fireberryFillAll(){
     }
   }
 
-  alert(`סיום משיכה מ-Fireberry:\n✅ עודכנו: ${okCount}\n❌ לא נמצאו/אין ח.פ: ${notFoundCount}\n⚠ שגיאות: ${errorCount}`);
+  const summaryLines = [
+    "סיום משיכה מ-Fireberry",
+    `עודכנו: ${okCount}`,
+  ];
+  if (notFoundCount > 0) {
+    summaryLines.push(`X לא נמצאו/אין ח.פ: ${notFoundCount}`);
+  }
+  if (errorCount > 0) {
+    summaryLines.push(`A שגיאות: ${errorCount}`);
+  }
+  alert(summaryLines.join("\n"));
 }
 
 /* ================================

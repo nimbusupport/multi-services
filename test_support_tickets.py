@@ -2842,6 +2842,12 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertIn("Email street 4", captured["html_body"])
         self.assertIn("add=assafh%40nimbusip.com", captured["body"])
         self.assertIn("add=assafh%40nimbusip.com", captured["html_body"])
+        self.assertIn(self.app_module.NASTIA_APP_LOGIN_URL, captured["body"])
+        self.assertIn(self.app_module.NASTIA_APP_LOGIN_URL, captured["html_body"])
+        self.assertIn(self.app_module.NASTIA_APP_LOGIN_URL, captured["body"])
+        self.assertIn(self.app_module.NASTIA_APP_LOGIN_URL, captured["html_body"])
+        self.assertIn(self.app_module.NASTIA_APP_LOGIN_URL, captured["body"])
+        self.assertIn(self.app_module.NASTIA_APP_LOGIN_URL, captured["html_body"])
         self.assertEqual(captured["attachments"], [])
 
     def test_send_nastia_waiting_alert_email_includes_terminal_and_address(self):
