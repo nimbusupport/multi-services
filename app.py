@@ -4857,7 +4857,7 @@ def support_tickets_data():
     board_slug = (request.args.get("board") or "support").strip().lower()
     queue_slug = (request.args.get("queue") or "").strip().lower()
     register_service_activity(support_page_key(board_slug, queue_slug))
-    tickets = load_support_tickets(board_slug)
+    tickets = load_support_tickets() if queue_slug == "nastia" else load_support_tickets(board_slug)
     scope = (request.args.get("scope") or "all").strip().lower()
     status_filter = (request.args.get("status") or "").strip()
     assignee_filter = (request.args.get("assignee") or "").strip()

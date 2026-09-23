@@ -922,6 +922,48 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertEqual(len(payload["tickets"]), 1)
         self.assertEqual(payload["tickets"][0]["details"]["terminal_number"], "6001")
 
+    def test_nastia_queue_includes_hot_coordination_tickets(self):
+        tickets = self.app_module.load_support_tickets()
+        tickets.extend([
+            {
+                "id": 2,
+                "board_slug": "hot-kiryot",
+                "created_at": "2026-07-08T09:00:00+03:00",
+                "created_at_display": "08/07/2026 09:00",
+                "creator": "Admin",
+                "ticket_type": "שירות",
+                "service_type": "הוט קריות",
+                "domain": "",
+                "priority": "Medium",
+                "description": "",
+                "solution": "",
+                "status": "ממתין לתיאום",
+                "assigned_to": "ניר",
+                "details": {
+                    "call_number": "275749117",
+                    "customer_name": "חיים",
+                    "address": "Hot coordination address",
+                    "issue_summary": "PANCODE לא עובד",
+                    "coordinated_worker": "",
+                    "visit_date": "",
+                    "visit_hour_from": "",
+                    "visit_hour_to": "",
+                },
+                "attachments": [],
+                "updates": [],
+            },
+        ])
+        self.app_module.save_support_tickets(tickets)
+
+        self.login("admin@nimbusip.com")
+        response = self.client.get("/support-tickets-data?board=pais&queue=nastia")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(len(payload["tickets"]), 1)
+        self.assertEqual(payload["tickets"][0]["board_slug"], "hot-kiryot")
+        self.assertEqual(payload["tickets"][0]["details"]["call_number"], "275749117")
+
     def test_nastia_queue_prioritizes_waiting_tickets_at_top(self):
         tickets = self.app_module.load_support_tickets()
         tickets.extend([
