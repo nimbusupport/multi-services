@@ -211,6 +211,9 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.original_send_nastia_cancellation_alert_email = self.app_module.send_nastia_cancellation_alert_email
         self.original_send_plain_email = self.app_module.send_plain_email
         self.original_build_hot_field_report_pdf = self.app_module.build_hot_field_report_pdf
+        self.original_resend_api_key = self.app_module.RESEND_API_KEY
+        self.original_resend_api_url = self.app_module.RESEND_API_URL
+        self.original_resend_from = self.app_module.RESEND_FROM
         self.original_smtp_from = self.app_module.SMTP_FROM
         self.original_smtp_username = self.app_module.SMTP_USERNAME
         self.original_token_inforu = self.app_module.TOKEN_INFORU
@@ -238,6 +241,9 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.app_module.send_nastia_cancellation_alert_email = self.original_send_nastia_cancellation_alert_email
         self.app_module.send_plain_email = self.original_send_plain_email
         self.app_module.build_hot_field_report_pdf = self.original_build_hot_field_report_pdf
+        self.app_module.RESEND_API_KEY = self.original_resend_api_key
+        self.app_module.RESEND_API_URL = self.original_resend_api_url
+        self.app_module.RESEND_FROM = self.original_resend_from
         self.app_module.SMTP_FROM = self.original_smtp_from
         self.app_module.SMTP_USERNAME = self.original_smtp_username
         self.app_module.TOKEN_INFORU = self.original_token_inforu
@@ -3275,6 +3281,8 @@ class SupportTicketsTestCase(unittest.TestCase):
     def test_send_plain_email_retries_once_after_disconnect(self):
         original_smtp_ssl = self.app_module.smtplib.SMTP_SSL
         app_module = self.app_module
+        self.app_module.RESEND_API_KEY = ""
+        self.app_module.RESEND_FROM = ""
         self.app_module.SMTP_HOST = "smtp.gmail.com"
         self.app_module.SMTP_PORT = 465
         self.app_module.SMTP_USE_SSL = True
@@ -3321,6 +3329,56 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertEqual(attempts["login"], ("nimbuskonan@gmail.com", "secret"))
         self.assertEqual(len(sent_messages), 1)
         self.assertEqual(sent_messages[0]["To"], "nastya@nimbusip.com")
+
+    def test_send_plain_email_uses_resend_api_when_configured(self):
+        captured = {}
+
+        class FakeResponse:
+            def __init__(self, ok=True, status_code=200, payload=None, text=""):
+                self.ok = ok
+                self.status_code = status_code
+                self._payload = payload or {}
+                self.text = text
+
+            def json(self):
+                return self._payload
+
+        def fake_post(url, headers=None, json=None, timeout=None):
+            captured["url"] = url
+            captured["headers"] = headers or {}
+            captured["json"] = json or {}
+            captured["timeout"] = timeout
+            return FakeResponse(ok=True, payload={"id": "email_123"})
+
+        self.app_module.RESEND_API_KEY = "re_test_123"
+        self.app_module.RESEND_API_URL = "https://api.resend.com/emails"
+        self.app_module.RESEND_FROM = "Nimbus <noreply@nimbusip.com>"
+        self.app_module.SMTP_HOST = ""
+        self.app_module.requests.post = fake_post
+
+        self.app_module.send_plain_email(
+            "nastya@nimbusip.com",
+            "Resend test",
+            "Plain body",
+            html_body="<strong>HTML</strong>",
+            attachments=[{
+                "filename": "report.txt",
+                "content": b"hello",
+                "content_type": "text/plain",
+            }],
+        )
+
+        self.assertEqual(captured["url"], "https://api.resend.com/emails")
+        self.assertEqual(captured["headers"]["Authorization"], "Bearer re_test_123")
+        self.assertEqual(captured["json"]["from"], "Nimbus <noreply@nimbusip.com>")
+        self.assertEqual(captured["json"]["to"], ["nastya@nimbusip.com"])
+        self.assertEqual(captured["json"]["subject"], "Resend test")
+        self.assertEqual(captured["json"]["text"], "Plain body")
+        self.assertEqual(captured["json"]["html"], "<strong>HTML</strong>")
+        self.assertEqual(captured["json"]["attachments"][0]["filename"], "report.txt")
+        self.assertEqual(captured["json"]["attachments"][0]["content"], "aGVsbG8=")
+        self.assertEqual(captured["json"]["attachments"][0]["content_type"], "text/plain")
+        self.assertEqual(captured["timeout"], 30)
 
     def test_golan_coordination_calendar_link_includes_worker_guest_email(self):
         calendar_link = self.app_module.build_pais_google_calendar_link({

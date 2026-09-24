@@ -364,6 +364,15 @@ PAIS_CALENDAR_GUEST_EMAILS = {
     "איציק": "isaace@nimbusip.com",
     "זורה": "zura@nimbusip.com",
 }
+RESEND_API_KEY = (os.environ.get("RESEND_API_KEY") or "").strip()
+RESEND_API_URL = (os.environ.get("RESEND_API_URL") or "https://api.resend.com/emails").strip()
+RESEND_FROM = (
+    os.environ.get("RESEND_FROM")
+    or os.environ.get("EMAIL_FROM")
+    or PAIS_NOTIFICATION_FROM
+    or os.environ.get("SMTP_FROM")
+    or os.environ.get("SMTP_USERNAME")
+).strip()
 SMTP_HOST = (os.environ.get("SMTP_HOST") or "").strip()
 SMTP_PORT = int((os.environ.get("SMTP_PORT") or "587").strip())
 SMTP_USERNAME = (os.environ.get("SMTP_USERNAME") or "").strip()
@@ -2145,9 +2154,91 @@ def smtp_email_enabled():
     return bool(SMTP_HOST and (SMTP_FROM or SMTP_USERNAME))
 
 
+def resend_email_enabled():
+    return bool(RESEND_API_KEY and (RESEND_FROM or SMTP_FROM or SMTP_USERNAME))
+
+
+def _resend_attachment_payload(attachment):
+    if not isinstance(attachment, dict):
+        return None
+    filename = str(attachment.get("filename") or "attachment.txt")
+    content = attachment.get("content")
+    path = str(attachment.get("path") or "").strip()
+    content_type = str(attachment.get("content_type") or attachment.get("contentType") or "").strip()
+
+    payload = {"filename": filename}
+    if path:
+        payload["path"] = path
+    else:
+        if isinstance(content, str):
+            encoded_content = content
+        else:
+            encoded_content = base64.b64encode(content or b"").decode("ascii")
+        payload["content"] = encoded_content
+    if content_type:
+        payload["content_type"] = content_type
+    return payload
+
+
+def send_plain_email_via_resend(to_address, subject, body, from_address=None, html_body=None, attachments=None):
+    sender = (from_address or RESEND_FROM or SMTP_FROM or SMTP_USERNAME).strip()
+    if not (RESEND_API_KEY and sender):
+        raise RuntimeError("Resend is not configured")
+
+    payload = {
+        "from": sender,
+        "to": [to_address],
+        "subject": subject,
+        "text": body,
+    }
+    if html_body:
+        payload["html"] = html_body
+
+    prepared_attachments = [
+        prepared for prepared in (_resend_attachment_payload(item) for item in (attachments or []))
+        if prepared
+    ]
+    if prepared_attachments:
+        payload["attachments"] = prepared_attachments
+
+    response = requests.post(
+        RESEND_API_URL,
+        headers={
+            "Authorization": f"Bearer {RESEND_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        json=payload,
+        timeout=30,
+    )
+    if response.ok:
+        return
+
+    try:
+        error_payload = response.json()
+    except ValueError:
+        error_payload = {}
+    error_message = (
+        error_payload.get("message")
+        or error_payload.get("error")
+        or response.text.strip()
+        or f"Resend API request failed with status {response.status_code}"
+    )
+    raise RuntimeError(error_message)
+
+
 def send_plain_email(to_address, subject, body, from_address=None, html_body=None, attachments=None):
+    if resend_email_enabled():
+        send_plain_email_via_resend(
+            to_address,
+            subject,
+            body,
+            from_address=from_address,
+            html_body=html_body,
+            attachments=attachments,
+        )
+        return
     if not smtp_email_enabled():
-        raise RuntimeError("SMTP is not configured")
+        raise RuntimeError("SMTP or Resend is not configured")
 
     message = EmailMessage()
     message["Subject"] = subject
