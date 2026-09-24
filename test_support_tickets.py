@@ -3380,6 +3380,39 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertEqual(captured["json"]["attachments"][0]["content_type"], "text/plain")
         self.assertEqual(captured["timeout"], 30)
 
+    def test_send_plain_email_uses_resend_from_even_when_legacy_sender_is_passed(self):
+        captured = {}
+
+        class FakeResponse:
+            def __init__(self):
+                self.ok = True
+                self.status_code = 200
+                self.text = ""
+
+            def json(self):
+                return {"id": "email_legacy_sender_override"}
+
+        def fake_post(url, headers=None, json=None, timeout=None):
+            captured["url"] = url
+            captured["json"] = json or {}
+            return FakeResponse()
+
+        self.app_module.RESEND_API_KEY = "re_test_123"
+        self.app_module.RESEND_API_URL = "https://api.resend.com/emails"
+        self.app_module.RESEND_FROM = "Support <onboarding@resend.dev>"
+        self.app_module.SMTP_FROM = "nimbuskonan@gmail.com"
+        self.app_module.requests.post = fake_post
+
+        self.app_module.send_plain_email(
+            "nastya@nimbusip.com",
+            "Resend sender priority",
+            "Plain body",
+            from_address="nimbuskonan@gmail.com",
+        )
+
+        self.assertEqual(captured["url"], "https://api.resend.com/emails")
+        self.assertEqual(captured["json"]["from"], "Support <onboarding@resend.dev>")
+
     def test_golan_coordination_calendar_link_includes_worker_guest_email(self):
         calendar_link = self.app_module.build_pais_google_calendar_link({
             "id": 44,

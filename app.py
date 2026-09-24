@@ -2158,6 +2158,10 @@ def resend_email_enabled():
     return bool(RESEND_API_KEY and (RESEND_FROM or SMTP_FROM or SMTP_USERNAME))
 
 
+def default_notification_from_address():
+    return (RESEND_FROM or PAIS_NOTIFICATION_FROM or SMTP_FROM or SMTP_USERNAME).strip()
+
+
 def _resend_attachment_payload(attachment):
     if not isinstance(attachment, dict):
         return None
@@ -2181,7 +2185,8 @@ def _resend_attachment_payload(attachment):
 
 
 def send_plain_email_via_resend(to_address, subject, body, from_address=None, html_body=None, attachments=None):
-    sender = (from_address or RESEND_FROM or SMTP_FROM or SMTP_USERNAME).strip()
+    # Resend must use the verified sender configured for the account.
+    sender = (RESEND_FROM or from_address or SMTP_FROM or SMTP_USERNAME).strip()
     if not (RESEND_API_KEY and sender):
         raise RuntimeError("Resend is not configured")
 
@@ -2827,7 +2832,7 @@ def send_racheli_ticket_email(ticket):
         RACHELI_NOTIFICATION_EMAIL,
         f"{email_context['ticket_label']} - {selected_mode}",
         "\n".join(email_context["body_lines"]),
-        from_address=PAIS_NOTIFICATION_FROM or SMTP_FROM or SMTP_USERNAME,
+        from_address=default_notification_from_address(),
         html_body=build_pais_email_html(ticket),
     )
 
@@ -2850,7 +2855,7 @@ def send_nastia_ticket_email(ticket):
         NASTIA_NOTIFICATION_EMAIL,
         email_context["subject"],
         "\n".join(body_lines),
-        from_address=PAIS_NOTIFICATION_FROM or SMTP_FROM or SMTP_USERNAME,
+        from_address=default_notification_from_address(),
         html_body=build_pais_email_html(ticket, calendar_link=calendar_link, app_link=NASTIA_APP_LOGIN_URL),
     )
 
@@ -2861,7 +2866,7 @@ def send_nastia_waiting_alert_email(ticket):
         NASTIA_NOTIFICATION_EMAIL,
         subject,
         body,
-        from_address=PAIS_NOTIFICATION_FROM or SMTP_FROM or SMTP_USERNAME,
+        from_address=default_notification_from_address(),
         html_body=html_body,
     )
 
@@ -2872,7 +2877,7 @@ def send_nastia_cancellation_alert_email(previous_ticket, updated_ticket):
         NASTIA_NOTIFICATION_EMAIL,
         subject,
         body,
-        from_address=PAIS_NOTIFICATION_FROM or SMTP_FROM or SMTP_USERNAME,
+        from_address=default_notification_from_address(),
         html_body=html_body,
     )
 
