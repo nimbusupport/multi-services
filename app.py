@@ -380,6 +380,71 @@ SMTP_PASSWORD = (os.environ.get("SMTP_PASSWORD") or "").strip()
 SMTP_FROM = (os.environ.get("SMTP_FROM") or SMTP_USERNAME or f"no-reply@{ALLOWED_EMAIL_DOMAIN}").strip()
 SMTP_USE_TLS = env_flag("SMTP_USE_TLS", True)
 SMTP_USE_SSL = env_flag("SMTP_USE_SSL", False)
+
+
+def configured_resend_api_key():
+    return (
+        os.environ.get("RESEND_API_KEY")
+        or os.environ.get("RESEND_KEY")
+        or os.environ.get("RESEND_TOKEN")
+        or ""
+    ).strip()
+
+
+def configured_resend_api_url():
+    return (os.environ.get("RESEND_API_URL") or RESEND_API_URL or "https://api.resend.com/emails").strip()
+
+
+def configured_resend_from():
+    return (
+        os.environ.get("RESEND_FROM")
+        or os.environ.get("EMAIL_FROM")
+        or PAIS_NOTIFICATION_FROM
+        or os.environ.get("SMTP_FROM")
+        or os.environ.get("SMTP_USERNAME")
+        or ""
+    ).strip()
+
+
+def configured_smtp_host():
+    return (os.environ.get("SMTP_HOST") or SMTP_HOST or "").strip()
+
+
+def configured_smtp_port():
+    raw_value = (os.environ.get("SMTP_PORT") or str(SMTP_PORT or "587")).strip()
+    try:
+        return int(raw_value)
+    except (TypeError, ValueError):
+        return 587
+
+
+def configured_smtp_username():
+    return (os.environ.get("SMTP_USERNAME") or SMTP_USERNAME or "").strip()
+
+
+def configured_smtp_password():
+    return (os.environ.get("SMTP_PASSWORD") or SMTP_PASSWORD or "").strip()
+
+
+def configured_smtp_from():
+    return (
+        os.environ.get("SMTP_FROM")
+        or configured_smtp_username()
+        or SMTP_FROM
+        or f"no-reply@{ALLOWED_EMAIL_DOMAIN}"
+    ).strip()
+
+
+def configured_smtp_use_tls():
+    if "SMTP_USE_TLS" in os.environ:
+        return env_flag("SMTP_USE_TLS", True)
+    return SMTP_USE_TLS
+
+
+def configured_smtp_use_ssl():
+    if "SMTP_USE_SSL" in os.environ:
+        return env_flag("SMTP_USE_SSL", False)
+    return SMTP_USE_SSL
 TICKET_BOARD_DEFAULTS = {
     "support": {
         "slug": "support",
@@ -2151,15 +2216,31 @@ def save_hot_field_report(ticket_id, actor, payload, area_photo_files=None):
 
 
 def smtp_email_enabled():
-    return bool(SMTP_HOST and (SMTP_FROM or SMTP_USERNAME))
+    return bool(configured_smtp_host() and (configured_smtp_from() or configured_smtp_username()))
 
 
 def resend_email_enabled():
-    return bool(RESEND_API_KEY and (RESEND_FROM or SMTP_FROM or SMTP_USERNAME))
+    return bool(configured_resend_api_key() and (configured_resend_from() or configured_smtp_from() or configured_smtp_username()))
+
+
+def resend_delivery_requested():
+    return bool(
+        configured_resend_api_key()
+        or configured_resend_from()
+        or (os.environ.get("EMAIL_PROVIDER") or "").strip().lower() == "resend"
+    )
+
+
+def selected_email_provider():
+    if resend_delivery_requested():
+        return "resend"
+    if smtp_email_enabled():
+        return "smtp"
+    return "none"
 
 
 def default_notification_from_address():
-    return (RESEND_FROM or PAIS_NOTIFICATION_FROM or SMTP_FROM or SMTP_USERNAME).strip()
+    return (configured_resend_from() or PAIS_NOTIFICATION_FROM or configured_smtp_from() or configured_smtp_username()).strip()
 
 
 def _resend_attachment_payload(attachment):
@@ -2186,8 +2267,10 @@ def _resend_attachment_payload(attachment):
 
 def send_plain_email_via_resend(to_address, subject, body, from_address=None, html_body=None, attachments=None):
     # Resend must use the verified sender configured for the account.
-    sender = (RESEND_FROM or from_address or SMTP_FROM or SMTP_USERNAME).strip()
-    if not (RESEND_API_KEY and sender):
+    resend_api_key = configured_resend_api_key()
+    resend_api_url = configured_resend_api_url()
+    sender = (configured_resend_from() or from_address or configured_smtp_from() or configured_smtp_username()).strip()
+    if not (resend_api_key and sender):
         raise RuntimeError("Resend is not configured")
 
     payload = {
@@ -2207,9 +2290,9 @@ def send_plain_email_via_resend(to_address, subject, body, from_address=None, ht
         payload["attachments"] = prepared_attachments
 
     response = requests.post(
-        RESEND_API_URL,
+        resend_api_url,
         headers={
-            "Authorization": f"Bearer {RESEND_API_KEY}",
+            "Authorization": f"Bearer {resend_api_key}",
             "Content-Type": "application/json",
         },
         json=payload,
@@ -2232,7 +2315,8 @@ def send_plain_email_via_resend(to_address, subject, body, from_address=None, ht
 
 
 def send_plain_email(to_address, subject, body, from_address=None, html_body=None, attachments=None):
-    if resend_email_enabled():
+    provider = selected_email_provider()
+    if provider == "resend":
         send_plain_email_via_resend(
             to_address,
             subject,
@@ -2242,12 +2326,20 @@ def send_plain_email(to_address, subject, body, from_address=None, html_body=Non
             attachments=attachments,
         )
         return
-    if not smtp_email_enabled():
+    if provider != "smtp":
         raise RuntimeError("SMTP or Resend is not configured")
+
+    smtp_host = configured_smtp_host()
+    smtp_port = configured_smtp_port()
+    smtp_username = configured_smtp_username()
+    smtp_password = configured_smtp_password()
+    smtp_from = configured_smtp_from()
+    smtp_use_tls = configured_smtp_use_tls()
+    smtp_use_ssl = configured_smtp_use_ssl()
 
     message = EmailMessage()
     message["Subject"] = subject
-    message["From"] = (from_address or SMTP_FROM or SMTP_USERNAME).strip()
+    message["From"] = (from_address or smtp_from or smtp_username).strip()
     message["To"] = to_address
     message.set_content(body)
     if html_body:
@@ -2267,18 +2359,18 @@ def send_plain_email(to_address, subject, body, from_address=None, html_body=Non
     last_error = None
     for attempt in range(1, attempts + 1):
         try:
-            if SMTP_USE_SSL:
-                with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=20) as smtp:
-                    if SMTP_USERNAME and SMTP_PASSWORD:
-                        smtp.login(SMTP_USERNAME, SMTP_PASSWORD)
+            if smtp_use_ssl:
+                with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=20) as smtp:
+                    if smtp_username and smtp_password:
+                        smtp.login(smtp_username, smtp_password)
                     smtp.send_message(message)
                 return
 
-            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=20) as smtp:
-                if SMTP_USE_TLS:
+            with smtplib.SMTP(smtp_host, smtp_port, timeout=20) as smtp:
+                if smtp_use_tls:
                     smtp.starttls()
-                if SMTP_USERNAME and SMTP_PASSWORD:
-                    smtp.login(SMTP_USERNAME, SMTP_PASSWORD)
+                if smtp_username and smtp_password:
+                    smtp.login(smtp_username, smtp_password)
                 smtp.send_message(message)
             return
         except (smtplib.SMTPServerDisconnected, smtplib.SMTPConnectError, TimeoutError, OSError) as exc:

@@ -3350,23 +3350,45 @@ class SupportTicketsTestCase(unittest.TestCase):
             captured["timeout"] = timeout
             return FakeResponse(ok=True, payload={"id": "email_123"})
 
-        self.app_module.RESEND_API_KEY = "re_test_123"
-        self.app_module.RESEND_API_URL = "https://api.resend.com/emails"
-        self.app_module.RESEND_FROM = "Nimbus <noreply@nimbusip.com>"
-        self.app_module.SMTP_HOST = ""
-        self.app_module.requests.post = fake_post
+        original_resend_api_key = os.environ.get("RESEND_API_KEY")
+        original_resend_api_url = os.environ.get("RESEND_API_URL")
+        original_resend_from = os.environ.get("RESEND_FROM")
+        original_smtp_host = os.environ.get("SMTP_HOST")
+        try:
+            os.environ["RESEND_API_KEY"] = "re_test_123"
+            os.environ["RESEND_API_URL"] = "https://api.resend.com/emails"
+            os.environ["RESEND_FROM"] = "Nimbus <noreply@nimbusip.com>"
+            os.environ["SMTP_HOST"] = ""
+            self.app_module.requests.post = fake_post
 
-        self.app_module.send_plain_email(
-            "nastya@nimbusip.com",
-            "Resend test",
-            "Plain body",
-            html_body="<strong>HTML</strong>",
-            attachments=[{
-                "filename": "report.txt",
-                "content": b"hello",
-                "content_type": "text/plain",
-            }],
-        )
+            self.app_module.send_plain_email(
+                "nastya@nimbusip.com",
+                "Resend test",
+                "Plain body",
+                html_body="<strong>HTML</strong>",
+                attachments=[{
+                    "filename": "report.txt",
+                    "content": b"hello",
+                    "content_type": "text/plain",
+                }],
+            )
+        finally:
+            if original_resend_api_key is None:
+                os.environ.pop("RESEND_API_KEY", None)
+            else:
+                os.environ["RESEND_API_KEY"] = original_resend_api_key
+            if original_resend_api_url is None:
+                os.environ.pop("RESEND_API_URL", None)
+            else:
+                os.environ["RESEND_API_URL"] = original_resend_api_url
+            if original_resend_from is None:
+                os.environ.pop("RESEND_FROM", None)
+            else:
+                os.environ["RESEND_FROM"] = original_resend_from
+            if original_smtp_host is None:
+                os.environ.pop("SMTP_HOST", None)
+            else:
+                os.environ["SMTP_HOST"] = original_smtp_host
 
         self.assertEqual(captured["url"], "https://api.resend.com/emails")
         self.assertEqual(captured["headers"]["Authorization"], "Bearer re_test_123")
@@ -3397,21 +3419,81 @@ class SupportTicketsTestCase(unittest.TestCase):
             captured["json"] = json or {}
             return FakeResponse()
 
-        self.app_module.RESEND_API_KEY = "re_test_123"
-        self.app_module.RESEND_API_URL = "https://api.resend.com/emails"
-        self.app_module.RESEND_FROM = "Support <onboarding@resend.dev>"
-        self.app_module.SMTP_FROM = "nimbuskonan@gmail.com"
-        self.app_module.requests.post = fake_post
+        original_resend_api_key = os.environ.get("RESEND_API_KEY")
+        original_resend_api_url = os.environ.get("RESEND_API_URL")
+        original_resend_from = os.environ.get("RESEND_FROM")
+        try:
+            os.environ["RESEND_API_KEY"] = "re_test_123"
+            os.environ["RESEND_API_URL"] = "https://api.resend.com/emails"
+            os.environ["RESEND_FROM"] = "Support <onboarding@resend.dev>"
+            self.app_module.SMTP_FROM = "nimbuskonan@gmail.com"
+            self.app_module.requests.post = fake_post
 
-        self.app_module.send_plain_email(
-            "nastya@nimbusip.com",
-            "Resend sender priority",
-            "Plain body",
-            from_address="nimbuskonan@gmail.com",
-        )
+            self.app_module.send_plain_email(
+                "nastya@nimbusip.com",
+                "Resend sender priority",
+                "Plain body",
+                from_address="nimbuskonan@gmail.com",
+            )
+        finally:
+            if original_resend_api_key is None:
+                os.environ.pop("RESEND_API_KEY", None)
+            else:
+                os.environ["RESEND_API_KEY"] = original_resend_api_key
+            if original_resend_api_url is None:
+                os.environ.pop("RESEND_API_URL", None)
+            else:
+                os.environ["RESEND_API_URL"] = original_resend_api_url
+            if original_resend_from is None:
+                os.environ.pop("RESEND_FROM", None)
+            else:
+                os.environ["RESEND_FROM"] = original_resend_from
 
         self.assertEqual(captured["url"], "https://api.resend.com/emails")
         self.assertEqual(captured["json"]["from"], "Support <onboarding@resend.dev>")
+
+    def test_send_plain_email_does_not_fallback_to_smtp_when_resend_sender_is_configured(self):
+        original_smtp_ssl = self.app_module.smtplib.SMTP_SSL
+        original_send_resend = self.app_module.send_plain_email_via_resend
+        smtp_attempted = {"value": False}
+        resend_attempted = {"value": False}
+
+        class UnexpectedSMTPSSL:
+            def __init__(self, *args, **kwargs):
+                smtp_attempted["value"] = True
+                raise AssertionError("SMTP should not be used when Resend is requested")
+
+        def fake_send_resend(*args, **kwargs):
+            resend_attempted["value"] = True
+            raise RuntimeError("Resend is not configured")
+
+        self.app_module.RESEND_API_KEY = ""
+        self.app_module.RESEND_FROM = ""
+        self.app_module.SMTP_HOST = "smtp.gmail.com"
+        self.app_module.SMTP_PORT = 465
+        self.app_module.SMTP_USE_SSL = True
+        self.app_module.SMTP_USERNAME = "nimbuskonan@gmail.com"
+        self.app_module.SMTP_PASSWORD = "secret"
+        self.app_module.SMTP_FROM = "nimbuskonan@gmail.com"
+        os.environ["RESEND_FROM"] = "Support <onboarding@resend.dev>"
+        os.environ.pop("RESEND_API_KEY", None)
+
+        try:
+            self.app_module.smtplib.SMTP_SSL = UnexpectedSMTPSSL
+            self.app_module.send_plain_email_via_resend = fake_send_resend
+            with self.assertRaisesRegex(RuntimeError, "Resend is not configured"):
+                self.app_module.send_plain_email(
+                    "nastya@nimbusip.com",
+                    "Provider selection",
+                    "Body",
+                )
+        finally:
+            self.app_module.smtplib.SMTP_SSL = original_smtp_ssl
+            self.app_module.send_plain_email_via_resend = original_send_resend
+            os.environ.pop("RESEND_FROM", None)
+
+        self.assertTrue(resend_attempted["value"])
+        self.assertFalse(smtp_attempted["value"])
 
     def test_golan_coordination_calendar_link_includes_worker_guest_email(self):
         calendar_link = self.app_module.build_pais_google_calendar_link({
