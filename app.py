@@ -399,9 +399,6 @@ def configured_resend_from():
     return (
         os.environ.get("RESEND_FROM")
         or os.environ.get("EMAIL_FROM")
-        or PAIS_NOTIFICATION_FROM
-        or os.environ.get("SMTP_FROM")
-        or os.environ.get("SMTP_USERNAME")
         or ""
     ).strip()
 
@@ -2220,7 +2217,7 @@ def smtp_email_enabled():
 
 
 def resend_email_enabled():
-    return bool(configured_resend_api_key() and (configured_resend_from() or configured_smtp_from() or configured_smtp_username()))
+    return bool(configured_resend_api_key() and configured_resend_from())
 
 
 def resend_delivery_requested():
@@ -2240,7 +2237,9 @@ def selected_email_provider():
 
 
 def default_notification_from_address():
-    return (configured_resend_from() or PAIS_NOTIFICATION_FROM or configured_smtp_from() or configured_smtp_username()).strip()
+    if selected_email_provider() == "resend":
+        return configured_resend_from()
+    return (PAIS_NOTIFICATION_FROM or configured_smtp_from() or configured_smtp_username()).strip()
 
 
 def _resend_attachment_payload(attachment):
@@ -2269,7 +2268,7 @@ def send_plain_email_via_resend(to_address, subject, body, from_address=None, ht
     # Resend must use the verified sender configured for the account.
     resend_api_key = configured_resend_api_key()
     resend_api_url = configured_resend_api_url()
-    sender = (configured_resend_from() or from_address or configured_smtp_from() or configured_smtp_username()).strip()
+    sender = str(configured_resend_from() or from_address or "").strip()
     if not (resend_api_key and sender):
         raise RuntimeError("Resend is not configured")
 

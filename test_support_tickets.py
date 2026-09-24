@@ -3495,6 +3495,100 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertTrue(resend_attempted["value"])
         self.assertFalse(smtp_attempted["value"])
 
+    def test_send_plain_email_does_not_borrow_smtp_sender_for_resend(self):
+        original_resend_api_key = os.environ.get("RESEND_API_KEY")
+        original_resend_from = os.environ.get("RESEND_FROM")
+        original_email_from = os.environ.get("EMAIL_FROM")
+        captured = {}
+
+        class FakeResponse:
+            def __init__(self):
+                self.ok = True
+                self.status_code = 200
+                self.text = ""
+
+            def json(self):
+                return {"id": "email_resend_sender_only"}
+
+        def fake_post(url, headers=None, json=None, timeout=None):
+            captured["json"] = json or {}
+            return FakeResponse()
+
+        try:
+            os.environ["RESEND_API_KEY"] = "re_test_123"
+            os.environ["RESEND_FROM"] = "onboarding@resend.dev"
+            os.environ.pop("EMAIL_FROM", None)
+            self.app_module.SMTP_FROM = "nimbuskonan@gmail.com"
+            self.app_module.requests.post = fake_post
+
+            self.app_module.send_plain_email(
+                "nastya@nimbusip.com",
+                "Strict resend sender",
+                "Body",
+            )
+        finally:
+            if original_resend_api_key is None:
+                os.environ.pop("RESEND_API_KEY", None)
+            else:
+                os.environ["RESEND_API_KEY"] = original_resend_api_key
+            if original_resend_from is None:
+                os.environ.pop("RESEND_FROM", None)
+            else:
+                os.environ["RESEND_FROM"] = original_resend_from
+            if original_email_from is None:
+                os.environ.pop("EMAIL_FROM", None)
+            else:
+                os.environ["EMAIL_FROM"] = original_email_from
+
+        self.assertEqual(captured["json"]["from"], "onboarding@resend.dev")
+
+    def test_send_plain_email_with_resend_key_but_without_resend_sender_does_not_fallback_to_smtp(self):
+        original_smtp_ssl = self.app_module.smtplib.SMTP_SSL
+        smtp_attempted = {"value": False}
+
+        class UnexpectedSMTPSSL:
+            def __init__(self, *args, **kwargs):
+                smtp_attempted["value"] = True
+                raise AssertionError("SMTP should not be used when Resend is selected")
+
+        original_resend_api_key = os.environ.get("RESEND_API_KEY")
+        original_resend_from = os.environ.get("RESEND_FROM")
+        original_email_provider = os.environ.get("EMAIL_PROVIDER")
+        try:
+            os.environ["RESEND_API_KEY"] = "re_test_123"
+            os.environ.pop("RESEND_FROM", None)
+            os.environ.pop("EMAIL_PROVIDER", None)
+            self.app_module.SMTP_HOST = "smtp.gmail.com"
+            self.app_module.SMTP_PORT = 465
+            self.app_module.SMTP_USE_SSL = True
+            self.app_module.SMTP_USERNAME = "nimbuskonan@gmail.com"
+            self.app_module.SMTP_PASSWORD = "secret"
+            self.app_module.SMTP_FROM = "nimbuskonan@gmail.com"
+            self.app_module.smtplib.SMTP_SSL = UnexpectedSMTPSSL
+
+            with self.assertRaisesRegex(RuntimeError, "Resend is not configured"):
+                self.app_module.send_plain_email(
+                    "nastya@nimbusip.com",
+                    "Missing resend sender",
+                    "Body",
+                )
+        finally:
+            self.app_module.smtplib.SMTP_SSL = original_smtp_ssl
+            if original_resend_api_key is None:
+                os.environ.pop("RESEND_API_KEY", None)
+            else:
+                os.environ["RESEND_API_KEY"] = original_resend_api_key
+            if original_resend_from is None:
+                os.environ.pop("RESEND_FROM", None)
+            else:
+                os.environ["RESEND_FROM"] = original_resend_from
+            if original_email_provider is None:
+                os.environ.pop("EMAIL_PROVIDER", None)
+            else:
+                os.environ["EMAIL_PROVIDER"] = original_email_provider
+
+        self.assertFalse(smtp_attempted["value"])
+
     def test_golan_coordination_calendar_link_includes_worker_guest_email(self):
         calendar_link = self.app_module.build_pais_google_calendar_link({
             "id": 44,
