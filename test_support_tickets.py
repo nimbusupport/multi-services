@@ -2715,6 +2715,74 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertEqual(cancellation_alerts[0][0]["details"]["coordinated_worker"], "אסף")
         self.assertEqual(cancellation_alerts[0][1]["status"], self.app_module.COORDINATION_PENDING_STATUS)
 
+    def test_nastya_can_change_existing_coordination_and_resend_email(self):
+        tickets = self.app_module.load_support_tickets()
+        tickets.append({
+            "id": 2,
+            "board_slug": "pais",
+            "created_at": "2026-07-08T09:00:00+03:00",
+            "created_at_display": "08/07/2026 09:00",
+            "creator": "Admin",
+            "ticket_type": "שירות",
+            "service_type": "מפעל הפיס",
+            "domain": "",
+            "priority": "Medium",
+            "description": "",
+            "solution": "",
+            "status": "תואם",
+            "assigned_to": "ניר",
+            "details": {
+                "terminal_number": "8005",
+                "address": "Resend me",
+                "customer_request": "R12",
+                "actions_taken": "",
+                "coordinated_worker": "אסף",
+                "visit_date": "2026-07-09",
+                "visit_hour_from": "09:00",
+                "visit_hour_to": "10:00",
+                "failure_notes": "",
+            },
+            "attachments": [],
+            "updates": [],
+        })
+        self.app_module.save_support_tickets(tickets)
+        sent_tickets = []
+        self.app_module.send_nastia_ticket_email = lambda ticket: sent_tickets.append(ticket)
+
+        self.login("nastya@nimbusip.com", "tygeydfuyw5t3g")
+        response = self.client.post(
+            "/support-tickets-update",
+            json={
+                "ticket_id": 2,
+                "source_page_mode": "nastia",
+                "source_ticket_queue": "nastia",
+                "status": "תואם",
+                "details": {
+                    "actions_taken": "",
+                    "coordinated_worker": "גולן",
+                    "visit_date": "2026-07-10",
+                    "visit_hour_from": "11:00",
+                    "visit_hour_to": "12:00",
+                    "failure_notes": "",
+                },
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["ticket"]["status"], "תואם")
+        self.assertEqual(payload["ticket"]["details"]["coordinated_worker"], "גולן")
+        self.assertEqual(payload["ticket"]["details"]["visit_date"], "2026-07-10")
+        self.assertEqual(payload["ticket"]["details"]["visit_hour_from"], "11:00")
+        self.assertEqual(payload["ticket"]["details"]["visit_hour_to"], "12:00")
+        self.assertTrue(payload["ticket"]["notification_attempted"])
+        self.assertTrue(payload["ticket"]["notification_sent"])
+        self.assertEqual(len(sent_tickets), 1)
+        self.assertEqual(sent_tickets[0]["details"]["coordinated_worker"], "גולן")
+        self.assertEqual(sent_tickets[0]["details"]["visit_date"], "2026-07-10")
+        self.assertEqual(sent_tickets[0]["details"]["visit_hour_from"], "11:00")
+        self.assertEqual(sent_tickets[0]["details"]["visit_hour_to"], "12:00")
+
     def test_nastya_cancellation_alert_is_sent_even_if_previous_status_is_final(self):
         tickets = self.app_module.load_support_tickets()
         tickets.append({
