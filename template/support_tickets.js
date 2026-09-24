@@ -2500,6 +2500,7 @@ function coordinationSchedulingEditor(ticket, details) {
         </label>
       </div>
       <p class="detail-hint">חלונות התיאום הם של שעה אחת, החל מ-09:00.</p>
+      ${coordinationCancelButton(ticket, details)}
     </section>`;
 }
 
@@ -2752,7 +2753,6 @@ async function savePaisDetail(ticketId) {
     button.classList.add("is-saving");
     button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i><span>שומר נתונים...</span>';
   }
-
   if (technicianMode && selectedStatus === "נכשל" && !String(payload.details.failure_notes || "").trim()) {
     if (message) message.textContent = "יש למלא סיבת כשל";
     if (button) button.disabled = false;
@@ -2833,10 +2833,51 @@ async function savePaisDetail(ticketId) {
   }
 }
 
-async function saveTicketDetailWithFeedback(ticketId) {
+function hasCoordinationDetails(details) {
+  return ["coordinated_worker", "visit_date", "visit_hour_from", "visit_hour_to"]
+    .some((fieldName) => Boolean(String(details?.[fieldName] || "").trim()));
+}
+
+function coordinationCancelButton(ticket, details) {
+  if (isAssignedTechnicianMode || !isNastyaQueuePage || !hasCoordinationDetails(details)) {
+    return "";
+  }
+  return `
+    <div class="detail-save-row coordination-card-actions">
+      <span></span>
+      <button class="secondary-btn coordination-cancel-btn" id="detail-cancel-coordination-btn" type="button" data-ticket-id="${escapeHtml(ticket.id)}">בטל ביקור</button>
+    </div>
+  `;
+}
+
+async function cancelTicketCoordination(ticketId) {
+  const currentTicket = getTicket(ticketId);
+  if (!currentTicket) return;
+  const currentDetails = ticketDetails(currentTicket);
+  const message = document.getElementById("detail-save-message");
+  if (!hasCoordinationDetails(currentDetails)) {
+    setDetailSaveMessageState(message, "אין ביקור מתואם לבטל", "error");
+    return;
+  }
+
+  const coordinatedWorkerField = document.getElementById("detail-coordinated-worker");
+  const visitDateField = document.getElementById("detail-visit-date");
+  const visitHourFromField = document.getElementById("detail-visit-hour-from");
+  const visitHourToField = document.getElementById("detail-visit-hour-to");
+  if (coordinatedWorkerField) coordinatedWorkerField.value = "";
+  if (visitDateField) visitDateField.value = "";
+  if (visitHourFromField) visitHourFromField.value = "";
+  if (visitHourToField) visitHourToField.value = "";
+  clearCoordinationValidation();
+
+  await saveTicketDetailWithFeedback(ticketId, { cancelCoordination: true });
+}
+
+async function saveTicketDetailWithFeedback(ticketId, options = {}) {
   const currentTicket = getTicket(ticketId);
   if (!currentTicket) return;
 
+  const cancelCoordination = Boolean(options.cancelCoordination);
   const currentDetails = ticketDetails(currentTicket);
   const technicianMode = canAssignedTechnicianEditTicket(currentTicket);
   const coordinatedWorkerField = document.getElementById("detail-coordinated-worker");
@@ -2849,6 +2890,7 @@ async function saveTicketDetailWithFeedback(ticketId) {
   const detailSections = document.getElementById("detail-sections");
   const message = document.getElementById("detail-save-message");
   const button = document.getElementById("detail-save-btn");
+  const cancelButton = document.getElementById("detail-cancel-coordination-btn");
   const originalButtonContent = button?.innerHTML || "";
   const coordinationPayload = {
     coordinated_worker: coordinatedWorkerField?.value || "",
@@ -2858,8 +2900,8 @@ async function saveTicketDetailWithFeedback(ticketId) {
   };
   const selectedStatus = statusSelect?.value || "";
   const shouldMarkCoordinated = Object.values(coordinationPayload).every(Boolean);
-  let nextStatus = selectedStatus;
-  if (shouldMarkCoordinated && (!selectedStatus || selectedStatus === "ממתין לתיאום" || selectedStatus === "תואם")) {
+  let nextStatus = cancelCoordination ? "ממתין לתיאום" : selectedStatus;
+  if (!cancelCoordination && shouldMarkCoordinated && (!selectedStatus || selectedStatus === "ממתין לתיאום" || selectedStatus === "תואם")) {
     nextStatus = "תואם";
   }
   const isFinalStatus = NASTYA_FINAL_STATUSES.includes(selectedStatus);
@@ -2874,6 +2916,9 @@ async function saveTicketDetailWithFeedback(ticketId) {
     button.disabled = false;
     button.classList.remove("is-saving");
     button.innerHTML = originalButtonContent;
+    if (cancelButton) {
+      cancelButton.disabled = false;
+    }
   };
 
   if (technicianMode) {
@@ -2913,6 +2958,9 @@ async function saveTicketDetailWithFeedback(ticketId) {
     button.classList.add("is-saving");
     button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i><span>שומר נתונים...</span>';
   }
+  if (cancelButton) {
+    cancelButton.disabled = true;
+  }
 
   if (technicianMode && selectedStatus === "נכשל" && !String(payload.details.failure_notes || "").trim()) {
     setDetailSaveMessageState(message, "יש למלא סיבת כשל", "error");
@@ -2931,7 +2979,7 @@ async function saveTicketDetailWithFeedback(ticketId) {
       return;
     }
   }
-  if (isNastyaQueuePage && !technicianMode && !isFinalStatus) {
+  if (isNastyaQueuePage && !technicianMode && !isFinalStatus && !cancelCoordination) {
     if (!coordinationPayload.coordinated_worker) {
       setFieldInvalid(coordinatedWorkerField, true);
       setDetailSaveMessageState(message, "לא נבחר טכנאי מטפל", "error");
@@ -2960,7 +3008,9 @@ async function saveTicketDetailWithFeedback(ticketId) {
 
   const coordinationChanged = ["coordinated_worker", "visit_date", "visit_hour_from", "visit_hour_to"]
     .some((fieldName) => String(currentDetails?.[fieldName] || "") !== String(coordinationPayload[fieldName] || ""));
-  if (isNastyaQueuePage && !technicianMode && shouldMarkCoordinated && coordinationChanged) {
+  if (isNastyaQueuePage && !technicianMode && cancelCoordination && coordinationChanged) {
+    payload.send_nastia_cancellation_notification = true;
+  } else if (isNastyaQueuePage && !technicianMode && shouldMarkCoordinated && coordinationChanged) {
     payload.send_nastia_notification = true;
   }
 
@@ -2978,7 +3028,7 @@ async function saveTicketDetailWithFeedback(ticketId) {
       openNotificationErrorModal(`הסטטוס עודכן אבל שליחת המייל נכשלה: ${data.ticket.notification_error}`);
     } else if (data?.ticket?.notification_sent === true) {
       showSendSuccessToast();
-    } else if (payload.send_nastia_notification === true) {
+    } else if (payload.send_nastia_notification === true || payload.send_nastia_cancellation_notification === true) {
       openNotificationErrorModal("הסטטוס עודכן אבל טריגר המייל לא הופעל.");
     }
     setDetailSaveMessageState(message, "נשמר בהצלחה", "success");
@@ -3094,6 +3144,7 @@ function openTicketDetail(ticketId) {
     document.getElementById("detail-visit-hour-from")?.addEventListener("change", () => setFieldInvalid(document.getElementById("detail-visit-hour-from"), false));
     document.getElementById("detail-visit-hour-to")?.addEventListener("change", () => setFieldInvalid(document.getElementById("detail-visit-hour-to"), false));
     document.getElementById("detail-save-btn")?.addEventListener("click", () => saveTicketDetailWithFeedback(ticket.id));
+    document.getElementById("detail-cancel-coordination-btn")?.addEventListener("click", () => cancelTicketCoordination(ticket.id));
     syncPaisDetailStatusFields();
     syncPaisDetailVisitRange();
     toggleSupportServiceDetails(detailSections);
@@ -3382,6 +3433,7 @@ function renderPaisDetailSections(ticket) {
         </label>
       </div>
       <p class="detail-hint">חלונות התיאום הם של שעה אחת, החל מ-09:00.</p>
+      ${coordinationCancelButton(ticket, details)}
     </section>` : ""}
     <section class="detail-description detail-edit-card ${showFailureNotes ? "" : "hidden"}" id="detail-failure-notes-wrap">
       <h3>הערות</h3>

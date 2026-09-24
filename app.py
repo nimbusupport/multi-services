@@ -2191,6 +2191,16 @@ def coordination_ticket_has_complete_details(ticket):
     ])
 
 
+def coordination_ticket_has_any_details(ticket):
+    details = ticket.get("details") or {}
+    return any([
+        (details.get("coordinated_worker") or "").strip(),
+        (details.get("visit_date") or "").strip(),
+        (details.get("visit_hour_from") or "").strip(),
+        (details.get("visit_hour_to") or "").strip(),
+    ])
+
+
 def coordination_ticket_details_changed(previous_ticket, updated_ticket):
     previous_details = (previous_ticket or {}).get("details") or {}
     updated_details = (updated_ticket or {}).get("details") or {}
@@ -2592,6 +2602,109 @@ def build_nastia_waiting_alert_email(ticket):
     return subject, "\n".join(body_lines), html_body
 
 
+def nastia_cancellation_alert_rows(previous_ticket, updated_ticket):
+    previous_details = (previous_ticket or {}).get("details") or {}
+    updated_details = (updated_ticket or {}).get("details") or {}
+    board_slug = (updated_ticket.get("board_slug") or "").strip().lower()
+    rows = [
+        ("סטטוס נוכחי", normalize_ticket_status(updated_ticket.get("board_slug"), updated_ticket.get("status"))),
+        ("טכנאי שבוטל", previous_details.get("coordinated_worker")),
+        ("תאריך ביקור שבוטל", previous_details.get("visit_date")),
+        ("שעת ביקור מ", previous_details.get("visit_hour_from")),
+        ("שעת ביקור עד", previous_details.get("visit_hour_to")),
+    ]
+    if board_slug == "support":
+        rows.extend([
+            ("שם העסק", updated_details.get("business_name") or previous_details.get("business_name")),
+            ("כתובת", coordination_ticket_calendar_address(updated_ticket)),
+        ])
+    elif board_slug == "hot-kiryot":
+        rows.extend([
+            ("מספר קריאה", updated_details.get("call_number") or previous_details.get("call_number")),
+            ("שם לקוח", updated_details.get("customer_name") or previous_details.get("customer_name")),
+            ("כתובת", coordination_ticket_calendar_address(updated_ticket)),
+        ])
+    else:
+        rows.extend([
+            ("מספר מסוף", updated_details.get("terminal_number") or previous_details.get("terminal_number")),
+            ("כתובת", coordination_ticket_calendar_address(updated_ticket)),
+        ])
+    return rows
+
+
+def build_nastia_cancellation_alert_email(previous_ticket, updated_ticket):
+    board = get_ticket_board((updated_ticket.get("board_slug") or "").strip().lower())
+    ticket_label = updated_ticket.get("ticket_id") or f"#{int(updated_ticket.get('id') or 0):04d}"
+    subject = f"התראה: {ticket_label} ביטול ביקור"
+    rows = nastia_cancellation_alert_rows(previous_ticket, updated_ticket)
+    body_lines = [
+        "ביקור שתואם בוטל ונדרש תיאום מחדש.",
+        f"מספר קריאה: {ticket_label}",
+        f"לוח: {(updated_ticket.get('service_type') or board['name']).strip() or board['name']}",
+    ] + [f"{label}: {_pais_email_value(value)}" for label, value in rows]
+    if NASTIA_APP_LOGIN_URL:
+        body_lines.extend([
+            "",
+            f"קישור לאפליקציה: {NASTIA_APP_LOGIN_URL}",
+        ])
+    rendered_rows = "".join(
+        f"""
+          <tr>
+            <td style="padding:10px 12px{';border-bottom:1px solid #e7dfd2' if index < len(rows) - 1 else ''};color:#6a6258;font-weight:700;width:34%;">{xml_escape(label)}</td>
+            <td style="padding:10px 12px{';border-bottom:1px solid #e7dfd2' if index < len(rows) - 1 else ''};color:#1f2f46;">{_pais_email_multiline_html(value)}</td>
+          </tr>
+        """
+        for index, (label, value) in enumerate(rows)
+    )
+    app_link = ""
+    if NASTIA_APP_LOGIN_URL:
+        app_link = f"""
+        <div style="margin:18px 0 0;text-align:center;">
+          <a href="{xml_escape(NASTIA_APP_LOGIN_URL)}" style="display:inline-block;background:#8f3d1f;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:700;">
+            מעבר לאפליקציה
+          </a>
+        </div>
+        <div style="margin:12px 0 0;text-align:center;font-size:13px;color:#6a6258;">
+          <a href="{xml_escape(NASTIA_APP_LOGIN_URL)}" style="color:#8f3d1f;text-decoration:none;">{xml_escape(NASTIA_APP_LOGIN_URL)}</a>
+        </div>
+        """
+    html_body = f"""\
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+  <body style="margin:0;padding:24px;background:#f5f1ea;font-family:Arial,'Noto Sans Hebrew',sans-serif;color:#1f2f46;">
+    <div style="max-width:540px;margin:0 auto;background:#fbfaf7;border:1px solid #ded5c9;border-radius:14px;overflow:hidden;">
+      <div style="padding:20px 24px;background:linear-gradient(135deg,#ffe5dd 0%,#fff3e4 100%);border-bottom:1px solid #ded5c9;">
+        <div style="font-size:13px;color:#7b7267;font-weight:700;">התראת ביטול ביקור</div>
+        <div style="font-size:28px;font-weight:800;margin-top:6px;">{xml_escape(ticket_label)}</div>
+      </div>
+      <div style="padding:24px;">
+        <p style="margin:0 0 16px;font-size:16px;font-weight:700;">הביקור שבוטל דורש תיאום מחדש.</p>
+        <table role="presentation" style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #e7dfd2;border-radius:10px;overflow:hidden;">
+          {rendered_rows}
+        </table>
+        {app_link}
+      </div>
+    </div>
+  </body>
+</html>
+"""
+    return subject, "\n".join(body_lines), html_body
+
+
+def should_send_nastia_cancellation_alert(previous_ticket, updated_ticket, enabled=False):
+    if not enabled:
+        return False
+    if not board_supports_coordination((updated_ticket.get("board_slug") or "").strip().lower()):
+        return False
+    if not coordination_ticket_details_changed(previous_ticket, updated_ticket):
+        return False
+    if not coordination_ticket_has_any_details(previous_ticket):
+        return False
+    if coordination_ticket_has_any_details(updated_ticket):
+        return False
+    return True
+
+
 def should_notify_racheli(previous_ticket, updated_ticket, actor, changes):
     if (updated_ticket.get("board_slug") or "").strip().lower() != "support":
         return False
@@ -2648,12 +2761,33 @@ def send_nastia_waiting_alert_email(ticket):
     )
 
 
-def process_nastia_ticket_notification(previous_ticket, updated_ticket, actor="", enabled=True):
+def send_nastia_cancellation_alert_email(previous_ticket, updated_ticket):
+    subject, body, html_body = build_nastia_cancellation_alert_email(previous_ticket, updated_ticket)
+    send_plain_email(
+        NASTIA_NOTIFICATION_EMAIL,
+        subject,
+        body,
+        from_address=PAIS_NOTIFICATION_FROM or SMTP_FROM or SMTP_USERNAME,
+        html_body=html_body,
+    )
+
+
+def process_nastia_ticket_notification(previous_ticket, updated_ticket, actor="", enabled=True, cancellation_requested=False):
     result = {
         "notification_attempted": False,
         "notification_sent": False,
         "notification_error": "",
     }
+    if cancellation_requested and should_send_nastia_cancellation_alert(previous_ticket, updated_ticket, enabled=enabled):
+        result["notification_attempted"] = True
+        try:
+            send_nastia_cancellation_alert_email(previous_ticket, updated_ticket)
+            result["notification_sent"] = True
+        except Exception as exc:
+            print(f"Nastia cancellation alert email warning for ticket {updated_ticket.get('id')}: {exc}")
+            result["notification_error"] = str(exc)
+        return result
+
     if should_send_nastia_waiting_alert(previous_ticket, updated_ticket, actor):
         result["notification_attempted"] = True
         try:
@@ -2707,6 +2841,8 @@ def find_support_ticket(tickets, ticket_id):
 
 def nastia_notification_enabled(previous_ticket, updated_ticket, actor, changes):
     if bool((changes or {}).get("send_nastia_notification", False)):
+        return True
+    if bool((changes or {}).get("send_nastia_cancellation_notification", False)):
         return True
     if (
         (updated_ticket.get("board_slug") or "").strip().lower() == "pais"
@@ -3107,6 +3243,7 @@ def update_support_ticket_record(ticket_id, changes, actor):
             normalized_ticket,
             actor,
             enabled=notification_enabled,
+            cancellation_requested=bool((changes or {}).get("send_nastia_cancellation_notification", False)),
         )
         normalized_ticket.update(notification_result)
         normalized_ticket.update(process_racheli_ticket_notification(
@@ -3148,6 +3285,7 @@ def update_support_ticket_record(ticket_id, changes, actor):
         normalized_ticket,
         actor,
         enabled=notification_enabled,
+        cancellation_requested=bool((changes or {}).get("send_nastia_cancellation_notification", False)),
     )
     normalized_ticket.update(notification_result)
     normalized_ticket.update(process_racheli_ticket_notification(
@@ -5316,6 +5454,16 @@ def support_tickets_update():
             (details.get("visit_hour_to") or "").strip(),
         ]) and not (payload.get("status") or "").strip():
             payload["status"] = "תואם"
+        elif (
+            bool(payload.get("send_nastia_cancellation_notification"))
+            and not any([
+                (details.get("coordinated_worker") or "").strip(),
+                (details.get("visit_date") or "").strip(),
+                (details.get("visit_hour_from") or "").strip(),
+                (details.get("visit_hour_to") or "").strip(),
+            ])
+        ):
+            payload["status"] = COORDINATION_PENDING_STATUS
 
     if "assigned_to" in payload:
         assigned_to = (payload.get("assigned_to") or "").strip()

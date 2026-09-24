@@ -1176,6 +1176,25 @@ textarea {
   font-weight: 800;
 }
 
+.coordination-card-actions {
+  margin-top: 12px;
+}
+
+.coordination-cancel-btn {
+  border-color: #efc08a;
+  background: #fff3e2;
+  color: #9a5416;
+}
+
+.coordination-cancel-btn:hover {
+  background: #ffe8ca;
+}
+
+.coordination-cancel-btn:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
 .send-success-toast {
   position: fixed;
   left: 50%;
