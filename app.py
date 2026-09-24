@@ -12,6 +12,7 @@ import io
 import json
 import mimetypes
 import smtplib
+import time
 import pandas as pd
 import gspread
 import requests
@@ -2166,19 +2167,32 @@ def send_plain_email(to_address, subject, body, from_address=None, html_body=Non
             content = content.encode("utf-8")
         message.add_attachment(content, maintype=maintype, subtype=subtype, filename=filename)
 
-    if SMTP_USE_SSL:
-        with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=20) as smtp:
-            if SMTP_USERNAME and SMTP_PASSWORD:
-                smtp.login(SMTP_USERNAME, SMTP_PASSWORD)
-            smtp.send_message(message)
-        return
+    attempts = 2
+    last_error = None
+    for attempt in range(1, attempts + 1):
+        try:
+            if SMTP_USE_SSL:
+                with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=20) as smtp:
+                    if SMTP_USERNAME and SMTP_PASSWORD:
+                        smtp.login(SMTP_USERNAME, SMTP_PASSWORD)
+                    smtp.send_message(message)
+                return
 
-    with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=20) as smtp:
-        if SMTP_USE_TLS:
-            smtp.starttls()
-        if SMTP_USERNAME and SMTP_PASSWORD:
-            smtp.login(SMTP_USERNAME, SMTP_PASSWORD)
-        smtp.send_message(message)
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=20) as smtp:
+                if SMTP_USE_TLS:
+                    smtp.starttls()
+                if SMTP_USERNAME and SMTP_PASSWORD:
+                    smtp.login(SMTP_USERNAME, SMTP_PASSWORD)
+                smtp.send_message(message)
+            return
+        except (smtplib.SMTPServerDisconnected, smtplib.SMTPConnectError, TimeoutError, OSError) as exc:
+            last_error = exc
+            if attempt >= attempts:
+                break
+            time.sleep(1)
+
+    if last_error is not None:
+        raise last_error
 
 
 def coordination_ticket_has_complete_details(ticket):

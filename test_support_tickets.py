@@ -3204,6 +3204,56 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertIn("אסף", captured["html_body"])
         self.assertEqual(captured["attachments"], [])
 
+    def test_send_plain_email_retries_once_after_disconnect(self):
+        original_smtp_ssl = self.app_module.smtplib.SMTP_SSL
+        app_module = self.app_module
+        self.app_module.SMTP_HOST = "smtp.gmail.com"
+        self.app_module.SMTP_PORT = 465
+        self.app_module.SMTP_USE_SSL = True
+        self.app_module.SMTP_USE_TLS = False
+        self.app_module.SMTP_USERNAME = "nimbuskonan@gmail.com"
+        self.app_module.SMTP_PASSWORD = "secret"
+        self.app_module.SMTP_FROM = "nimbuskonan@gmail.com"
+
+        attempts = {"count": 0}
+        sent_messages = []
+
+        class FakeSMTPSSL:
+            def __init__(self, host, port, timeout=20):
+                self.host = host
+                self.port = port
+                self.timeout = timeout
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def login(self, username, password):
+                attempts["login"] = (username, password)
+
+            def send_message(self, message):
+                attempts["count"] += 1
+                if attempts["count"] == 1:
+                    raise app_module.smtplib.SMTPServerDisconnected("Connection unexpectedly closed")
+                sent_messages.append(message)
+
+        try:
+            self.app_module.smtplib.SMTP_SSL = FakeSMTPSSL
+            self.app_module.send_plain_email(
+                "nastya@nimbusip.com",
+                "Retry test",
+                "Body",
+            )
+        finally:
+            self.app_module.smtplib.SMTP_SSL = original_smtp_ssl
+
+        self.assertEqual(attempts["count"], 2)
+        self.assertEqual(attempts["login"], ("nimbuskonan@gmail.com", "secret"))
+        self.assertEqual(len(sent_messages), 1)
+        self.assertEqual(sent_messages[0]["To"], "nastya@nimbusip.com")
+
     def test_golan_coordination_calendar_link_includes_worker_guest_email(self):
         calendar_link = self.app_module.build_pais_google_calendar_link({
             "id": 44,
