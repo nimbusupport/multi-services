@@ -1142,7 +1142,7 @@ async function savePaisDetail(ticketId) {
       throw new Error(data.message || "Save failed");
     }
     if (data?.ticket?.notification_error) {
-      openNotificationErrorModal(`הסטטוס עודכן אבל שליחת המייל נכשלה: ${data.ticket.notification_error}`);
+      openNotificationErrorModal(data.ticket.notification_error);
     } else if (data?.ticket?.notification_sent === true) {
       showSendSuccessToast();
     } else if (payload.send_nastia_notification === true) {
@@ -1553,7 +1553,7 @@ async function updateTicket(ticketId, changes) {
     return;
   }
   if (data?.ticket?.notification_error) {
-    openNotificationErrorModal(`הסטטוס עודכן אבל שליחת המייל נכשלה: ${data.ticket.notification_error}`);
+    openNotificationErrorModal(data.ticket.notification_error);
   } else if (data?.ticket?.notification_sent === true) {
     showSendSuccessToast();
   } else if (payload.send_nastia_notification === true) {
@@ -2816,7 +2816,7 @@ async function savePaisDetail(ticketId) {
       throw new Error(data.message || "Save failed");
     }
     if (data?.ticket?.notification_error) {
-      openNotificationErrorModal(`הסטטוס עודכן אבל שליחת המייל נכשלה: ${data.ticket.notification_error}`);
+      openNotificationErrorModal(data.ticket.notification_error);
     } else if (data?.ticket?.notification_sent === true) {
       showSendSuccessToast();
     } else if (payload.send_nastia_notification === true) {
@@ -3025,7 +3025,7 @@ async function saveTicketDetailWithFeedback(ticketId, options = {}) {
       throw new Error(data.message || "Save failed");
     }
     if (data?.ticket?.notification_error) {
-      openNotificationErrorModal(`הסטטוס עודכן אבל שליחת המייל נכשלה: ${data.ticket.notification_error}`);
+      openNotificationErrorModal(data.ticket.notification_error);
     } else if (data?.ticket?.notification_sent === true) {
       showSendSuccessToast();
     } else if (payload.send_nastia_notification === true || payload.send_nastia_cancellation_notification === true) {

@@ -3278,6 +3278,70 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertIn("אסף", captured["html_body"])
         self.assertEqual(captured["attachments"], [])
 
+    def test_send_nastia_ticket_email_uses_runtime_notification_recipient(self):
+        captured = {}
+        original_nastia_notification_email = os.environ.get("NASTIA_NOTIFICATION_EMAIL")
+
+        def fake_send_plain_email(to_address, subject, body, from_address=None, html_body=None, attachments=None):
+            captured["to_address"] = to_address
+
+        self.app_module.send_plain_email = fake_send_plain_email
+
+        try:
+            os.environ["NASTIA_NOTIFICATION_EMAIL"] = "zura@nimbusip.com"
+            self.app_module.send_nastia_ticket_email({
+                "id": 47,
+                "service_type": "Test",
+                "status": "תואם",
+                "details": {
+                    "terminal_number": "1234",
+                    "address": "Runtime street 1",
+                    "coordinated_worker": "זורה",
+                    "visit_date": "2026-09-25",
+                    "visit_hour_from": "09:00",
+                    "visit_hour_to": "10:00",
+                },
+            })
+        finally:
+            if original_nastia_notification_email is None:
+                os.environ.pop("NASTIA_NOTIFICATION_EMAIL", None)
+            else:
+                os.environ["NASTIA_NOTIFICATION_EMAIL"] = original_nastia_notification_email
+
+        self.assertEqual(captured["to_address"], "zura@nimbusip.com")
+
+    def test_process_nastia_ticket_notification_returns_friendly_error_message(self):
+        self.app_module.send_nastia_ticket_email = lambda ticket: (_ for _ in ()).throw(
+            RuntimeError("You can only send testing emails to your own email address (zura@nimbusip.com).")
+        )
+
+        result = self.app_module.process_nastia_ticket_notification(
+            {
+                "id": 67,
+                "board_slug": "support",
+                "status": "ממתין לתיאום",
+                "details": {},
+            },
+            {
+                "id": 67,
+                "board_slug": "support",
+                "status": "תואם",
+                "details": {
+                    "coordinated_worker": "זורה",
+                    "visit_date": "2026-09-25",
+                    "visit_hour_from": "13:00",
+                    "visit_hour_to": "14:00",
+                },
+            },
+            actor="nastya@nimbusip.com",
+            enabled=True,
+        )
+
+        self.assertTrue(result["notification_attempted"])
+        self.assertFalse(result["notification_sent"])
+        self.assertEqual(result["notification_error"], "יש להגדיר כתובת שולח מדומיין מאומת ב-Resend.")
+        self.assertIn("You can only send testing emails", result["notification_error_detail"])
+
     def test_send_plain_email_retries_once_after_disconnect(self):
         original_smtp_ssl = self.app_module.smtplib.SMTP_SSL
         app_module = self.app_module

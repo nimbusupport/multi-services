@@ -382,6 +382,10 @@ SMTP_USE_TLS = env_flag("SMTP_USE_TLS", True)
 SMTP_USE_SSL = env_flag("SMTP_USE_SSL", False)
 
 
+def configured_nastia_notification_email():
+    return (os.environ.get("NASTIA_NOTIFICATION_EMAIL") or NASTIA_NOTIFICATION_EMAIL or "nastya@nimbusip.com").strip()
+
+
 def configured_resend_api_key():
     return (
         os.environ.get("RESEND_API_KEY")
@@ -2242,6 +2246,22 @@ def default_notification_from_address():
     return (PAIS_NOTIFICATION_FROM or configured_smtp_from() or configured_smtp_username()).strip()
 
 
+def user_friendly_email_error(message):
+    normalized = str(message or "").strip()
+    lowered = normalized.lower()
+    if "you can only send testing emails to your own email address" in lowered:
+        return "יש להגדיר כתובת שולח מדומיין מאומת ב-Resend."
+    if "domain is not verified" in lowered:
+        return "הדומיין של כתובת השולח עדיין לא מאומת ב-Resend."
+    if "resend is not configured" in lowered:
+        return "הגדרות Resend חסרות."
+    if "connection unexpectedly closed" in lowered:
+        return "חיבור שרת המייל נסגר. יש לבדוק את הגדרות השליחה."
+    if normalized:
+        return "שליחת המייל נכשלה. יש לבדוק את הגדרות השליחה."
+    return ""
+
+
 def _resend_attachment_payload(attachment):
     if not isinstance(attachment, dict):
         return None
@@ -2943,7 +2963,7 @@ def send_nastia_ticket_email(ticket):
             f"קישור לאפליקציה: {NASTIA_APP_LOGIN_URL}",
         ])
     send_plain_email(
-        NASTIA_NOTIFICATION_EMAIL,
+        configured_nastia_notification_email(),
         email_context["subject"],
         "\n".join(body_lines),
         from_address=default_notification_from_address(),
@@ -2954,7 +2974,7 @@ def send_nastia_ticket_email(ticket):
 def send_nastia_waiting_alert_email(ticket):
     subject, body, html_body = build_nastia_waiting_alert_email(ticket)
     send_plain_email(
-        NASTIA_NOTIFICATION_EMAIL,
+        configured_nastia_notification_email(),
         subject,
         body,
         from_address=default_notification_from_address(),
@@ -2965,7 +2985,7 @@ def send_nastia_waiting_alert_email(ticket):
 def send_nastia_cancellation_alert_email(previous_ticket, updated_ticket):
     subject, body, html_body = build_nastia_cancellation_alert_email(previous_ticket, updated_ticket)
     send_plain_email(
-        NASTIA_NOTIFICATION_EMAIL,
+        configured_nastia_notification_email(),
         subject,
         body,
         from_address=default_notification_from_address(),
@@ -2978,6 +2998,7 @@ def process_nastia_ticket_notification(previous_ticket, updated_ticket, actor=""
         "notification_attempted": False,
         "notification_sent": False,
         "notification_error": "",
+        "notification_error_detail": "",
     }
     if cancellation_requested and should_send_nastia_cancellation_alert(previous_ticket, updated_ticket, enabled=enabled):
         result["notification_attempted"] = True
@@ -2986,7 +3007,8 @@ def process_nastia_ticket_notification(previous_ticket, updated_ticket, actor=""
             result["notification_sent"] = True
         except Exception as exc:
             print(f"Nastia cancellation alert email warning for ticket {updated_ticket.get('id')}: {exc}")
-            result["notification_error"] = str(exc)
+            result["notification_error"] = user_friendly_email_error(exc)
+            result["notification_error_detail"] = str(exc)
         return result
 
     if should_send_nastia_waiting_alert(previous_ticket, updated_ticket, actor):
@@ -2996,7 +3018,8 @@ def process_nastia_ticket_notification(previous_ticket, updated_ticket, actor=""
             result["notification_sent"] = True
         except Exception as exc:
             print(f"Nastia waiting alert email warning for ticket {updated_ticket.get('id')}: {exc}")
-            result["notification_error"] = str(exc)
+            result["notification_error"] = user_friendly_email_error(exc)
+            result["notification_error_detail"] = str(exc)
         return result
 
     attempted = should_notify_nastia(previous_ticket, updated_ticket, enabled=enabled)
@@ -3007,7 +3030,8 @@ def process_nastia_ticket_notification(previous_ticket, updated_ticket, actor=""
             result["notification_sent"] = True
         except Exception as exc:
             print(f"Nastia notification email warning for ticket {updated_ticket.get('id')}: {exc}")
-            result["notification_error"] = str(exc)
+            result["notification_error"] = user_friendly_email_error(exc)
+            result["notification_error_detail"] = str(exc)
     return result
 
 
@@ -5128,7 +5152,7 @@ def render_ticket_board_page(board_slug):
         support_customer_types=SUPPORT_CUSTOMER_TYPES,
         support_statuses=SUPPORT_STATUSES,
         pais_statuses=PAIS_STATUSES,
-        nastia_notification_email=NASTIA_NOTIFICATION_EMAIL,
+        nastia_notification_email=configured_nastia_notification_email(),
         ticket_operator_mode="assigned_technician" if assigned_technician_mode else "default",
         can_upload_ticket_attachments=True,
         can_delete_ticket_attachments=not assigned_technician_mode,
@@ -5226,7 +5250,7 @@ def nastia_tickets_page():
         support_customer_types=SUPPORT_CUSTOMER_TYPES,
         support_statuses=SUPPORT_STATUSES,
         pais_statuses=PAIS_STATUSES,
-        nastia_notification_email=NASTIA_NOTIFICATION_EMAIL,
+        nastia_notification_email=configured_nastia_notification_email(),
         ticket_operator_mode="default",
         can_upload_ticket_attachments=True,
         can_delete_ticket_attachments=True,
