@@ -654,6 +654,24 @@
       </header>
       <div class="detail-grid" id="detail-grid"></div>
       <div id="detail-sections"></div>
+      {% if is_admin %}
+      <section class="detail-email-panel detail-description detail-edit-card" id="detail-email-panel">
+        <h3>שליחת מייל מהטיקט</h3>
+        <p class="detail-hint">אפשר לשלוח את סיכום הקריאה המעוצב לכל כתובת מייל.</p>
+        <div class="detail-form-grid">
+          <label>
+            <span>כתובת מייל</span>
+            <input id="detail-email-input" type="email" inputmode="email" placeholder="name@example.com">
+          </label>
+        </div>
+        <div class="detail-save-row">
+          <span id="detail-email-message"></span>
+          <button class="create-ticket-btn" id="detail-email-send-btn" type="button">
+            <i class="fa-regular fa-envelope"></i><span>שלח מייל</span>
+          </button>
+        </div>
+      </section>
+      {% endif %}
       {% if can_upload_ticket_attachments %}
       <section class="detail-upload-panel" id="detail-upload-panel">
         <div class="detail-upload-copy">

@@ -197,6 +197,32 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.app = self.app_module.app
         self.app.config["TESTING"] = True
         self.client = self.app.test_client()
+        self.original_email_env = {
+            name: os.environ.get(name)
+            for name in [
+                "RESEND_API_KEY",
+                "RESEND_API_URL",
+                "RESEND_FROM",
+                "RESEND_KEY",
+                "RESEND_TOKEN",
+                "EMAIL_PROVIDER",
+                "SMTP_HOST",
+                "SMTP_PORT",
+                "SMTP_USERNAME",
+                "SMTP_PASSWORD",
+                "SMTP_FROM",
+                "SMTP_USE_TLS",
+                "SMTP_USE_SSL",
+                "PAIS_NOTIFICATION_FROM",
+                "NASTIA_NOTIFICATION_FROM",
+                "SUPPORT_APP_BASE_URL",
+                "APP_BASE_URL",
+                "TECHNICIAN_REMINDER_CRON_TOKEN",
+                "CRON_SECRET",
+            ]
+        }
+        for name in self.original_email_env:
+            os.environ.pop(name, None)
         self.support_log_file = os.path.join(self.tempdir.name, "support.log")
         self.screens_dir = os.path.join(self.tempdir.name, "Screens")
         self.original_log = self.app_module.SUPPORT_LOG_FILE
@@ -217,6 +243,8 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.original_smtp_from = self.app_module.SMTP_FROM
         self.original_smtp_username = self.app_module.SMTP_USERNAME
         self.original_token_inforu = self.app_module.TOKEN_INFORU
+        self.original_support_app_base_url = self.app_module.SUPPORT_APP_BASE_URL
+        self.original_technician_reminder_cron_token = self.app_module.TECHNICIAN_REMINDER_CRON_TOKEN
         self.original_requests_post = self.app_module.requests.post
         self.original_inforu_log_dir = self.app_module.inforu_log_dir
         self.original_inforu_log_path = self.app_module.inforu_log_path
@@ -247,10 +275,17 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.app_module.SMTP_FROM = self.original_smtp_from
         self.app_module.SMTP_USERNAME = self.original_smtp_username
         self.app_module.TOKEN_INFORU = self.original_token_inforu
+        self.app_module.SUPPORT_APP_BASE_URL = self.original_support_app_base_url
+        self.app_module.TECHNICIAN_REMINDER_CRON_TOKEN = self.original_technician_reminder_cron_token
         self.app_module.requests.post = self.original_requests_post
         self.app_module.inforu_log_dir = self.original_inforu_log_dir
         self.app_module.inforu_log_path = self.original_inforu_log_path
         self.app_module.PAIS_NOTIFICATION_FROM = self.original_pais_notification_from
+        for name, value in self.original_email_env.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
         if self.original_vercel is None:
             os.environ.pop("VERCEL", None)
         else:
@@ -311,6 +346,53 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertFalse(response.get_json()["ok"])
         self.assertEqual(len(self.app_module.load_support_tickets()), 1)
+
+    def test_admin_can_send_ticket_email_to_custom_address(self):
+        captured = {}
+
+        def fake_send_plain_email(to_address, subject, body, from_address=None, html_body=None, attachments=None):
+            captured["to_address"] = to_address
+            captured["subject"] = subject
+            captured["body"] = body
+            captured["from_address"] = from_address
+            captured["html_body"] = html_body or ""
+
+        self.app_module.send_plain_email = fake_send_plain_email
+        self.login("admin@nimbusip.com")
+        response = self.client.post(
+            "/support-tickets-send-email",
+            json={"ticket_id": 1, "email": "external@example.com"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["message"], "מייל נשלח בהצלחה")
+        self.assertEqual(captured["to_address"], "external@example.com")
+        self.assertIn("#0001", captured["subject"])
+        self.assertIn("מספר קריאה: #0001", captured["body"])
+        self.assertIn("<html", captured["html_body"])
+
+    def test_non_admin_cannot_send_ticket_email(self):
+        self.login("eugeni@nimbusip.com")
+        response = self.client.post(
+            "/support-tickets-send-email",
+            json={"ticket_id": 1, "email": "external@example.com"},
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(response.get_json()["ok"])
+
+    def test_send_ticket_email_requires_valid_email(self):
+        self.login("admin@nimbusip.com")
+        response = self.client.post(
+            "/support-tickets-send-email",
+            json={"ticket_id": 1, "email": "not-an-email"},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(response.get_json()["ok"])
+        self.assertIn("כתובת מייל תקינה", response.get_json()["message"])
 
     def test_support_data_returns_only_requested_board(self):
         tickets = self.app_module.load_support_tickets()
@@ -3710,6 +3792,192 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertIn("כתובת: Email street 4", details_value)
         self.assertIn("איש קשר: Dana 0501234567", details_value)
         self.assertEqual(query["location"][0], "Email street 4")
+
+    def test_send_daily_technician_reminders_groups_tickets_marks_delivery_and_avoids_duplicates(self):
+        self.app_module.israel_now = lambda: datetime(2026, 9, 28, 8, 30, tzinfo=ZoneInfo("Asia/Jerusalem"))
+        self.app_module.SUPPORT_APP_BASE_URL = "https://multi-services-gilt.vercel.app"
+        sent_messages = []
+
+        def fake_send_plain_email(to_address, subject, body, from_address=None, html_body=None, attachments=None):
+            sent_messages.append({
+                "to_address": to_address,
+                "subject": subject,
+                "body": body,
+                "from_address": from_address,
+                "html_body": html_body or "",
+            })
+
+        self.app_module.send_plain_email = fake_send_plain_email
+
+        tickets = self.app_module.load_support_tickets()
+        tickets.extend([
+            {
+                "id": 66,
+                "board_slug": "pais",
+                "created_at": "2026-09-27T11:00:00+03:00",
+                "created_at_display": "27/09/2026 11:00",
+                "creator": "נסטיה",
+                "ticket_type": "שירות",
+                "service_type": "מפעל הפיס",
+                "domain": "",
+                "priority": "Medium",
+                "description": "",
+                "solution": "",
+                "status": "תואם",
+                "assigned_to": "נסטיה",
+                "details": {
+                    "terminal_number": "9988",
+                    "address": "רחוב הבדיקה 1",
+                    "contact_name": "דנה",
+                    "contact_phone": "0501234567",
+                    "customer_request": "בדיקת מסוף",
+                    "coordinated_worker": "אסף",
+                    "visit_date": "2026-09-28",
+                    "visit_hour_from": "09:00",
+                    "visit_hour_to": "10:00",
+                },
+                "attachments": [],
+                "updates": [],
+            },
+            {
+                "id": 49,
+                "board_slug": "pais",
+                "created_at": "2026-09-27T12:00:00+03:00",
+                "created_at_display": "27/09/2026 12:00",
+                "creator": "נסטיה",
+                "ticket_type": "שירות",
+                "service_type": "מפעל הפיס",
+                "domain": "",
+                "priority": "Medium",
+                "description": "",
+                "solution": "",
+                "status": "תואם",
+                "assigned_to": "נסטיה",
+                "details": {
+                    "terminal_number": "5544",
+                    "address": "רחוב הבדיקה 2",
+                    "contact_name": "אורן",
+                    "contact_phone": "0529876543",
+                    "customer_request": "בדיקת תקשורת",
+                    "coordinated_worker": "אסף",
+                    "visit_date": "2026-09-28",
+                    "visit_hour_from": "10:00",
+                    "visit_hour_to": "11:00",
+                },
+                "attachments": [],
+                "updates": [],
+            },
+            {
+                "id": 77,
+                "board_slug": "hot-kiryot",
+                "created_at": "2026-09-27T13:00:00+03:00",
+                "created_at_display": "27/09/2026 13:00",
+                "creator": "נסטיה",
+                "ticket_type": "שירות",
+                "service_type": "הוט קריאות",
+                "domain": "",
+                "priority": "Medium",
+                "description": "",
+                "solution": "",
+                "status": "תואם",
+                "assigned_to": "נסטיה",
+                "details": {
+                    "call_number": "275749117",
+                    "customer_name": "חיים",
+                    "address": "רחוב הוט 9",
+                    "on_site_contact": "חיים 0500000000",
+                    "issue_summary": "אין חיוג",
+                    "coordinated_worker": "גולן",
+                    "visit_date": "2026-09-28",
+                    "visit_hour_from": "12:00",
+                    "visit_hour_to": "13:00",
+                },
+                "attachments": [],
+                "updates": [],
+            },
+        ])
+        self.app_module.save_support_tickets(tickets)
+
+        result = self.app_module.send_daily_technician_reminders()
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(len(result["sent"]), 2)
+        self.assertEqual(len(sent_messages), 2)
+
+        assaf_message = next(message for message in sent_messages if message["to_address"] == "assafh@nimbusip.com")
+        golan_message = next(message for message in sent_messages if message["to_address"] == "golan@nimbusip.com")
+
+        self.assertIn("0066", assaf_message["subject"])
+        self.assertIn("0049", assaf_message["subject"])
+        self.assertIn("מפעל הפיס", assaf_message["body"])
+        self.assertIn("רחוב הבדיקה 1", assaf_message["body"])
+        self.assertIn("0501234567", assaf_message["body"])
+        self.assertIn("https://multi-services-gilt.vercel.app", assaf_message["body"])
+        self.assertIn("מעבר לקריאה באפליקציה", assaf_message["html_body"])
+        self.assertIn("הוט קריאות", golan_message["body"])
+        self.assertIn("275749117", golan_message["subject"])
+        self.assertIn("רחוב הוט 9", golan_message["html_body"])
+
+        persisted = self.app_module.load_support_tickets()
+        assaf_ticket = next(ticket for ticket in persisted if ticket["id"] == 66)
+        self.assertTrue(any(update.get("field") == self.app_module.TECHNICIAN_REMINDER_UPDATE_FIELD for update in assaf_ticket["updates"]))
+
+        second_result = self.app_module.send_daily_technician_reminders()
+        self.assertTrue(second_result["ok"])
+        self.assertEqual(second_result["sent"], [])
+        self.assertEqual(len(sent_messages), 2)
+
+    def test_technician_reminders_cron_route_requires_token_and_supports_force_run(self):
+        self.app_module.israel_now = lambda: datetime(2026, 9, 28, 7, 30, tzinfo=ZoneInfo("Asia/Jerusalem"))
+        self.app_module.TECHNICIAN_REMINDER_CRON_TOKEN = "cron-secret"
+        self.app_module.SUPPORT_APP_BASE_URL = "https://multi-services-gilt.vercel.app"
+        sent_messages = []
+        self.app_module.send_plain_email = lambda *args, **kwargs: sent_messages.append((args, kwargs))
+
+        tickets = self.app_module.load_support_tickets()
+        tickets.append({
+            "id": 88,
+            "board_slug": "pais",
+            "created_at": "2026-09-27T11:00:00+03:00",
+            "created_at_display": "27/09/2026 11:00",
+            "creator": "נסטיה",
+            "ticket_type": "שירות",
+            "service_type": "מפעל הפיס",
+            "domain": "",
+            "priority": "Medium",
+            "description": "",
+            "solution": "",
+            "status": "תואם",
+            "assigned_to": "נסטיה",
+            "details": {
+                "terminal_number": "1234",
+                "address": "רחוב כרון 3",
+                "contact_name": "יוסי",
+                "contact_phone": "0508888888",
+                "customer_request": "בדיקה",
+                "coordinated_worker": "אסף",
+                "visit_date": "2026-09-28",
+                "visit_hour_from": "09:00",
+                "visit_hour_to": "10:00",
+            },
+            "attachments": [],
+            "updates": [],
+        })
+        self.app_module.save_support_tickets(tickets)
+
+        unauthorized = self.client.get("/api/cron/technician-reminders?date=2026-09-28&force=1")
+        self.assertEqual(unauthorized.status_code, 401)
+
+        response = self.client.get(
+            "/api/cron/technician-reminders?date=2026-09-28&force=1",
+            headers={"Authorization": "Bearer cron-secret"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(len(payload["sent"]), 1)
+        self.assertEqual(len(sent_messages), 1)
 
     def test_hot_coordination_changes_trigger_notification_email(self):
         tickets = self.app_module.load_support_tickets()

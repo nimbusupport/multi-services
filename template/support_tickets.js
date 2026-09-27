@@ -2679,6 +2679,15 @@ function setDetailSaveMessageState(message, text = "", kind = "") {
   }
 }
 
+function setInlineMessageState(message, text = "", kind = "") {
+  if (!message) return;
+  message.textContent = text || "";
+  message.classList.remove("saving", "success", "error");
+  if (kind) {
+    message.classList.add(kind);
+  }
+}
+
 function waitForUi(ms) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
@@ -2829,6 +2838,45 @@ async function savePaisDetail(ticketId) {
     openNotificationErrorModal(err.message || "Save failed");
     if (message) message.textContent = err.message;
   } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+async function sendTicketEmail(ticketId) {
+  const emailInput = document.getElementById("detail-email-input");
+  const message = document.getElementById("detail-email-message");
+  const button = document.getElementById("detail-email-send-btn");
+  const email = String(emailInput?.value || "").trim();
+
+  if (!email) {
+    setInlineMessageState(message, "יש להזין כתובת מייל", "error");
+    emailInput?.focus();
+    return;
+  }
+
+  try {
+    button?.classList.add("is-saving");
+    if (button) button.disabled = true;
+    setInlineMessageState(message, "שולח מייל...", "saving");
+
+    const res = await fetch("/support-tickets-send-email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ticket_id: ticketId,
+        email,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) {
+      throw new Error(data.message || "שליחת המייל נכשלה");
+    }
+    setInlineMessageState(message, "מייל נשלח בהצלחה", "success");
+  } catch (err) {
+    setInlineMessageState(message, err.message || "שליחת המייל נכשלה", "error");
+    openNotificationErrorModal(err.message || "שליחת המייל נכשלה");
+  } finally {
+    button?.classList.remove("is-saving");
     if (button) button.disabled = false;
   }
 }
@@ -3132,6 +3180,22 @@ function openTicketDetail(ticketId) {
   const detailUploadPanel = document.getElementById("detail-upload-panel");
   if (detailUploadPanel) {
     detailUploadPanel.hidden = !canUploadTicketAttachments;
+  }
+  const detailEmailPanel = document.getElementById("detail-email-panel");
+  const detailEmailInput = document.getElementById("detail-email-input");
+  const detailEmailMessage = document.getElementById("detail-email-message");
+  const detailEmailButton = document.getElementById("detail-email-send-btn");
+  if (detailEmailPanel) {
+    detailEmailPanel.hidden = !isAdmin;
+  }
+  if (detailEmailInput) {
+    detailEmailInput.value = "";
+  }
+  setInlineMessageState(detailEmailMessage, "");
+  if (detailEmailButton) {
+    detailEmailButton.disabled = false;
+    detailEmailButton.classList.remove("is-saving");
+    detailEmailButton.onclick = () => sendTicketEmail(ticket.id);
   }
   if (isCoordinationTicket(ticket)) {
     clearCoordinationValidation();

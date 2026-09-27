@@ -1491,25 +1491,38 @@ textarea {
   margin-top: 14px;
 }
 
-#detail-save-message {
+#detail-save-message,
+#detail-email-message {
   min-height: 20px;
   font-size: 13px;
   font-weight: 800;
 }
 
-#detail-save-message.saving {
+#detail-save-message.saving,
+#detail-email-message.saving {
   color: #7b5b17;
 }
 
-#detail-save-message.success {
+#detail-save-message.success,
+#detail-email-message.success {
   color: #1f8a5b;
 }
 
-#detail-save-message.error {
+#detail-save-message.error,
+#detail-email-message.error {
   color: #b0433e;
 }
 
 #detail-save-btn.is-saving {
+  opacity: 0.92;
+  cursor: wait;
+}
+
+.detail-email-panel {
+  margin-top: 14px;
+}
+
+#detail-email-send-btn.is-saving {
   opacity: 0.92;
   cursor: wait;
 }

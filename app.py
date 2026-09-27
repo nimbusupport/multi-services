@@ -207,6 +207,7 @@ PDF_FONT_CANDIDATES = {
 }
 PDF_FONT_NAMES = {}
 HEBREW_TEXT_RE = re.compile(r"[\u0590-\u05FF]")
+EMAIL_ADDRESS_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 # Column mapping (1-based for gspread)
 COL_NAME = 1       # A
@@ -356,14 +357,31 @@ PAIS_NOTIFICATION_FROM = (
     or os.environ.get("NASTIA_NOTIFICATION_FROM")
     or ""
 ).strip()
-PAIS_CALENDAR_GUEST_EMAILS = {
+TECHNICIAN_NOTIFICATION_EMAILS = {
     "גולן": "golan@nimbusip.com",
     "אסף": "assafh@nimbusip.com",
     "מוסטפה.ח": "pelecom2016@gmail.com",
     "מוסטפה.א": "mostpc55@gmail.com",
     "איציק": "isaace@nimbusip.com",
     "זורה": "zura@nimbusip.com",
+    "ניר": "support@nimbusip.com",
+    "יבגני": "support@nimbusip.com",
 }
+PAIS_CALENDAR_GUEST_EMAILS = dict(TECHNICIAN_NOTIFICATION_EMAILS)
+SUPPORT_APP_BASE_URL = (
+    os.environ.get("SUPPORT_APP_BASE_URL")
+    or os.environ.get("APP_BASE_URL")
+    or ""
+).strip().rstrip("/")
+TECHNICIAN_REMINDER_CRON_TOKEN = (
+    os.environ.get("TECHNICIAN_REMINDER_CRON_TOKEN")
+    or os.environ.get("CRON_SECRET")
+    or ""
+).strip()
+TECHNICIAN_REMINDER_UPDATE_FIELD = "system.technician_reminder_sent"
+TECHNICIAN_REMINDER_TARGET_HOUR = 8
+TECHNICIAN_REMINDER_TARGET_MINUTE = 30
+TECHNICIAN_REMINDER_WINDOW_MINUTES = 10
 RESEND_API_KEY = (os.environ.get("RESEND_API_KEY") or "").strip()
 RESEND_API_URL = (os.environ.get("RESEND_API_URL") or "https://api.resend.com/emails").strip()
 RESEND_FROM = (
@@ -384,6 +402,32 @@ SMTP_USE_SSL = env_flag("SMTP_USE_SSL", False)
 
 def configured_nastia_notification_email():
     return (os.environ.get("NASTIA_NOTIFICATION_EMAIL") or NASTIA_NOTIFICATION_EMAIL or "nastya@nimbusip.com").strip()
+
+
+def configured_support_app_base_url():
+    explicit_value = (
+        os.environ.get("SUPPORT_APP_BASE_URL")
+        or os.environ.get("APP_BASE_URL")
+        or SUPPORT_APP_BASE_URL
+        or ""
+    ).strip().rstrip("/")
+    if explicit_value:
+        return explicit_value
+
+    login_url = (os.environ.get("NASTIA_APP_LOGIN_URL") or NASTIA_APP_LOGIN_URL or "").strip()
+    parsed = urlparse(login_url)
+    if not (parsed.scheme and parsed.netloc):
+        return ""
+    return urlunparse((parsed.scheme, parsed.netloc, "", "", "", "")).rstrip("/")
+
+
+def configured_technician_reminder_cron_token():
+    return (
+        os.environ.get("TECHNICIAN_REMINDER_CRON_TOKEN")
+        or os.environ.get("CRON_SECRET")
+        or TECHNICIAN_REMINDER_CRON_TOKEN
+        or ""
+    ).strip()
 
 
 def configured_resend_api_key():
@@ -844,6 +888,341 @@ def support_page_key(board_slug, queue_slug=""):
     if normalized_queue == "nastia":
         return "nastia_tickets"
     return board_page_key(board_slug)
+
+
+def technician_notification_email(worker_name):
+    return TECHNICIAN_NOTIFICATION_EMAILS.get((worker_name or "").strip(), "")
+
+
+def parse_iso_date_value(value):
+    raw_value = str(value or "").strip()
+    if not raw_value:
+        return None
+    try:
+        return datetime.strptime(raw_value, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def technician_reminder_within_delivery_window(now=None):
+    local_now = now or israel_now()
+    if local_now.tzinfo is None:
+        local_now = local_now.replace(tzinfo=ZoneInfo("Asia/Jerusalem"))
+    else:
+        local_now = local_now.astimezone(ZoneInfo("Asia/Jerusalem"))
+    target_time = local_now.replace(
+        hour=TECHNICIAN_REMINDER_TARGET_HOUR,
+        minute=TECHNICIAN_REMINDER_TARGET_MINUTE,
+        second=0,
+        microsecond=0,
+    )
+    return abs((local_now - target_time).total_seconds()) <= TECHNICIAN_REMINDER_WINDOW_MINUTES * 60
+
+
+def support_ticket_reference_number(ticket):
+    ticket_label = str(ticket.get("ticket_id") or f"#{int(ticket.get('id') or 0):04d}").strip()
+    details = ticket.get("details") or {}
+    if (ticket.get("board_slug") or "").strip().lower() == "hot-kiryot":
+        return (details.get("call_number") or "").strip() or ticket_label.lstrip("#")
+    return ticket_label.lstrip("#")
+
+
+def support_ticket_app_link(ticket):
+    base_url = configured_support_app_base_url()
+    if base_url:
+        return base_url
+    return (NASTIA_APP_LOGIN_URL or "").strip()
+
+
+def technician_reminder_contact_value(ticket):
+    details = ticket.get("details") or {}
+    board_slug = (ticket.get("board_slug") or "").strip().lower()
+    if board_slug == "support":
+        return (details.get("service_contact") or "").strip()
+    if board_slug == "hot-kiryot":
+        return (details.get("on_site_contact") or details.get("technical_contact") or "").strip()
+    name = (details.get("contact_name") or "").strip()
+    phone = (details.get("contact_phone") or "").strip()
+    if name and phone:
+        return f"{name} | {phone}"
+    return phone or name
+
+
+def technician_reminder_summary_value(ticket):
+    details = ticket.get("details") or {}
+    board_slug = (ticket.get("board_slug") or "").strip().lower()
+    if board_slug == "support":
+        return (ticket.get("description") or details.get("service_mode") or "").strip()
+    if board_slug == "hot-kiryot":
+        return (details.get("issue_summary") or "").strip()
+    return (details.get("customer_request") or "").strip()
+
+
+def technician_reminder_ticket_context(ticket):
+    board_slug = (ticket.get("board_slug") or "").strip().lower()
+    board = get_ticket_board(board_slug)
+    details = ticket.get("details") or {}
+    return {
+        "board_name": (ticket.get("service_type") or board.get("name") or "").strip() or board.get("name") or "קריאת שירות",
+        "ticket_label": str(ticket.get("ticket_id") or f"#{int(ticket.get('id') or 0):04d}").strip(),
+        "reference_number": support_ticket_reference_number(ticket),
+        "address": coordination_ticket_calendar_address(ticket),
+        "contact_value": technician_reminder_contact_value(ticket),
+        "summary": technician_reminder_summary_value(ticket),
+        "visit_date": (details.get("visit_date") or "").strip(),
+        "visit_hour_from": (details.get("visit_hour_from") or "").strip(),
+        "visit_hour_to": (details.get("visit_hour_to") or "").strip(),
+        "app_link": support_ticket_app_link(ticket),
+    }
+
+
+def technician_reminder_delivery_marker(reminder_date, to_email):
+    return f"{(reminder_date or '').strip()}|{(to_email or '').strip().lower()}"
+
+
+def technician_reminder_already_sent(ticket, reminder_date, to_email):
+    marker = technician_reminder_delivery_marker(reminder_date, to_email)
+    for update in ticket.get("updates") or []:
+        field_name = (update.get("field") or update.get("field_name") or "").strip()
+        new_value = (update.get("to") or update.get("new_value") or "").strip()
+        if field_name == TECHNICIAN_REMINDER_UPDATE_FIELD and new_value == marker:
+            return True
+    return False
+
+
+def record_technician_reminder_delivery(tickets, reminder_date, worker_name, to_email, sent_at=None):
+    reminder_tickets = [ticket for ticket in (tickets or []) if int(ticket.get("id") or 0) > 0]
+    if not reminder_tickets:
+        return
+
+    sent_at_value = sent_at or israel_now().isoformat(timespec="seconds")
+    marker = technician_reminder_delivery_marker(reminder_date, to_email)
+    updates_payload = [{
+        "ticket_id": int(ticket.get("id") or 0),
+        "changed_at": sent_at_value,
+        "actor": "System",
+        "field_name": TECHNICIAN_REMINDER_UPDATE_FIELD,
+        "old_value": (worker_name or "").strip(),
+        "new_value": marker,
+    } for ticket in reminder_tickets]
+
+    if supabase_ticketing_enabled():
+        _supabase_request(
+            "POST",
+            "ticket_updates",
+            json_body=updates_payload,
+            prefer="return=minimal",
+        )
+        return
+
+    persisted = load_support_tickets()
+    persisted_by_id = {int(ticket.get("id") or 0): ticket for ticket in persisted}
+    for payload in updates_payload:
+        local_ticket = persisted_by_id.get(payload["ticket_id"])
+        if not local_ticket:
+            continue
+        local_ticket.setdefault("updates", []).append({
+            "at": payload["changed_at"],
+            "actor": payload["actor"],
+            "field": payload["field_name"],
+            "from": payload["old_value"],
+            "to": payload["new_value"],
+        })
+    save_support_tickets(persisted)
+
+
+def build_technician_daily_reminder_email(worker_name, tickets, reminder_date):
+    normalized_tickets = sorted(
+        [normalize_support_ticket(ticket) for ticket in tickets],
+        key=lambda item: (
+            str((item.get("details") or {}).get("visit_hour_from") or ""),
+            int(item.get("id") or 0),
+        ),
+    )
+    contexts = [technician_reminder_ticket_context(ticket) for ticket in normalized_tickets]
+    reminder_date_display = reminder_date
+    parsed_date = parse_iso_date_value(reminder_date)
+    if parsed_date:
+        reminder_date_display = parsed_date.strftime("%d.%m.%Y")
+
+    subject_numbers = [context["reference_number"] for context in contexts if context.get("reference_number")]
+    subject_preview = ", ".join(subject_numbers[:3]) if subject_numbers else reminder_date_display
+    if len(subject_numbers) > 3:
+        subject_preview = f"{subject_preview} ועוד {len(subject_numbers) - 3}"
+    subject = f"תזכורת מס' קריאה : {subject_preview}"
+
+    body_lines = [
+        f"שלום {worker_name},",
+        f"זוהי תזכורת לקריאות השירות שלך לתאריך {reminder_date_display}.",
+        "",
+    ]
+    for index, context in enumerate(contexts, start=1):
+        visit_window = " - ".join([value for value in [context["visit_hour_from"], context["visit_hour_to"]] if value]) or "-"
+        body_lines.extend([
+            f"{index}. [{context['board_name']}] מס' קריאה: {context['reference_number']}",
+            f"מספר פנימי: {context['ticket_label']}",
+            f"שעת ביקור: {visit_window}",
+            f"כתובת: {context['address'] or '-'}",
+            f"נייד / איש קשר: {context['contact_value'] or '-'}",
+            f"תקציר: {context['summary'] or '-'}",
+            f"קישור לאפליקציה: {context['app_link'] or NASTIA_APP_LOGIN_URL or '-'}",
+            "",
+        ])
+
+    cards_html = "".join(
+        f"""
+        <div style="border:1px solid #e7dfd2;border-radius:12px;background:#fff;padding:16px 18px;margin:0 0 14px;">
+          <div style="font-size:12px;color:#7b7267;font-weight:700;">{xml_escape(context['board_name'])}</div>
+          <div style="font-size:22px;font-weight:800;margin-top:4px;">מס' קריאה: {xml_escape(context['reference_number'])}</div>
+          <div style="font-size:13px;color:#7b7267;margin-top:4px;">מספר פנימי: {xml_escape(context['ticket_label'])}</div>
+          <table role="presentation" style="width:100%;border-collapse:collapse;margin-top:14px;">
+            <tr>
+              <td style="padding:6px 0;color:#6a6258;font-weight:700;width:34%;">שעת ביקור</td>
+              <td style="padding:6px 0;color:#1f2f46;">{xml_escape(" - ".join([value for value in [context['visit_hour_from'], context['visit_hour_to']] if value]) or "-")}</td>
+            </tr>
+            <tr>
+              <td style="padding:6px 0;color:#6a6258;font-weight:700;">כתובת</td>
+              <td style="padding:6px 0;color:#1f2f46;">{_pais_email_multiline_html(context['address'])}</td>
+            </tr>
+            <tr>
+              <td style="padding:6px 0;color:#6a6258;font-weight:700;">נייד / איש קשר</td>
+              <td style="padding:6px 0;color:#1f2f46;">{_pais_email_multiline_html(context['contact_value'])}</td>
+            </tr>
+            <tr>
+              <td style="padding:6px 0;color:#6a6258;font-weight:700;">תקציר</td>
+              <td style="padding:6px 0;color:#1f2f46;">{_pais_email_multiline_html(context['summary'])}</td>
+            </tr>
+          </table>
+          <div style="margin-top:16px;text-align:center;">
+            <a href="{xml_escape(context['app_link'] or NASTIA_APP_LOGIN_URL or '#')}" style="display:inline-block;background:#1f4f8f;color:#ffffff;text-decoration:none;padding:11px 18px;border-radius:8px;font-weight:700;">
+              מעבר לקריאה באפליקציה
+            </a>
+          </div>
+        </div>
+        """
+        for context in contexts
+    )
+    html_body = f"""\
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+  <body style="margin:0;padding:24px;background:#f5f1ea;font-family:Arial,'Noto Sans Hebrew',sans-serif;color:#1f2f46;">
+    <div style="max-width:760px;margin:0 auto;background:#fbfaf7;border:1px solid #ded5c9;border-radius:14px;overflow:hidden;">
+      <div style="padding:20px 24px;background:linear-gradient(135deg,#eef4ff 0%,#f9f3e8 100%);border-bottom:1px solid #ded5c9;">
+        <div style="font-size:13px;color:#7b7267;font-weight:700;">תזכורת יומית לטכנאי</div>
+        <div style="font-size:28px;font-weight:800;margin-top:6px;">{xml_escape(worker_name)}</div>
+        <div style="font-size:15px;color:#4d647e;margin-top:8px;">{xml_escape(reminder_date_display)} | {len(contexts)} קריאות מתואמות</div>
+      </div>
+      <div style="padding:24px;">
+        <p style="margin:0 0 18px;font-size:15px;">אלו קריאות השירות המתואמות שלך להיום.</p>
+        {cards_html}
+      </div>
+    </div>
+  </body>
+</html>
+"""
+    return subject, "\n".join(body_lines).strip(), html_body
+
+
+def collect_technician_reminder_groups(reminder_date):
+    reminder_groups = {}
+    skipped_workers = []
+    for ticket in load_support_tickets():
+        if not board_supports_coordination(ticket.get("board_slug")) or support_ticket_is_done(ticket):
+            continue
+        details = ticket.get("details") or {}
+        worker_name = (details.get("coordinated_worker") or "").strip()
+        visit_date = (details.get("visit_date") or "").strip()
+        if not worker_name or visit_date != reminder_date:
+            continue
+        to_email = technician_notification_email(worker_name)
+        if not to_email:
+            skipped_workers.append(worker_name)
+            continue
+        if technician_reminder_already_sent(ticket, reminder_date, to_email):
+            continue
+        reminder_groups.setdefault((worker_name, to_email), []).append(ticket)
+    return reminder_groups, sorted(set(skipped_workers))
+
+
+def send_daily_technician_reminders(reminder_date=None, force=False):
+    now = israel_now()
+    target_date = reminder_date or now.strftime("%Y-%m-%d")
+    if not force and not technician_reminder_within_delivery_window(now):
+        return {
+            "ok": True,
+            "skipped": True,
+            "reason": "outside_delivery_window",
+            "local_time": now.strftime("%Y-%m-%d %H:%M:%S %Z"),
+            "target_date": target_date,
+            "sent": [],
+            "errors": [],
+            "skipped_workers": [],
+        }
+
+    reminder_groups, skipped_workers = collect_technician_reminder_groups(target_date)
+    result = {
+        "ok": True,
+        "skipped": False,
+        "reason": "",
+        "local_time": now.strftime("%Y-%m-%d %H:%M:%S %Z"),
+        "target_date": target_date,
+        "sent": [],
+        "errors": [],
+        "skipped_workers": skipped_workers,
+    }
+
+    for (worker_name, to_email), tickets in sorted(reminder_groups.items(), key=lambda item: item[0][0]):
+        subject, body, html_body = build_technician_daily_reminder_email(worker_name, tickets, target_date)
+        try:
+            send_plain_email(
+                to_email,
+                subject,
+                body,
+                from_address=default_notification_from_address(),
+                html_body=html_body,
+            )
+            record_technician_reminder_delivery(
+                tickets,
+                target_date,
+                worker_name,
+                to_email,
+                sent_at=now.isoformat(timespec="seconds"),
+            )
+            result["sent"].append({
+                "worker": worker_name,
+                "email": to_email,
+                "ticket_ids": [ticket.get("ticket_id") or f"#{int(ticket.get('id') or 0):04d}" for ticket in tickets],
+                "count": len(tickets),
+            })
+        except Exception as exc:
+            result["ok"] = False
+            result["errors"].append({
+                "worker": worker_name,
+                "email": to_email,
+                "message": str(exc),
+            })
+
+    return result
+
+
+def technician_reminder_request_authorized():
+    expected_token = configured_technician_reminder_cron_token()
+    if app.config.get("TESTING") and not expected_token:
+        return True
+    if session.get("logged_in") and support_user_is_admin():
+        return True
+    if not expected_token:
+        return True
+    auth_header = (request.headers.get("Authorization") or "").strip()
+    if auth_header == f"Bearer {expected_token}":
+        return True
+    provided_token = (
+        request.headers.get("X-Reminder-Token")
+        or request.args.get("token")
+        or request.form.get("token")
+        or ""
+    ).strip()
+    return provided_token == expected_token
 
 
 def _supabase_headers(prefer=None):
@@ -2478,6 +2857,10 @@ def _pais_email_multiline_html(value):
     return xml_escape(_pais_email_value(value)).replace("\n", "<br>")
 
 
+def email_address_is_valid(value):
+    return bool(EMAIL_ADDRESS_RE.fullmatch(str(value or "").strip()))
+
+
 def coordination_ticket_calendar_contact(ticket):
     details = ticket.get("details") or {}
     board_slug = (ticket.get("board_slug") or "").strip().lower()
@@ -2948,7 +3331,7 @@ def send_racheli_ticket_email(ticket):
     )
 
 
-def send_nastia_ticket_email(ticket):
+def build_support_ticket_email_message(ticket, app_link=None):
     email_context = coordination_ticket_email_context(ticket)
     calendar_link = build_pais_google_calendar_link(ticket)
     body_lines = list(email_context["body_lines"])
@@ -2957,17 +3340,37 @@ def send_nastia_ticket_email(ticket):
             "",
             f"הוספה ליומן Google: {calendar_link}",
         ])
-    if NASTIA_APP_LOGIN_URL:
+    if app_link:
         body_lines.extend([
             "",
-            f"קישור לאפליקציה: {NASTIA_APP_LOGIN_URL}",
+            f"קישור לאפליקציה: {app_link}",
         ])
+    return {
+        "subject": email_context["subject"],
+        "body": "\n".join(body_lines),
+        "html_body": build_pais_email_html(ticket, calendar_link=calendar_link, app_link=app_link),
+    }
+
+
+def send_support_ticket_email_to_address(ticket, to_address):
+    email_payload = build_support_ticket_email_message(ticket, app_link=support_ticket_app_link(ticket))
+    send_plain_email(
+        str(to_address or "").strip(),
+        email_payload["subject"],
+        email_payload["body"],
+        from_address=default_notification_from_address(),
+        html_body=email_payload["html_body"],
+    )
+
+
+def send_nastia_ticket_email(ticket):
+    email_payload = build_support_ticket_email_message(ticket, app_link=NASTIA_APP_LOGIN_URL)
     send_plain_email(
         configured_nastia_notification_email(),
-        email_context["subject"],
-        "\n".join(body_lines),
+        email_payload["subject"],
+        email_payload["body"],
         from_address=default_notification_from_address(),
-        html_body=build_pais_email_html(ticket, calendar_link=calendar_link, app_link=NASTIA_APP_LOGIN_URL),
+        html_body=email_payload["html_body"],
     )
 
 
@@ -5459,6 +5862,34 @@ def pais_tickets_report_export():
     )
 
 
+@app.route("/api/cron/technician-reminders", methods=["GET", "POST"])
+def technician_reminders_cron():
+    if not technician_reminder_request_authorized():
+        return jsonify({"ok": False, "message": "Unauthorized"}), 401
+
+    payload = request.get_json(silent=True) if request.is_json else {}
+    force_raw = (
+        request.args.get("force")
+        or request.form.get("force")
+        or (payload or {}).get("force")
+        or ""
+    )
+    reminder_date = (
+        request.args.get("date")
+        or request.form.get("date")
+        or (payload or {}).get("date")
+        or ""
+    ).strip()
+    if reminder_date and not parse_iso_date_value(reminder_date):
+        return jsonify({"ok": False, "message": "Invalid date. Use YYYY-MM-DD."}), 400
+
+    result = send_daily_technician_reminders(
+        reminder_date=reminder_date or None,
+        force=str(force_raw).strip().lower() in {"1", "true", "yes", "on"},
+    )
+    return jsonify(result), (200 if result.get("ok") else 207)
+
+
 @app.route("/support-tickets-create", methods=["POST"])
 def support_tickets_create():
     if not session.get("logged_in"):
@@ -5747,6 +6178,31 @@ def support_tickets_update():
     except RuntimeError as exc:
         return jsonify({"ok": False, "message": str(exc)}), 502
     return jsonify({"ok": True, "ticket": ticket})
+
+
+@app.route("/support-tickets-send-email", methods=["POST"])
+def support_tickets_send_email():
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+    if not support_user_is_admin():
+        return jsonify({"ok": False, "message": "Admin access required"}), 403
+
+    payload = request.get_json(silent=True) or {}
+    ticket_id = payload.get("ticket_id")
+    to_address = str(payload.get("email") or "").strip()
+    if not email_address_is_valid(to_address):
+        return jsonify({"ok": False, "message": "יש להזין כתובת מייל תקינה"}), 400
+
+    ticket = find_support_ticket(load_support_tickets(), ticket_id)
+    if not ticket:
+        return jsonify({"ok": False, "message": "Ticket not found"}), 404
+
+    try:
+        send_support_ticket_email_to_address(ticket, to_address)
+    except Exception as exc:
+        return jsonify({"ok": False, "message": user_friendly_email_error(exc) or str(exc)}), 502
+
+    return jsonify({"ok": True, "message": "מייל נשלח בהצלחה"})
 
 
 @app.route("/support-tickets-attachments", methods=["POST"])
