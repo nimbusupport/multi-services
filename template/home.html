@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>לוח שירותים</title>
+  <title>דאשבורד שירותים</title>
   <link rel="icon" type="image/jpeg" href="/favicon/favicon.jpg">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -19,269 +19,129 @@
     <section class="dashboard-hero">
       <div class="hero-copy">
         <p class="welcome">ברוך שובך, <strong>{{ (current_user or "user").split("@")[0] }}</strong></p>
-        <h1>שירותים</h1>
+        <h1>דאשבורד שירותים</h1>
       </div>
     </section>
 
     <section class="card-grid">
-      <article class="service-card theme-recordings">
-        <div class="card-hero">
-          <div class="card-icon"><i class="fa-solid fa-record-vinyl"></i></div>
-        </div>
-        <div class="card-body">
-          <div class="card-topline">
-            <span class="badge rec">הקלטות</span>
+      <a class="service-card-link" href="/dashboard-services" aria-label="פתח שירותי פיצ'רים מרוכזים">
+        <article class="service-card theme-services">
+          <div class="card-hero">
+            <div class="card-icon"><i class="fa-solid fa-layer-group"></i></div>
           </div>
-          <h2>הקלטות פתיח</h2>
-          <a class="connect-btn" href="/record">פתח שירות</a>
-          <div class="active-users" id="recordings-users"></div>
-          <div class="meter-row">
-            <span>ממתינים</span>
-            <span id="recordings-waiting-count">0</span>
+          <div class="card-body">
+            <div class="card-topline">
+              <span class="badge services-group">פיצ'רים</span>
+            </div>
+            <h2>שירותי פיצ'רים מרוכזים</h2>
+            <span class="connect-btn card-link-cta">לכל השירותים</span>
+            <div class="portal-preview">
+              <span class="portal-pill">SMS</span>
+              <span class="portal-pill">מוקד בוט</span>
+              <span class="portal-pill">הקלטות פתיח</span>
+            </div>
+            <div class="meter-row">
+              <span>סה"כ ממתינים</span>
+              <span id="dashboard-services-waiting-count">0</span>
+            </div>
+            <div class="meter"><div id="dashboard-services-waiting-bar"></div></div>
           </div>
-          <div class="meter"><div id="recordings-waiting-bar"></div></div>
-        </div>
-      </article>
+        </article>
+      </a>
 
-      <article class="service-card theme-f2m">
-        <div class="card-hero">
-          <div class="card-icon"><i class="fa-solid fa-envelopes-bulk"></i></div>
-        </div>
-        <div class="card-body">
-          <div class="card-topline">
-            <span class="badge f2m">פקס</span>
+      <a class="service-card-link" href="/dashboard-service-tickets" aria-label="פתח קריאות שירות">
+        <article class="service-card theme-dashboard-tickets">
+          <div class="card-hero">
+            <div class="card-icon"><i class="fa-solid fa-screwdriver-wrench"></i></div>
           </div>
-          <h2>שליחת פקס למייל F2M</h2>
-          <a class="connect-btn" href="/f2m">פתח שירות</a>
-          <div class="active-users" id="f2m-users"></div>
-          <div class="meter-row">
-            <span>ממתינים</span>
-            <span id="f2m-waiting-count">0</span>
+          <div class="card-body">
+            <div class="card-topline">
+              <span class="badge tickets-group">קריאות</span>
+            </div>
+            <h2>קריאות שירות</h2>
+            <span class="connect-btn card-link-cta">לכל הקריאות</span>
+            <div class="portal-preview">
+              <span class="portal-pill">נימבוס</span>
+              <span class="portal-pill">מפעל הפיס</span>
+              <span class="portal-pill">הוט קריאות</span>
+            </div>
+            <div class="meter-row">
+              <span>סה"כ ממתינים</span>
+              <span id="dashboard-service-tickets-waiting-count">0</span>
+            </div>
+            <div class="meter"><div id="dashboard-service-tickets-waiting-bar"></div></div>
           </div>
-          <div class="meter"><div id="f2m-waiting-bar"></div></div>
-        </div>
-      </article>
+        </article>
+      </a>
 
-      <article class="service-card theme-bot">
-        <div class="card-hero">
-          <div class="card-icon"><i class="fa-solid fa-robot"></i></div>
-        </div>
-        <div class="card-body">
-          <div class="card-topline">
-            <span class="badge bot">בוט</span>
+      <a class="service-card-link" href="/dashboard-reports" aria-label="פתח דוחות">
+        <article class="service-card theme-dashboard-reports">
+          <div class="card-hero">
+            <div class="card-icon"><i class="fa-solid fa-chart-pie"></i></div>
           </div>
-          <h2>מוקד בוט</h2>
-          <a class="connect-btn" href="/bot">פתח שירות</a>
-          <div class="active-users" id="bot-users"></div>
-          <div class="meter-row">
-            <span>ממתינים</span>
-            <span id="bot-waiting-count">0</span>
+          <div class="card-body">
+            <div class="card-topline">
+              <span class="badge report-group">דוחות</span>
+            </div>
+            <h2>דוחות</h2>
+            <span class="connect-btn card-link-cta">לכל הדוחות</span>
+            <div class="active-users">
+              <span class="active-user-empty">דו"ח פיצ'רים וסטטוס פיצ'רים</span>
+            </div>
+            <div class="meter-row">
+              <span>דוחות זמינים</span>
+              <span id="dashboard-reports-waiting-count">2</span>
+            </div>
+            <div class="meter"><div id="dashboard-reports-waiting-bar" style="width: 100%"></div></div>
           </div>
-          <div class="meter"><div id="bot-waiting-bar"></div></div>
-        </div>
-      </article>
+        </article>
+      </a>
 
-      <article class="service-card theme-sms">
-        <div class="card-hero">
-          <div class="card-icon"><i class="fa-solid fa-comment-sms"></i></div>
-        </div>
-        <div class="card-body">
-          <div class="card-topline">
-            <span class="badge sms">SMS</span>
+      <a class="service-card-link" href="/portals" aria-label="פתח פורטל שירותי ענן">
+        <article class="service-card theme-portals portal-entry-card">
+          <div class="card-hero">
+            <div class="card-icon"><i class="fa-solid fa-cloud"></i></div>
           </div>
-          <h2>שירות SMS</h2>
-          <a class="connect-btn" href="/sms">פתח שירות</a>
-          <div class="active-users" id="sms-users"></div>
-          <div class="meter-row">
-            <span>ממתינים</span>
-            <span id="sms-waiting-count">0</span>
+          <div class="card-body">
+            <div class="card-topline">
+              <span class="badge portals">פורטלים</span>
+            </div>
+            <h2>פורטל שירותי ענן</h2>
+            <span class="connect-btn card-link-cta">פתח פורטלים</span>
+            <div class="portal-preview">
+              <span class="portal-pill">Cloud Centrix</span>
+              <span class="portal-pill">Provision Cloud</span>
+              <span class="portal-pill">Cloud Network</span>
+            </div>
+            <div class="meter-row">
+              <span>קבוצות פורטלים</span>
+              <span>3</span>
+            </div>
+            <div class="meter"><div style="width: 100%"></div></div>
           </div>
-          <div class="meter"><div id="sms-waiting-bar"></div></div>
-        </div>
-      </article>
+        </article>
+      </a>
 
-      <article class="service-card theme-tickets">
-        <div class="card-hero">
-          <div class="card-icon"><i class="fa-solid fa-ticket"></i></div>
-        </div>
-        <div class="card-body">
-          <div class="card-topline">
-            <span class="badge tickets">קריאות</span>
+      <a class="service-card-link" href="/nastia-tickets" aria-label="פתח נסטיה תיאום">
+        <article class="service-card theme-coord">
+          <div class="card-hero">
+            <div class="card-icon"><i class="fa-solid fa-user-clock"></i></div>
           </div>
-          <h2>קריאות שירות</h2>
-          <a class="connect-btn" href="/support-tickets">פתח קריאות</a>
-          <div class="active-users" id="support_tickets-users"></div>
-          <div class="meter-row">
-            <span>ממתינים</span>
-            <span id="support_tickets-waiting-count">0</span>
+          <div class="card-body">
+            <div class="card-topline">
+              <span class="badge tickets">תיאום</span>
+            </div>
+            <h2>נסטיה - תיאום</h2>
+            <span class="connect-btn card-link-cta">פתח תור</span>
+            <div class="active-users" id="nastia_tickets-users"></div>
+            <div class="meter-row">
+              <span>ממתין לתיאום</span>
+              <span id="nastia_tickets-waiting-count">0</span>
+            </div>
+            <div class="meter"><div id="nastia_tickets-waiting-bar"></div></div>
           </div>
-          <div class="meter"><div id="support_tickets-waiting-bar"></div></div>
-        </div>
-      </article>
-
-      <article class="service-card theme-portals portal-entry-card">
-        <div class="card-hero">
-          <div class="card-icon"><i class="fa-solid fa-cloud"></i></div>
-        </div>
-        <div class="card-body">
-          <div class="card-topline">
-            <span class="badge portals">פורטלים</span>
-          </div>
-          <h2>פורטל שירותי ענן</h2>
-          <a class="connect-btn" href="/portals">פתח פורטלים</a>
-          <div class="portal-preview">
-            <span class="portal-pill">Cloud Centrix</span>
-            <span class="portal-pill">Provision Cloud</span>
-            <span class="portal-pill">Cloud Network</span>
-          </div>
-          <div class="meter-row">
-            <span>קבוצות פורטלים</span>
-            <span>3</span>
-          </div>
-          <div class="meter"><div style="width: 100%"></div></div>
-        </div>
-      </article>
-
-      <article class="service-card theme-report">
-        <div class="card-hero">
-          <div class="card-icon"><i class="fa-solid fa-chart-simple"></i></div>
-        </div>
-        <div class="card-body">
-          <div class="card-topline">
-            <span class="badge report">דוחות</span>
-          </div>
-          <h2>דוח פיצ'רים</h2>
-          <a class="connect-btn" href="/features-report">פתח דוח</a>
-          <div class="active-users">
-            <span class="active-user-empty">מונה חודשי ואפשרויות ייצוא</span>
-          </div>
-          <div class="meter-row">
-            <span>CSV / PDF</span>
-            <span>כל השירותים</span>
-          </div>
-          <div class="meter"><div style="width: 100%"></div></div>
-        </div>
-      </article>
-
-      <article class="service-card theme-human">
-        <div class="card-hero">
-          <div class="card-icon"><i class="fa-solid fa-headset"></i></div>
-        </div>
-        <div class="card-body">
-          <div class="card-topline">
-            <span class="badge human">אנושי</span>
-          </div>
-          <h2>מוקד אנושי</h2>
-          <a class="connect-btn" href="/human-service">פתח שירות</a>
-          <div class="active-users" id="human_service-users"></div>
-          <div class="meter-row">
-            <span>ממתינים</span>
-            <span id="human_service-waiting-count">0</span>
-          </div>
-          <div class="meter"><div id="human_service-waiting-bar"></div></div>
-        </div>
-      </article>
-
-      <article class="service-card theme-storage">
-        <div class="card-hero">
-          <div class="card-icon"><i class="fa-solid fa-database"></i></div>
-        </div>
-        <div class="card-body">
-          <div class="card-topline">
-            <span class="badge storage">אחסון</span>
-          </div>
-          <h2>אחסון הקלטות</h2>
-          <a class="connect-btn" href="/recording-storage">פתח שירות</a>
-          <div class="active-users" id="recording_storage-users"></div>
-          <div class="meter-row">
-            <span>ממתינים</span>
-            <span id="recording_storage-waiting-count">0</span>
-          </div>
-          <div class="meter"><div id="recording_storage-waiting-bar"></div></div>
-        </div>
-      </article>
-
-      <article class="service-card theme-pais">
-        <div class="card-hero">
-          <div class="card-icon card-icon-image">
-            <img src="/picture/pais.png" alt="Pais">
-          </div>
-        </div>
-        <div class="card-body">
-          <div class="card-topline">
-            <span class="badge tickets">Pais</span>
-          </div>
-          <h2>מפעל הפיס</h2>
-          <a class="connect-btn" href="/pais-tickets">פתח תור</a>
-          <div class="active-users" id="pais_tickets-users"></div>
-          <div class="meter-row">
-            <span>ממתינים</span>
-            <span id="pais_tickets-waiting-count">0</span>
-          </div>
-          <div class="meter"><div id="pais_tickets-waiting-bar"></div></div>
-        </div>
-      </article>
-
-      <article class="service-card theme-hot">
-        <div class="card-hero">
-          <div class="card-icon card-icon-image">
-            <img src="https://hot.nimbusip.com/themes/default/images/logo.png" alt="HOT">
-          </div>
-        </div>
-        <div class="card-body">
-          <div class="card-topline">
-            <span class="badge tickets">HOT</span>
-          </div>
-          <h2>הוט קריאות</h2>
-          <a class="connect-btn" href="/hot-kiryot-tickets">פתח תור</a>
-          <div class="active-users" id="hot_tickets-users"></div>
-          <div class="meter-row">
-            <span>ממתינים</span>
-            <span id="hot_tickets-waiting-count">0</span>
-          </div>
-          <div class="meter"><div id="hot_tickets-waiting-bar"></div></div>
-        </div>
-      </article>
-
-      <article class="service-card theme-lookup">
-        <div class="card-hero">
-          <div class="card-icon"><i class="fa-solid fa-magnifying-glass-chart"></i></div>
-        </div>
-        <div class="card-body">
-          <div class="card-topline">
-            <span class="badge report">חיפוש</span>
-          </div>
-          <h2>סטטוס פיצ'רים</h2>
-          <a class="connect-btn" href="/features-status">פתח חיפוש</a>
-          <div class="active-users">
-            <span class="active-user-empty">חיפוש לקוח מהיר בכל הגיליונות</span>
-          </div>
-          <div class="meter-row">
-            <span>עמוד ישיר</span>
-            <span>כל הגיליונות</span>
-          </div>
-          <div class="meter"><div style="width: 100%"></div></div>
-        </div>
-      </article>
-
-      <article class="service-card theme-coord">
-        <div class="card-hero">
-          <div class="card-icon"><i class="fa-solid fa-user-clock"></i></div>
-        </div>
-        <div class="card-body">
-          <div class="card-topline">
-            <span class="badge tickets">תיאום</span>
-          </div>
-          <h2>נסטיה - תיאום</h2>
-          <a class="connect-btn" href="/nastia-tickets">פתח תור</a>
-          <div class="active-users" id="nastia_tickets-users"></div>
-          <div class="meter-row">
-            <span>ממתין לתיאום</span>
-            <span id="nastia_tickets-waiting-count">0</span>
-          </div>
-          <div class="meter"><div id="nastia_tickets-waiting-bar"></div></div>
-        </div>
-      </article>
+        </article>
+      </a>
     </section>
   </main>
 

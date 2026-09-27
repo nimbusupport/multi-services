@@ -373,6 +373,20 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertIn("מספר קריאה: #0001", captured["body"])
         self.assertIn("<html", captured["html_body"])
 
+    def test_dashboard_group_pages_are_available_after_login(self):
+        self.login("admin@nimbusip.com")
+
+        services_response = self.client.get("/dashboard-services")
+        tickets_response = self.client.get("/dashboard-service-tickets")
+        reports_response = self.client.get("/dashboard-reports")
+
+        self.assertEqual(services_response.status_code, 200)
+        self.assertEqual(tickets_response.status_code, 200)
+        self.assertEqual(reports_response.status_code, 200)
+        self.assertIn("שירותים".encode("utf-8"), services_response.data)
+        self.assertIn("קריאות שירות".encode("utf-8"), tickets_response.data)
+        self.assertIn("דוחות".encode("utf-8"), reports_response.data)
+
     def test_non_admin_cannot_send_ticket_email(self):
         self.login("eugeni@nimbusip.com")
         response = self.client.post(

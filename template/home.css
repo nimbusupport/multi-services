@@ -238,6 +238,11 @@ body.dashboard-page .brand-word {
   padding: 8px 8px 22px;
 }
 
+.dashboard-hero-split {
+  justify-content: space-between;
+  gap: 16px;
+}
+
 .hero-copy {
   text-align: right;
 }
@@ -260,6 +265,28 @@ body.dashboard-page .brand-word {
   letter-spacing: -0.05em;
 }
 
+.dashboard-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(112, 156, 220, 0.24);
+  background: rgba(255, 255, 255, 0.86);
+  color: #194777;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 800;
+  box-shadow: 0 10px 20px rgba(49, 92, 146, 0.08);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.dashboard-back-link:hover {
+  transform: translateY(-2px);
+  border-color: rgba(58, 119, 209, 0.42);
+  box-shadow: 0 16px 28px rgba(49, 92, 146, 0.12);
+}
+
 .card-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -280,6 +307,16 @@ body.dashboard-page .brand-word {
   transform: translateY(-4px);
   box-shadow: 0 16px 30px rgba(33, 76, 130, 0.14);
   border-color: rgba(52, 116, 206, 0.3);
+}
+
+.service-card-link {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
+.service-card-link .service-card {
+  height: 100%;
 }
 
 .service-card::before {
@@ -352,6 +389,9 @@ body.dashboard-page .brand-word {
 .badge.report { background: #0d7e68; }
 .badge.tickets { background: #9f5b17; }
 .badge.portals { background: #155e75; }
+.badge.services-group { background: #285b9b; }
+.badge.tickets-group { background: #b56a17; }
+.badge.report-group { background: #157663; }
 
 .service-card h2 {
   margin: 10px 0 12px;
@@ -383,6 +423,10 @@ body.dashboard-page .brand-word {
 .connect-btn:hover {
   border-color: rgba(58, 119, 209, 0.45);
   box-shadow: 0 12px 20px rgba(49, 92, 146, 0.12);
+}
+
+.card-link-cta {
+  pointer-events: none;
 }
 
 .active-users {
@@ -465,6 +509,12 @@ body.dashboard-page .brand-word {
 .theme-coord .card-icon { color: #c22c31; }
 .theme-portals .card-hero { background: linear-gradient(135deg, #0f5a72 0%, #1683a3 54%, #2ca8cb 100%); }
 .theme-portals .card-icon { color: #14718d; }
+.theme-services .card-hero { background: linear-gradient(135deg, #183a70 0%, #2c65b6 56%, #5e93ea 100%); }
+.theme-services .card-icon { color: #2f60af; }
+.theme-dashboard-tickets .card-hero { background: linear-gradient(135deg, #8a4c10 0%, #d27f16 58%, #f2a43a 100%); }
+.theme-dashboard-tickets .card-icon { color: #b76a17; }
+.theme-dashboard-reports .card-hero { background: linear-gradient(135deg, #0b6458 0%, #15917c 55%, #32b29c 100%); }
+.theme-dashboard-reports .card-icon { color: #157a68; }
 
 body.dashboard-page .page,
 body.dashboard-page .record-wrap,
@@ -708,6 +758,11 @@ body.dashboard-page .guide-panel {
 
   .dashboard-hero {
     padding: 6px 4px 18px;
+  }
+
+  .dashboard-hero-split {
+    flex-direction: column-reverse;
+    align-items: stretch;
   }
 
   .card-grid {

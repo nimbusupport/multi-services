@@ -36,6 +36,21 @@ function renderWaiting(serviceKey, waiting) {
   }
 }
 
+function renderSummaryWaiting(serviceKey, total, maxScale = 40) {
+  const countEl = document.getElementById(`${serviceKey}-waiting-count`);
+  const barEl = document.getElementById(`${serviceKey}-waiting-bar`);
+  if (countEl) countEl.textContent = String(total);
+  if (barEl) {
+    const width = Math.min(100, maxScale <= 0 ? 100 : (total / maxScale) * 100);
+    barEl.style.width = `${width}%`;
+  }
+}
+
+function waitingValue(entry) {
+  const value = entry?.waiting;
+  return value === null || value === undefined ? 0 : (Number(value) || 0);
+}
+
 async function loadDashboardData() {
   try {
     const res = await fetch("/dashboard-data");
@@ -61,6 +76,21 @@ async function loadDashboardData() {
     renderUsers("hot_tickets", data?.hot_tickets?.active_users);
     renderWaiting("nastia_tickets", data?.nastia_tickets?.waiting);
     renderUsers("nastia_tickets", data?.nastia_tickets?.active_users);
+
+    const servicesTotal =
+      waitingValue(data?.sms) +
+      waitingValue(data?.bot) +
+      waitingValue(data?.f2m) +
+      waitingValue(data?.recordings) +
+      waitingValue(data?.recording_storage) +
+      waitingValue(data?.human_service);
+    renderSummaryWaiting("dashboard-services", servicesTotal);
+
+    const ticketsTotal =
+      waitingValue(data?.support_tickets) +
+      waitingValue(data?.pais_tickets) +
+      waitingValue(data?.hot_tickets);
+    renderSummaryWaiting("dashboard-service-tickets", ticketsTotal);
   } catch (err) {
     console.error("dashboard data error", err);
   }

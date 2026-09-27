@@ -785,7 +785,12 @@ def route_page_key(path):
         return "hot_tickets"
     if normalized_path.startswith("/nastia-tickets"):
         return "nastia_tickets"
-    if normalized_path.startswith("/dashboard-data") or normalized_path == "/home":
+    if normalized_path.startswith("/dashboard-data") or normalized_path in {
+        "/home",
+        "/dashboard-services",
+        "/dashboard-service-tickets",
+        "/dashboard-reports",
+    }:
         return "home"
     if normalized_path.startswith("/configuration"):
         return "configuration"
@@ -5241,6 +5246,31 @@ def home():
 
     register_service_activity("dashboard")
     return render_template("home.html", current_user=session.get("username", ""))
+
+
+def render_dashboard_group_page(template_name):
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+    if not user_can_access_page("home"):
+        return redirect(first_allowed_route())
+
+    register_service_activity("dashboard")
+    return render_template(template_name, current_user=session.get("username", ""))
+
+
+@app.route("/dashboard-services")
+def dashboard_services_page():
+    return render_dashboard_group_page("dashboard_services.html")
+
+
+@app.route("/dashboard-service-tickets")
+def dashboard_service_tickets_page():
+    return render_dashboard_group_page("dashboard_service_tickets.html")
+
+
+@app.route("/dashboard-reports")
+def dashboard_reports_page():
+    return render_dashboard_group_page("dashboard_reports.html")
 
 
 @app.route("/portals")

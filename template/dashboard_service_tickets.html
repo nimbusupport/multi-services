@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>קריאות שירות</title>
+  <link rel="icon" type="image/jpeg" href="/favicon/favicon.jpg">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&display=swap">
+  <link rel="stylesheet" href="/home.css">
+</head>
+<body class="dashboard-page">
+  {% set active_nav = "dashboard" %}
+  {% include "_dashboard_top_nav.html" %}
+
+  <main class="dashboard-wrap">
+    <section class="dashboard-hero dashboard-hero-split">
+      <a class="dashboard-back-link" href="/home">
+        <i class="fa-solid fa-arrow-right"></i>
+        <span>חזרה לדאשבורד</span>
+      </a>
+      <div class="hero-copy">
+        <p class="welcome">קטגוריית על</p>
+        <h1>קריאות שירות</h1>
+      </div>
+    </section>
+
+    <section class="card-grid">
+      <article class="service-card theme-tickets">
+        <div class="card-hero">
+          <div class="card-icon"><i class="fa-solid fa-ticket"></i></div>
+        </div>
+        <div class="card-body">
+          <div class="card-topline">
+            <span class="badge tickets">קריאות</span>
+          </div>
+          <h2>קריאות שירות</h2>
+          <a class="connect-btn" href="/support-tickets">פתח קריאות</a>
+          <div class="active-users" id="support_tickets-users"></div>
+          <div class="meter-row">
+            <span>ממתינים</span>
+            <span id="support_tickets-waiting-count">0</span>
+          </div>
+          <div class="meter"><div id="support_tickets-waiting-bar"></div></div>
+        </div>
+      </article>
+
+      <article class="service-card theme-pais">
+        <div class="card-hero">
+          <div class="card-icon card-icon-image">
+            <img src="/picture/pais.png" alt="Pais">
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="card-topline">
+            <span class="badge tickets">Pais</span>
+          </div>
+          <h2>מפעל הפיס</h2>
+          <a class="connect-btn" href="/pais-tickets">פתח תור</a>
+          <div class="active-users" id="pais_tickets-users"></div>
+          <div class="meter-row">
+            <span>ממתינים</span>
+            <span id="pais_tickets-waiting-count">0</span>
+          </div>
+          <div class="meter"><div id="pais_tickets-waiting-bar"></div></div>
+        </div>
+      </article>
+
+      <article class="service-card theme-hot">
+        <div class="card-hero">
+          <div class="card-icon card-icon-image">
+            <img src="https://hot.nimbusip.com/themes/default/images/logo.png" alt="HOT">
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="card-topline">
+            <span class="badge tickets">HOT</span>
+          </div>
+          <h2>הוט קריאות</h2>
+          <a class="connect-btn" href="/hot-kiryot-tickets">פתח תור</a>
+          <div class="active-users" id="hot_tickets-users"></div>
+          <div class="meter-row">
+            <span>ממתינים</span>
+            <span id="hot_tickets-waiting-count">0</span>
+          </div>
+          <div class="meter"><div id="hot_tickets-waiting-bar"></div></div>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <script src="/nav.js"></script>
+  <script src="/home.js"></script>
+</body>
+</html>

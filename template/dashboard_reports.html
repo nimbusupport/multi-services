@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>דוחות</title>
+  <link rel="icon" type="image/jpeg" href="/favicon/favicon.jpg">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&display=swap">
+  <link rel="stylesheet" href="/home.css">
+</head>
+<body class="dashboard-page">
+  {% set active_nav = "dashboard" %}
+  {% include "_dashboard_top_nav.html" %}
+
+  <main class="dashboard-wrap">
+    <section class="dashboard-hero dashboard-hero-split">
+      <a class="dashboard-back-link" href="/home">
+        <i class="fa-solid fa-arrow-right"></i>
+        <span>חזרה לדאשבורד</span>
+      </a>
+      <div class="hero-copy">
+        <p class="welcome">קטגוריית על</p>
+        <h1>דוחות</h1>
+      </div>
+    </section>
+
+    <section class="card-grid">
+      <article class="service-card theme-report">
+        <div class="card-hero">
+          <div class="card-icon"><i class="fa-solid fa-chart-simple"></i></div>
+        </div>
+        <div class="card-body">
+          <div class="card-topline">
+            <span class="badge report">דוחות</span>
+          </div>
+          <h2>דוח פיצ'רים</h2>
+          <a class="connect-btn" href="/features-report">פתח דוח</a>
+          <div class="active-users">
+            <span class="active-user-empty">מונה חודשי ואפשרויות ייצוא</span>
+          </div>
+          <div class="meter-row">
+            <span>CSV / PDF</span>
+            <span>כל השירותים</span>
+          </div>
+          <div class="meter"><div style="width: 100%"></div></div>
+        </div>
+      </article>
+
+      <article class="service-card theme-lookup">
+        <div class="card-hero">
+          <div class="card-icon"><i class="fa-solid fa-magnifying-glass-chart"></i></div>
+        </div>
+        <div class="card-body">
+          <div class="card-topline">
+            <span class="badge report">חיפוש</span>
+          </div>
+          <h2>סטטוס פיצ'רים</h2>
+          <a class="connect-btn" href="/features-status">פתח חיפוש</a>
+          <div class="active-users">
+            <span class="active-user-empty">חיפוש לקוח מהיר בכל הגיליונות</span>
+          </div>
+          <div class="meter-row">
+            <span>עמוד ישיר</span>
+            <span>כל הגיליונות</span>
+          </div>
+          <div class="meter"><div style="width: 100%"></div></div>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <script src="/nav.js"></script>
+</body>
+</html>
