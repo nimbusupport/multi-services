@@ -193,6 +193,7 @@ class SmsStatusDoneTests(unittest.TestCase):
     def setUp(self):
         self.app_module.app.config["TESTING"] = True
         self.client = self.app_module.app.test_client()
+        self.app_module.invalidate_sms_sheet_cache()
         self.original_vercel = os.environ.get("VERCEL")
         self.original_get_gspread_client = self.app_module.get_gspread_client
         self.original_append_log = self.app_module.append_log
@@ -211,6 +212,7 @@ class SmsStatusDoneTests(unittest.TestCase):
         self.original_requests_post = self.app_module.requests.post
 
     def tearDown(self):
+        self.app_module.invalidate_sms_sheet_cache()
         self.app_module.get_gspread_client = self.original_get_gspread_client
         self.app_module.append_log = self.original_append_log
         self.app_module._supabase_request = self.original_supabase_request
@@ -380,6 +382,80 @@ class SmsStatusDoneTests(unittest.TestCase):
             spreadsheet.sms.updates,
             [{"range": "H2", "values": [[self.app_module.STATUS_NO_SMS_TEXT]]}],
         )
+
+    def test_load_data_uses_stale_cache_when_google_sheets_quota_is_exceeded(self):
+        class FakeSmsWorksheet:
+            def __init__(self, rows):
+                self.rows = rows
+
+            def get_all_values(self):
+                return self.rows
+
+            def batch_update(self, updates):
+                return updates
+
+        class FakeCgrWorksheet:
+            def get(self, _range):
+                return [["0772135377", "TRUE", ""]]
+
+        class FakeSpreadsheet:
+            def __init__(self, app_module):
+                self.app_module = app_module
+                self.sms = FakeSmsWorksheet(
+                    [
+                        ["name", "id", "", "", "", "", "", "status", "", "text", "k"],
+                        ["Ready Customer", "456", "", "", "", "", "", app_module.STATUS_PENDING, "", "Hello SMS", app_module.K_REQUIRED_VALUE],
+                    ]
+                )
+                self.cgr = FakeCgrWorksheet()
+
+            def worksheet(self, name):
+                if name == self.app_module.SHEET_NAME:
+                    return self.sms
+                if name == self.app_module.CGR_SHEET_NAME:
+                    return self.cgr
+                raise AssertionError(f"Unexpected worksheet request: {name}")
+
+        class WorkingClient:
+            def __init__(self, spreadsheet):
+                self.spreadsheet = spreadsheet
+
+            def open_by_key(self, key):
+                self.last_key = key
+                return self.spreadsheet
+
+        self.app_module.gspread.utils = types.SimpleNamespace(
+            rowcol_to_a1=lambda row, col: f"{chr(64 + col)}{row}"
+        )
+        self.app_module.inforu_sent_numbers = lambda: set()
+        self.app_module.get_gspread_client = lambda: WorkingClient(FakeSpreadsheet(self.app_module))
+
+        self.login()
+        first_response = self.client.get("/load-data")
+
+        self.assertEqual(first_response.status_code, 200)
+        first_payload = first_response.get_json()
+        self.assertTrue(first_payload["ok"])
+        self.assertEqual(len(first_payload["customers"]), 1)
+
+        self.app_module.SMS_PENDING_CACHE["expires_at"] = 0.0
+        self.app_module.SMS_CGR_CACHE["expires_at"] = 0.0
+        self.app_module.get_gspread_client = lambda: (_ for _ in ()).throw(
+            RuntimeError(
+                "APIError: [429]: Quota exceeded for quota metric 'Read requests' "
+                "and limit 'Read requests per minute per user' of service "
+                "'sheets.googleapis.com' for consumer"
+            )
+        )
+
+        second_response = self.client.get("/load-data")
+
+        self.assertEqual(second_response.status_code, 200)
+        second_payload = second_response.get_json()
+        self.assertTrue(second_payload["ok"])
+        self.assertEqual(len(second_payload["customers"]), 1)
+        self.assertEqual(second_payload["customers"][0]["name"], "Ready Customer")
+        self.assertEqual(second_payload["customers"][0]["numbercgr"], "0772135377")
 
     def test_export_marks_empty_sms_text_as_not_transferred(self):
         class FakeWorksheet:

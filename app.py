@@ -4,6 +4,7 @@ import shutil
 import csv
 import tempfile
 import base64
+import copy
 from werkzeug.utils import secure_filename
 from werkzeug.datastructures import FileStorage
 from werkzeug.security import check_password_hash
@@ -535,6 +536,44 @@ SERVICE_ACTIVITY = {
     "hot_tickets": {},
     "nastia_tickets": {},
 }
+SMS_PENDING_CACHE_TTL_SECONDS = 20
+SMS_CGR_CACHE_TTL_SECONDS = 20
+SMS_PENDING_CACHE = {"expires_at": 0.0, "value": None}
+SMS_CGR_CACHE = {"expires_at": 0.0, "value": None}
+
+
+def invalidate_sms_sheet_cache():
+    SMS_PENDING_CACHE["expires_at"] = 0.0
+    SMS_PENDING_CACHE["value"] = None
+    SMS_CGR_CACHE["expires_at"] = 0.0
+    SMS_CGR_CACHE["value"] = None
+
+
+def cache_clone(value):
+    return copy.deepcopy(value)
+
+
+def cache_get(cache_store):
+    cached_value = cache_store.get("value")
+    expires_at = float(cache_store.get("expires_at") or 0.0)
+    if cached_value is None or expires_at <= time.time():
+        return None
+    return cache_clone(cached_value)
+
+
+def cache_set(cache_store, value, ttl_seconds):
+    cache_store["value"] = cache_clone(value)
+    cache_store["expires_at"] = time.time() + max(float(ttl_seconds or 0), 0.0)
+    return cache_clone(value)
+
+
+def is_google_sheets_quota_error(exc):
+    text = str(exc or "").lower()
+    return (
+        "quota exceeded" in text
+        or "read requests per minute per user" in text
+        or "sheets.googleapis.com" in text and "429" in text
+    )
 
 
 def ensure_log_file():
@@ -4394,7 +4433,7 @@ def get_domain_from_crm(crmordernumber):
         return ""
 
 
-def get_pending_customers():
+def get_pending_customers(use_cache=True, allow_stale_on_error=True):
     """
     Returns customers where:
       H == ׳׳׳×׳™׳ AND K == ׳׳§׳•׳— ׳”׳•׳×׳§׳
@@ -4404,109 +4443,133 @@ def get_pending_customers():
       - cgr_row (for updates on export)
       - cgr_marked (green/yellow indicator from column B)
     """
-    client = get_gspread_client()
-    ws = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
-
-    data = ws.get_all_values()
-    if not data or len(data) < 2:
-        return []
-
-    rows = data[1:]
-    pending = []
-    missing_text_rows = []
-
-    for i, row in enumerate(rows, start=2):
-        status = row[COL_STATUS - 1].strip() if len(row) >= COL_STATUS else ""
-        k_value = row[COL_K - 1].strip() if len(row) >= COL_K else ""
-
-        if status != STATUS_PENDING or k_value != K_REQUIRED_VALUE:
-            continue
-
-        name = row[COL_NAME - 1].strip() if len(row) >= COL_NAME else ""
-        idnumber = row[COL_IDNUMBER - 1].strip() if len(row) >= COL_IDNUMBER else ""
-        sms_text = row[COL_SMS_TEXT - 1].strip() if len(row) >= COL_SMS_TEXT else ""
-
-        if not sms_text:
-            missing_text_rows.append(i)
-            continue
-
-        pending.append({
-            "sheet_row": i,
-            "name": name,
-            "idnumber": idnumber,
-            "text": sms_text,
-            "status": status
-        })
-
-    if missing_text_rows:
-        try:
-            ws.batch_update([
-                {
-                    "range": gspread.utils.rowcol_to_a1(row_number, COL_STATUS),
-                    "values": [[STATUS_NO_SMS_TEXT]],
-                }
-                for row_number in missing_text_rows
-            ])
-        except Exception as exc:
-            print(f"SMS missing-text status update warning: {exc}")
-
-    # Attach NumberCGR from ׳—׳™׳₪_׳¡׳׳¡ (ONLY rows where column C empty)
     try:
-        if pending:
-            free_numbers = get_available_cgr_numbers()
+        if use_cache:
+            cached_pending = cache_get(SMS_PENDING_CACHE)
+            if cached_pending is not None:
+                return cached_pending
 
-            # attach numbers to customers
-            for idx, cust in enumerate(pending):
-                if idx < len(free_numbers):
-                    cust["numbercgr"] = free_numbers[idx]["number"]
-                    cust["cgr_row"] = free_numbers[idx]["row"]
-                    cust["cgr_marked"] = free_numbers[idx]["marked"]
-                else:
-                    cust["numbercgr"] = ""
-                    cust["cgr_row"] = None
-                    cust["cgr_marked"] = False
+        client = get_gspread_client()
+        ws = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
 
-    except Exception:
-        for cust in pending:
-            cust["numbercgr"] = ""
-            cust["cgr_row"] = None
-            cust["cgr_marked"] = False
+        data = ws.get_all_values()
+        if not data or len(data) < 2:
+            return cache_set(SMS_PENDING_CACHE, [], SMS_PENDING_CACHE_TTL_SECONDS) if use_cache else []
 
-    return pending
+        rows = data[1:]
+        pending = []
+        missing_text_rows = []
+
+        for i, row in enumerate(rows, start=2):
+            status = row[COL_STATUS - 1].strip() if len(row) >= COL_STATUS else ""
+            k_value = row[COL_K - 1].strip() if len(row) >= COL_K else ""
+
+            if status != STATUS_PENDING or k_value != K_REQUIRED_VALUE:
+                continue
+
+            name = row[COL_NAME - 1].strip() if len(row) >= COL_NAME else ""
+            idnumber = row[COL_IDNUMBER - 1].strip() if len(row) >= COL_IDNUMBER else ""
+            sms_text = row[COL_SMS_TEXT - 1].strip() if len(row) >= COL_SMS_TEXT else ""
+
+            if not sms_text:
+                missing_text_rows.append(i)
+                continue
+
+            pending.append({
+                "sheet_row": i,
+                "name": name,
+                "idnumber": idnumber,
+                "text": sms_text,
+                "status": status
+            })
+
+        if missing_text_rows:
+            try:
+                ws.batch_update([
+                    {
+                        "range": gspread.utils.rowcol_to_a1(row_number, COL_STATUS),
+                        "values": [[STATUS_NO_SMS_TEXT]],
+                    }
+                    for row_number in missing_text_rows
+                ])
+            except Exception as exc:
+                print(f"SMS missing-text status update warning: {exc}")
+
+        try:
+            if pending:
+                free_numbers = get_available_cgr_numbers(use_cache=use_cache, allow_stale_on_error=allow_stale_on_error)
+                for idx, cust in enumerate(pending):
+                    if idx < len(free_numbers):
+                        cust["numbercgr"] = free_numbers[idx]["number"]
+                        cust["cgr_row"] = free_numbers[idx]["row"]
+                        cust["cgr_marked"] = free_numbers[idx]["marked"]
+                    else:
+                        cust["numbercgr"] = ""
+                        cust["cgr_row"] = None
+                        cust["cgr_marked"] = False
+        except Exception:
+            for cust in pending:
+                cust["numbercgr"] = ""
+                cust["cgr_row"] = None
+                cust["cgr_marked"] = False
+
+        return cache_set(SMS_PENDING_CACHE, pending, SMS_PENDING_CACHE_TTL_SECONDS) if use_cache else pending
+    except Exception as exc:
+        if use_cache and allow_stale_on_error and is_google_sheets_quota_error(exc):
+            stale_pending = SMS_PENDING_CACHE.get("value")
+            if stale_pending is not None:
+                return cache_clone(stale_pending)
+        raise
 
 
-def get_available_cgr_numbers(limit=None):
-    client = get_gspread_client()
-    cgr_ws = client.open_by_key(SPREADSHEET_ID).worksheet(CGR_SHEET_NAME)
-    cgr_data = cgr_ws.get(f"A{CGR_START_ROW}:C")
+def get_available_cgr_numbers(limit=None, use_cache=True, allow_stale_on_error=True):
+    try:
+        cached_numbers = cache_get(SMS_CGR_CACHE) if use_cache else None
+        if cached_numbers is not None:
+            if isinstance(limit, int) and limit > 0:
+                return cached_numbers[:limit]
+            return cached_numbers
 
-    free_numbers = []
+        client = get_gspread_client()
+        cgr_ws = client.open_by_key(SPREADSHEET_ID).worksheet(CGR_SHEET_NAME)
+        cgr_data = cgr_ws.get(f"A{CGR_START_ROW}:C")
 
-    for idx, row in enumerate(cgr_data):
-        a_val = row[0] if len(row) >= 1 else ""
-        b_val = row[1] if len(row) >= 2 else ""
-        c_val = row[2] if len(row) >= 3 else ""
+        free_numbers = []
 
-        if (c_val or "").strip():
-            continue
+        for idx, row in enumerate(cgr_data):
+            a_val = row[0] if len(row) >= 1 else ""
+            b_val = row[1] if len(row) >= 2 else ""
+            c_val = row[2] if len(row) >= 3 else ""
 
-        numbercgr = normalize_phone_with_zero(a_val)
-        if not numbercgr:
-            continue
+            if (c_val or "").strip():
+                continue
 
-        b_norm = (b_val or "").strip().upper()
-        marked = bool(b_norm) and b_norm not in ("FALSE", "0", "NO")
+            numbercgr = normalize_phone_with_zero(a_val)
+            if not numbercgr:
+                continue
 
-        free_numbers.append({
-            "number": numbercgr,
-            "row": CGR_START_ROW + idx,
-            "marked": marked,
-        })
+            b_norm = (b_val or "").strip().upper()
+            marked = bool(b_norm) and b_norm not in ("FALSE", "0", "NO")
 
-        if isinstance(limit, int) and limit > 0 and len(free_numbers) >= limit:
-            break
+            free_numbers.append({
+                "number": numbercgr,
+                "row": CGR_START_ROW + idx,
+                "marked": marked,
+            })
 
-    return free_numbers
+        cached_free_numbers = cache_set(SMS_CGR_CACHE, free_numbers, SMS_CGR_CACHE_TTL_SECONDS) if use_cache else free_numbers
+        if isinstance(limit, int) and limit > 0:
+            return cached_free_numbers[:limit]
+        return cached_free_numbers
+    except Exception as exc:
+        if use_cache and allow_stale_on_error and is_google_sheets_quota_error(exc):
+            stale_numbers = SMS_CGR_CACHE.get("value")
+            if stale_numbers is not None:
+                stale_clone = cache_clone(stale_numbers)
+                if isinstance(limit, int) and limit > 0:
+                    return stale_clone[:limit]
+                return stale_clone
+        raise
 
 
 def get_recordings_waiting_count():
@@ -6667,6 +6730,7 @@ def mark_done():
         except Exception as log_exc:
             print(f"Mark-done log warning: {log_exc}")
 
+        invalidate_sms_sheet_cache()
         return jsonify({
             "ok": True,
             "updated": len(rows),
@@ -6790,6 +6854,7 @@ def reserve_numbercgr():
             return api_error("No customers provided.", 400, "missing_customers")
 
         result = reserve_cgr_numbers(customers)
+        invalidate_sms_sheet_cache()
         return jsonify({
             "ok": True,
             **result,
@@ -6917,6 +6982,9 @@ def export_csv():
             cgr_ws.batch_update(cgr_updates)
         except Exception as e:
             print("CGR UPDATE ERROR:", e)
+
+    if spreadsheet and (status_updates or cgr_updates):
+        invalidate_sms_sheet_cache()
 
     output = io.StringIO(newline="")
     writer = csv.DictWriter(output, fieldnames=["name", "caller_id_number", "number", "template"])

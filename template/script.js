@@ -121,6 +121,11 @@ function formatErrorMessage(error){
   return String(error ?? "Unknown error");
 }
 
+function isQuotaExceededMessage(message){
+  const text = String(message ?? "").toLowerCase();
+  return text.includes("quota exceeded") || (text.includes("429") && text.includes("sheets.googleapis.com"));
+}
+
 async function readJsonResponse(res){
   const contentType = res.headers.get("content-type") || "";
   if(contentType.includes("application/json")){
@@ -242,6 +247,7 @@ async function lookupSmsDomain(){
 
 /* Load data */
 async function loadData() {
+  for(let attempt = 0; attempt < 2; attempt += 1){
     try{
       const res = await fetch('/load-data');
       const payload = await readJsonResponse(res);
@@ -269,10 +275,16 @@ async function loadData() {
 
       refreshAllInforuSentFlags();
       renderTable();
+      return;
     }catch(e){
+      if(attempt === 0 && isQuotaExceededMessage(formatErrorMessage(e))){
+        await new Promise(resolve => window.setTimeout(resolve, 1500));
+        continue;
+      }
       alert("שגיאה בטעינת נתונים: " + formatErrorMessage(e));
     }
   }
+}
 
 /* Render */
 function renderTable(){
