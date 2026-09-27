@@ -16,6 +16,11 @@ const trendMessage = document.getElementById("trend-message");
 
 let currentReport = null;
 
+function isQuotaExceededMessage(message) {
+  const text = String(message || "").toLowerCase();
+  return text.includes("quota exceeded") || (text.includes("429") && text.includes("sheets.googleapis.com"));
+}
+
 function currentMonthValue() {
   const now = new Date();
   const month = String(now.getMonth() + 1).padStart(2, "0");
@@ -119,15 +124,26 @@ async function loadReport(loadingText = "Loading report...") {
   setReportLoading(true, loadingText);
 
   try {
-    const params = new URLSearchParams({ month });
-    const res = await fetch(`/features-report-data?${params.toString()}`);
-    const data = await res.json();
-    if (!res.ok || !data.ok) {
-      throw new Error(data.error || "Failed to load report");
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        const params = new URLSearchParams({ month });
+        const res = await fetch(`/features-report-data?${params.toString()}`);
+        const data = await res.json();
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || "Failed to load report");
+        }
+        renderReport(data.report);
+        renderTrendChartFromDomSelection(month);
+        setMessage("");
+        return;
+      } catch (error) {
+        if (attempt === 0 && isQuotaExceededMessage(error.message)) {
+          await new Promise((resolve) => window.setTimeout(resolve, 1500));
+          continue;
+        }
+        throw error;
+      }
     }
-    renderReport(data.report);
-    renderTrendChartFromDomSelection(month);
-    setMessage("");
   } catch (error) {
     currentReport = null;
     reportBody.innerHTML = "";
@@ -142,12 +158,23 @@ async function loadMonthlyTotals() {
   setTrendMessage("Loading monthly totals...");
 
   try {
-    const res = await fetch("/features-report-monthly-totals");
-    const data = await res.json();
-    if (!res.ok || !data.ok) {
-      throw new Error(data.error || "Failed to load monthly totals");
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        const res = await fetch("/features-report-monthly-totals");
+        const data = await res.json();
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || "Failed to load monthly totals");
+        }
+        renderTrendChart(data.months || [], data.start_month, data.end_month);
+        return;
+      } catch (error) {
+        if (attempt === 0 && isQuotaExceededMessage(error.message)) {
+          await new Promise((resolve) => window.setTimeout(resolve, 1500));
+          continue;
+        }
+        throw error;
+      }
     }
-    renderTrendChart(data.months || [], data.start_month, data.end_month);
   } catch (error) {
     trendChart.innerHTML = "";
     trendRange.textContent = "--/---- - --/----";

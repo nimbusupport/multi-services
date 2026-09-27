@@ -540,6 +540,10 @@ SMS_PENDING_CACHE_TTL_SECONDS = 20
 SMS_CGR_CACHE_TTL_SECONDS = 20
 SMS_PENDING_CACHE = {"expires_at": 0.0, "value": None}
 SMS_CGR_CACHE = {"expires_at": 0.0, "value": None}
+FEATURE_REPORT_COUNTS_CACHE_TTL_SECONDS = 60
+FEATURE_REPORT_MONTHLY_TOTALS_CACHE_TTL_SECONDS = 120
+FEATURE_REPORT_COUNTS_CACHE = {}
+FEATURE_REPORT_MONTHLY_TOTALS_CACHE = {}
 
 
 def invalidate_sms_sheet_cache():
@@ -547,6 +551,11 @@ def invalidate_sms_sheet_cache():
     SMS_PENDING_CACHE["value"] = None
     SMS_CGR_CACHE["expires_at"] = 0.0
     SMS_CGR_CACHE["value"] = None
+
+
+def invalidate_feature_report_cache():
+    FEATURE_REPORT_COUNTS_CACHE.clear()
+    FEATURE_REPORT_MONTHLY_TOTALS_CACHE.clear()
 
 
 def cache_clone(value):
@@ -565,6 +574,29 @@ def cache_set(cache_store, value, ttl_seconds):
     cache_store["value"] = cache_clone(value)
     cache_store["expires_at"] = time.time() + max(float(ttl_seconds or 0), 0.0)
     return cache_clone(value)
+
+
+def keyed_cache_get(cache_map, cache_key):
+    cache_store = cache_map.get(cache_key)
+    if not isinstance(cache_store, dict):
+        return None
+    return cache_get(cache_store)
+
+
+def keyed_cache_set(cache_map, cache_key, value, ttl_seconds):
+    cache_store = {"expires_at": 0.0, "value": None}
+    cache_map[cache_key] = cache_store
+    return cache_set(cache_store, value, ttl_seconds)
+
+
+def keyed_cache_stale_get(cache_map, cache_key):
+    cache_store = cache_map.get(cache_key)
+    if not isinstance(cache_store, dict):
+        return None
+    cached_value = cache_store.get("value")
+    if cached_value is None:
+        return None
+    return cache_clone(cached_value)
 
 
 def is_google_sheets_quota_error(exc):
@@ -4810,93 +4842,141 @@ def count_sheet_feature_by_month(config, start_month, end_month, client):
     return totals
 
 
-def get_feature_report_counts(month_value):
-    selected_month = datetime.strptime(month_value, "%Y-%m")
-    client = get_gspread_client()
-    reports = []
+def get_feature_report_counts(month_value, use_cache=True, allow_stale_on_error=True):
+    cache_key = str(month_value or "").strip()
+    try:
+        selected_month = datetime.strptime(month_value, "%Y-%m")
+        if use_cache:
+            cached_report = keyed_cache_get(FEATURE_REPORT_COUNTS_CACHE, cache_key)
+            if cached_report is not None:
+                return cached_report
 
-    for service_key, config in FEATURE_REPORT_SERVICES.items():
-        if config.get("source") == "drive_done":
-            recording_counts = count_done_recordings_from_drive(selected_month, client, config)
+        client = get_gspread_client()
+        reports = []
+
+        for service_key, config in FEATURE_REPORT_SERVICES.items():
+            if config.get("source") == "drive_done":
+                recording_counts = count_done_recordings_from_drive(selected_month, client, config)
+                reports.append({
+                    "key": service_key,
+                    "label": config["label"],
+                    "count": recording_counts["count"],
+                    "children": recording_counts["children"],
+                })
+                continue
+
+            ws = client.open_by_key(SPREADSHEET_ID).worksheet(config["sheet"])
+            rows = ws.get_all_values()[1:]
+            count = 0
+
+            for row in rows:
+                status_col = config["status_col"]
+                date_col = config["date_col"]
+                status = row[status_col - 1].strip() if len(row) >= status_col else ""
+                date_value = row[date_col - 1].strip() if len(row) >= date_col else ""
+
+                if config.get("checkbox"):
+                    is_done = report_checkbox_marked(status)
+                else:
+                    is_done = status == config["status_value"]
+
+                if not is_done:
+                    continue
+
+                done_date = parse_report_date(date_value, config.get("date_order", "mdy"))
+                if not done_date:
+                    continue
+
+                if done_date.year == selected_month.year and done_date.month == selected_month.month:
+                    count += 1
+
             reports.append({
                 "key": service_key,
                 "label": config["label"],
-                "count": recording_counts["count"],
-                "children": recording_counts["children"],
+                "count": count,
             })
-            continue
 
-        ws = client.open_by_key(SPREADSHEET_ID).worksheet(config["sheet"])
-        rows = ws.get_all_values()[1:]
-        count = 0
-
-        for row in rows:
-            status_col = config["status_col"]
-            date_col = config["date_col"]
-            status = row[status_col - 1].strip() if len(row) >= status_col else ""
-            date_value = row[date_col - 1].strip() if len(row) >= date_col else ""
-
-            if config.get("checkbox"):
-                is_done = report_checkbox_marked(status)
-            else:
-                is_done = status == config["status_value"]
-
-            if not is_done:
-                continue
-
-            done_date = parse_report_date(date_value, config.get("date_order", "mdy"))
-            if not done_date:
-                continue
-
-            if done_date.year == selected_month.year and done_date.month == selected_month.month:
-                count += 1
-
-        reports.append({
-            "key": service_key,
-            "label": config["label"],
-            "count": count,
-        })
-
-    return {
-        "month": month_value,
-        "month_display": selected_month.strftime("%m/%Y"),
-        "services": reports,
-        "total": sum(item["count"] for item in reports),
-    }
-
-
-def get_feature_report_monthly_totals(start_month_value, end_month_value):
-    start_month = datetime.strptime(start_month_value, "%Y-%m")
-    end_month = datetime.strptime(end_month_value, "%Y-%m")
-    if start_month > end_month:
-        raise ValueError("Start month must be before end month")
-
-    monthly_totals = {month_value: 0 for month_value in iter_month_values(start_month, end_month)}
-    client = get_gspread_client()
-
-    for config in FEATURE_REPORT_SERVICES.values():
-        if config.get("source") == "drive_done":
-            service_totals = count_done_recordings_by_month(start_month, end_month)
-        else:
-            service_totals = count_sheet_feature_by_month(config, start_month, end_month, client)
-
-        for month_value, count in service_totals.items():
-            monthly_totals[month_value] += count
-
-    months = []
-    for month_value in iter_month_values(start_month, end_month):
-        month_label = datetime.strptime(month_value, "%Y-%m").strftime("%m/%Y")
-        months.append({
+        report = {
             "month": month_value,
-            "month_display": month_label,
-            "total": monthly_totals[month_value],
-        })
+            "month_display": selected_month.strftime("%m/%Y"),
+            "services": reports,
+            "total": sum(item["count"] for item in reports),
+        }
+        return keyed_cache_set(
+            FEATURE_REPORT_COUNTS_CACHE,
+            cache_key,
+            report,
+            FEATURE_REPORT_COUNTS_CACHE_TTL_SECONDS,
+        ) if use_cache else report
+    except Exception as exc:
+        if (
+            not isinstance(exc, ValueError)
+            and use_cache
+            and allow_stale_on_error
+            and is_google_sheets_quota_error(exc)
+        ):
+            stale_report = keyed_cache_stale_get(FEATURE_REPORT_COUNTS_CACHE, cache_key)
+            if stale_report is not None:
+                return stale_report
+        raise
 
-    return {
-        "start_month": start_month_value,
-        "end_month": end_month_value,
-        "months": months,
-    }
+
+def get_feature_report_monthly_totals(start_month_value, end_month_value, use_cache=True, allow_stale_on_error=True):
+    cache_key = f"{start_month_value}:{end_month_value}"
+    try:
+        start_month = datetime.strptime(start_month_value, "%Y-%m")
+        end_month = datetime.strptime(end_month_value, "%Y-%m")
+        if start_month > end_month:
+            raise ValueError("Start month must be before end month")
+
+        if use_cache:
+            cached_totals = keyed_cache_get(FEATURE_REPORT_MONTHLY_TOTALS_CACHE, cache_key)
+            if cached_totals is not None:
+                return cached_totals
+
+        monthly_totals = {month_value: 0 for month_value in iter_month_values(start_month, end_month)}
+        client = get_gspread_client()
+
+        for config in FEATURE_REPORT_SERVICES.values():
+            if config.get("source") == "drive_done":
+                service_totals = count_done_recordings_by_month(start_month, end_month)
+            else:
+                service_totals = count_sheet_feature_by_month(config, start_month, end_month, client)
+
+            for month_value, count in service_totals.items():
+                monthly_totals[month_value] += count
+
+        months = []
+        for month_value in iter_month_values(start_month, end_month):
+            month_label = datetime.strptime(month_value, "%Y-%m").strftime("%m/%Y")
+            months.append({
+                "month": month_value,
+                "month_display": month_label,
+                "total": monthly_totals[month_value],
+            })
+
+        totals_payload = {
+            "start_month": start_month_value,
+            "end_month": end_month_value,
+            "months": months,
+        }
+        return keyed_cache_set(
+            FEATURE_REPORT_MONTHLY_TOTALS_CACHE,
+            cache_key,
+            totals_payload,
+            FEATURE_REPORT_MONTHLY_TOTALS_CACHE_TTL_SECONDS,
+        ) if use_cache else totals_payload
+    except Exception as exc:
+        if (
+            not isinstance(exc, ValueError)
+            and use_cache
+            and allow_stale_on_error
+            and is_google_sheets_quota_error(exc)
+        ):
+            stale_totals = keyed_cache_stale_get(FEATURE_REPORT_MONTHLY_TOTALS_CACHE, cache_key)
+            if stale_totals is not None:
+                return stale_totals
+        raise
 
 
 def get_feature_report_graph_range():

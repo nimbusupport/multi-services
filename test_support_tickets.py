@@ -1,4 +1,5 @@
 import importlib
+import copy
 import io
 import json
 import os
@@ -232,6 +233,8 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.original_israel_now = self.app_module.israel_now
         self.original_get_gspread_client = self.app_module.get_gspread_client
         self.original_get_feature_report_counts = self.app_module.get_feature_report_counts
+        self.original_get_feature_report_monthly_totals = self.app_module.get_feature_report_monthly_totals
+        self.original_feature_report_services = copy.deepcopy(self.app_module.FEATURE_REPORT_SERVICES)
         self.original_send_nastia_ticket_email = self.app_module.send_nastia_ticket_email
         self.original_send_nastia_waiting_alert_email = self.app_module.send_nastia_waiting_alert_email
         self.original_send_nastia_cancellation_alert_email = self.app_module.send_nastia_cancellation_alert_email
@@ -254,6 +257,7 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.app_module.SUPPORT_SCREEN_DIR = self.screens_dir
         self.app_module.SUPABASE_URL = ""
         self.app_module.SUPABASE_KEY = ""
+        self.app_module.invalidate_feature_report_cache()
         self.seed_tickets()
 
     def tearDown(self):
@@ -264,6 +268,9 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.app_module.israel_now = self.original_israel_now
         self.app_module.get_gspread_client = self.original_get_gspread_client
         self.app_module.get_feature_report_counts = self.original_get_feature_report_counts
+        self.app_module.get_feature_report_monthly_totals = self.original_get_feature_report_monthly_totals
+        self.app_module.FEATURE_REPORT_SERVICES = copy.deepcopy(self.original_feature_report_services)
+        self.app_module.invalidate_feature_report_cache()
         self.app_module.send_nastia_ticket_email = self.original_send_nastia_ticket_email
         self.app_module.send_nastia_waiting_alert_email = self.original_send_nastia_waiting_alert_email
         self.app_module.send_nastia_cancellation_alert_email = self.original_send_nastia_cancellation_alert_email
@@ -1484,6 +1491,117 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertTrue(response.headers["Content-Disposition"].startswith("attachment;"))
         self.assertIn("features-report-2026-07.pdf", response.headers["Content-Disposition"])
         self.assertTrue(response.data.startswith(b"%PDF"))
+
+    def test_features_report_data_uses_stale_cache_when_google_sheets_quota_is_exceeded(self):
+        class FakeWorksheet:
+            def get_all_values(self):
+                return [
+                    ["status", "date"],
+                    ["Done", "07/15/2026"],
+                ]
+
+        class FakeSpreadsheet:
+            def worksheet(self, name):
+                self.last_sheet = name
+                return FakeWorksheet()
+
+        class WorkingClient:
+            def open_by_key(self, key):
+                self.last_key = key
+                return FakeSpreadsheet()
+
+        self.app_module.FEATURE_REPORT_SERVICES = {
+            "test_feature": {
+                "label": "Test Feature",
+                "sheet": "TestFeatureSheet",
+                "status_col": 1,
+                "date_col": 2,
+                "date_order": "mdy",
+                "status_value": "Done",
+            }
+        }
+        self.app_module.get_gspread_client = lambda: WorkingClient()
+
+        self.login("admin@nimbusip.com")
+        first_response = self.client.get("/features-report-data?month=2026-07")
+
+        self.assertEqual(first_response.status_code, 200)
+        first_payload = first_response.get_json()
+        self.assertTrue(first_payload["ok"])
+        self.assertEqual(first_payload["report"]["total"], 1)
+
+        self.app_module.FEATURE_REPORT_COUNTS_CACHE["2026-07"]["expires_at"] = 0.0
+        self.app_module.get_gspread_client = lambda: (_ for _ in ()).throw(
+            RuntimeError(
+                "APIError: [429]: Quota exceeded for quota metric 'Read requests' "
+                "and limit 'Read requests per minute per user' of service "
+                "'sheets.googleapis.com' for consumer"
+            )
+        )
+
+        second_response = self.client.get("/features-report-data?month=2026-07")
+
+        self.assertEqual(second_response.status_code, 200)
+        second_payload = second_response.get_json()
+        self.assertTrue(second_payload["ok"])
+        self.assertEqual(second_payload["report"]["total"], 1)
+        self.assertEqual(second_payload["report"]["services"][0]["label"], "Test Feature")
+
+    def test_features_report_monthly_totals_uses_stale_cache_when_google_sheets_quota_is_exceeded(self):
+        class FakeWorksheet:
+            def get_all_values(self):
+                return [
+                    ["status", "date"],
+                    ["Done", "07/15/2026"],
+                    ["Done", "08/02/2026"],
+                ]
+
+        class FakeSpreadsheet:
+            def worksheet(self, name):
+                self.last_sheet = name
+                return FakeWorksheet()
+
+        class WorkingClient:
+            def open_by_key(self, key):
+                self.last_key = key
+                return FakeSpreadsheet()
+
+        self.app_module.FEATURE_REPORT_SERVICES = {
+            "test_feature": {
+                "label": "Test Feature",
+                "sheet": "TestFeatureSheet",
+                "status_col": 1,
+                "date_col": 2,
+                "date_order": "mdy",
+                "status_value": "Done",
+            }
+        }
+        self.app_module.get_gspread_client = lambda: WorkingClient()
+
+        self.login("admin@nimbusip.com")
+        first_response = self.client.get("/features-report-monthly-totals?start_month=2026-07&end_month=2026-08")
+
+        self.assertEqual(first_response.status_code, 200)
+        first_payload = first_response.get_json()
+        self.assertTrue(first_payload["ok"])
+        self.assertEqual([item["total"] for item in first_payload["months"]], [1, 1])
+
+        cache_key = "2026-07:2026-08"
+        self.app_module.FEATURE_REPORT_MONTHLY_TOTALS_CACHE[cache_key]["expires_at"] = 0.0
+        self.app_module.get_gspread_client = lambda: (_ for _ in ()).throw(
+            RuntimeError(
+                "APIError: [429]: Quota exceeded for quota metric 'Read requests' "
+                "and limit 'Read requests per minute per user' of service "
+                "'sheets.googleapis.com' for consumer"
+            )
+        )
+
+        second_response = self.client.get("/features-report-monthly-totals?start_month=2026-07&end_month=2026-08")
+
+        self.assertEqual(second_response.status_code, 200)
+        second_payload = second_response.get_json()
+        self.assertTrue(second_payload["ok"])
+        self.assertEqual([item["total"] for item in second_payload["months"]], [1, 1])
 
     def test_pdf_rtl_format_keeps_non_hebrew_text_order(self):
         formatted = self.app_module.format_rtl_pdf_text("2026-08-01 - 2026-08-31")
