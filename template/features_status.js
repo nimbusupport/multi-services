@@ -7,6 +7,7 @@ const statusFilterSelect = document.getElementById("status-filter-select");
 const projectManagerQueryField = document.getElementById("project-manager-query-field");
 const projectManagerFilterSelect = document.getElementById("project-manager-filter-select");
 const button = document.getElementById("lookup-submit-btn");
+const resetButton = document.getElementById("lookup-reset-btn");
 const message = document.getElementById("lookup-message");
 const statusCounterGrid = document.getElementById("status-counter-grid");
 const summaryGrid = document.getElementById("feature-status-summary");
@@ -72,6 +73,9 @@ function syncQueryMode() {
 
 function setLoadingState(isLoading) {
   button.disabled = isLoading;
+  if (resetButton) {
+    resetButton.disabled = isLoading;
+  }
   toolbarSurface?.classList.toggle("is-loading", isLoading);
   summarySurface?.classList.toggle("is-loading", isLoading);
   resultsSurface?.classList.toggle("is-loading", isLoading);
@@ -269,6 +273,17 @@ async function loadFeatureStatuses() {
   }
 }
 
+function resetFeatureStatusFilters() {
+  monthInput.value = currentMonthValue();
+  queryTypeSelect.value = "all";
+  queryInput.value = "";
+  statusFilterSelect.value = "";
+  projectManagerFilterSelect.value = "";
+  syncQueryMode();
+  setMessage("המסננים אופסו לברירת המחדל.");
+  loadFeatureStatuses();
+}
+
 monthInput.value = currentMonthValue();
 syncQueryMode();
 
@@ -298,6 +313,7 @@ queryTypeSelect?.addEventListener("change", () => {
   }
   loadFeatureStatuses();
 });
+resetButton?.addEventListener("click", resetFeatureStatusFilters);
 
 statusCounterGrid?.addEventListener("click", (event) => {
   const trigger = event.target.closest("[data-status-counter]");

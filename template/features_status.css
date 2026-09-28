@@ -228,7 +228,7 @@ body.features-status-page {
 
 .toolbar-form {
   display: grid;
-  grid-template-columns: minmax(150px, 0.7fr) minmax(130px, 0.6fr) minmax(220px, 1.1fr) minmax(150px, 0.7fr) minmax(170px, 0.8fr) auto;
+  grid-template-columns: minmax(150px, 0.7fr) minmax(130px, 0.6fr) minmax(220px, 1.1fr) minmax(150px, 0.7fr) minmax(170px, 0.8fr) auto auto;
   gap: 12px;
   align-items: end;
 }
@@ -272,6 +272,17 @@ body.features-status-page {
   transform: translateY(-2px);
   border-color: rgba(120, 210, 244, 0.62);
   box-shadow: 0 18px 30px rgba(22, 87, 120, 0.22);
+}
+
+.toolbar-btn-ghost {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(10, 21, 34, 0.38));
+  border-color: rgba(151, 194, 244, 0.18);
+  color: #dcecff;
+}
+
+.toolbar-btn-ghost:hover {
+  border-color: rgba(151, 194, 244, 0.34);
+  box-shadow: 0 18px 30px rgba(10, 21, 34, 0.22);
 }
 
 .page-message {
