@@ -198,8 +198,18 @@ function renderTrend(months, selectedMonth) {
           <span class="trend-rate">${rateText}</span>
         </div>
         <div class="trend-bars">
-          <span class="trend-bar total" style="--total-height:${totalHeight}%"></span>
-          <span class="trend-bar coordinated" style="--coordinated-height:${coordinatedHeight}%"></span>
+          <span
+            class="trend-bar total"
+            style="--total-height:${totalHeight}%"
+            title="כחול = סה&quot;כ קריאות בחודש הזה: ${item.total || 0}"
+            aria-label="סהכ קריאות: ${item.total || 0}"
+          ></span>
+          <span
+            class="trend-bar coordinated"
+            style="--coordinated-height:${coordinatedHeight}%"
+            title="ירוק = קריאות מתואמות בחודש הזה: ${item.coordinated || 0}"
+            aria-label="קריאות מתואמות: ${item.coordinated || 0}"
+          ></span>
         </div>
         <span class="trend-month">${item.month_display}</span>
       </button>

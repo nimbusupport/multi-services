@@ -3,77 +3,125 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>דו"ח פיצ'רים שבוצעו</title>
+  <title>דו"ח פיצ'רים חודשי</title>
+  <link rel="icon" type="image/jpeg" href="/favicon/favicon.jpg">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&display=swap">
   <link rel="stylesheet" href="/home.css">
   <link rel="stylesheet" href="/features_report.css">
 </head>
-<body class="dashboard-page">
+<body class="dashboard-page features-report-page">
   {% set active_nav = "report" %}
   {% include "_dashboard_top_nav.html" %}
-  <nav class="site-nav" hidden>
-    <div class="site-nav-inner">
-      <a class="brand" href="/home"><span class="brand-kicker">Support Suite</span><span class="brand-main">Services</span></a>
-      <button class="nav-toggle" type="button">Menu</button>
-      <div class="nav-links">
-        <a class="nav-link" href="/sms"><span class="nav-icon"><i class="fa-solid fa-comment-sms"></i></span><span class="nav-label">SMS</span></a>
-        <a class="nav-link" href="/bot"><span class="nav-icon"><i class="fa-solid fa-robot"></i></span><span class="nav-label">Bot</span></a>
-        <a class="nav-link" href="/f2m"><span class="nav-icon"><i class="fa-solid fa-envelope-open-text"></i></span><span class="nav-label">F2M</span></a>
-        <a class="nav-link" href="/recording-storage"><span class="nav-icon"><i class="fa-solid fa-database"></i></span><span class="nav-label">אחסון</span></a>
-        <a class="nav-link" href="/human-service"><span class="nav-icon"><i class="fa-solid fa-headset"></i></span><span class="nav-label">מוקד</span></a>
-        <a class="nav-link" href="/record"><span class="nav-icon"><i class="fa-solid fa-record-vinyl"></i></span><span class="nav-label">Recordings</span></a>
-        <a class="nav-link active" href="/features-report"><span class="nav-icon"><i class="fa-solid fa-chart-simple"></i></span><span class="nav-label">דו"ח פיצ'רים</span></a>
-        <a class="nav-link" href="/home"><span class="nav-icon"><i class="fa-solid fa-chart-column"></i></span><span class="nav-label">Dashboard</span></a>
-      </div>
-      <div class="nav-footer">
-        <div class="nav-user">{{ (current_user or "").split("@")[0] }}</div>
-        <a class="nav-logout" href="/logout"><i class="fa-solid fa-right-from-bracket"></i> Logout</a>
-      </div>
-    </div>
-  </nav>
 
-  <main class="report-wrap">
-    <section class="report-panel">
-      <header class="report-head">
-        <div>
-          <p class="welcome">דו"ח חודשי</p>
-          <h1>דו"ח פיצ'רים שבוצעו</h1>
-        </div>
-        <div class="export-control" aria-label="Export report">
-          <button id="export-btn" class="export-btn" type="button">
-            <i class="fa-solid fa-file-export"></i>
-            <span>EXPORT</span>
-          </button>
-          <select id="export-format" aria-label="Format">
-            <option value="">Format</option>
-            <option value="csv">CSV</option>
-            <option value="pdf">PDF</option>
-          </select>
-        </div>
-      </header>
+  <main class="features-report-wrap">
+    <section class="features-hero">
+      <div class="features-hero-copy">
+        <a class="dashboard-back-link" href="/dashboard-reports">
+          <i class="fa-solid fa-arrow-right"></i>
+          <span>חזרה לכרטיס הדוחות</span>
+        </a>
+        <p class="features-kicker">דו"ח פיצ'רים חודשי</p>
+        <h1>אותה שפה יוקרתית, עכשיו גם לדו"ח הפיצ'רים</h1>
+        <p class="features-subtitle">
+          מעקב חודשי אחר כל הפיצ'רים שבוצעו, עם תצוגת KPI, פילוח שירותים, השוואת חודשים וייצוא מהיר ל־CSV או PDF.
+        </p>
+      </div>
 
-      <section class="filters-row">
-        <label for="month-filter">חודש</label>
+      <div class="features-hero-visual" aria-hidden="true">
+        <div class="hero-glow hero-glow-large"></div>
+        <div class="hero-glow hero-glow-small"></div>
+        <div class="hero-tags">
+          <span>SMS</span>
+          <span>Bot</span>
+          <span>F2M</span>
+          <span>Recordings</span>
+          <span>Storage</span>
+        </div>
+        <div class="hero-bars">
+          <span style="--bar-size: 42%"></span>
+          <span style="--bar-size: 61%"></span>
+          <span style="--bar-size: 52%"></span>
+          <span style="--bar-size: 76%"></span>
+          <span style="--bar-size: 68%"></span>
+          <span style="--bar-size: 88%"></span>
+        </div>
+      </div>
+    </section>
+
+    <section class="surface toolbar-surface">
+      <div class="toolbar-group">
+        <label for="month-filter">חודש תצוגה</label>
         <input id="month-filter" type="month">
-        <button id="recordings-detail-export" class="detail-btn" type="button">
+      </div>
+
+      <div class="toolbar-actions">
+        <button id="recordings-detail-export" class="toolbar-btn secondary" type="button">
           <i class="fa-solid fa-file-lines"></i>
           <span>דו"ח מפורט הקלטות</span>
         </button>
-        <button id="load-report" class="load-btn" type="button">
+        <button id="load-report" class="toolbar-btn" type="button">
           <i class="fa-solid fa-rotate"></i>
-          <span>הצג</span>
+          <span>רענן</span>
         </button>
-      </section>
+      </div>
 
-      <section id="print-area" class="report-table-wrap">
+      <div class="toolbar-export" aria-label="Export report">
+        <button id="export-btn" class="toolbar-btn export" type="button">
+          <i class="fa-solid fa-file-export"></i>
+          <span>ייצוא דוח</span>
+        </button>
+        <select id="export-format" aria-label="Format">
+          <option value="">פורמט</option>
+          <option value="csv">CSV</option>
+          <option value="pdf">PDF</option>
+        </select>
+      </div>
+    </section>
+
+    <section class="kpi-grid">
+      <article class="kpi-card">
+        <span class="kpi-label">סה"כ פיצ'רים שבוצעו</span>
+        <strong id="report-total">0</strong>
+        <p id="report-month-label">--/----</p>
+      </article>
+      <article class="kpi-card accent-teal">
+        <span class="kpi-label">שירותים פעילים בדוח</span>
+        <strong id="report-services-count">0</strong>
+        <p>קטגוריות ראשיות עם ביצועים בחודש</p>
+      </article>
+      <article class="kpi-card accent-amber">
+        <span class="kpi-label">ממתין לביצוע</span>
+        <strong id="report-children-count">0</strong>
+        <p>כמות מונה פיצ'רים מרוכזים</p>
+      </article>
+      <article class="kpi-card accent-slate">
+        <span class="kpi-label">שירות מוביל</span>
+        <strong id="report-top-service-count">0</strong>
+        <p id="report-top-service-label">-</p>
+      </article>
+    </section>
+
+    <section class="report-main-grid">
+      <section id="print-area" class="surface report-table-surface">
         <div id="report-loading" class="report-loading" aria-live="polite" hidden>
           <div class="report-loading-spinner" aria-hidden="true"></div>
           <span id="report-loading-text">Loading report...</span>
         </div>
-        <div class="summary-row">
-          <span id="report-month-label">--/----</span>
-          <strong id="report-total">0</strong>
+
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">פירוט חודשי</p>
+            <h2>שירותים שבוצעו לפי קטגוריה</h2>
+          </div>
+          <div class="section-chip">
+            <span id="report-summary-total-chip">0</span>
+            <small>סה"כ ביצועים</small>
+          </div>
         </div>
+
         <table class="report-table">
           <thead>
             <tr>
@@ -85,19 +133,50 @@
         </table>
       </section>
 
-      <section class="trend-card" aria-labelledby="trend-title">
-        <div class="trend-head">
+      <section class="surface insights-surface">
+        <div class="section-head">
           <div>
-            <p class="trend-kicker">April to current month</p>
-            <h2 id="trend-title">Monthly Total Comparison</h2>
+            <p class="section-kicker">סטטוס חודשי</p>
+            <h2>תמונת מצב ניהולית</h2>
           </div>
-          <span id="trend-range" class="trend-range">--/---- - --/----</span>
+          <div class="section-chip accent">
+            <span id="trend-range">--/---- - --/----</span>
+            <small>טווח מגמה</small>
+          </div>
         </div>
-        <div id="trend-chart" class="trend-chart" aria-live="polite"></div>
-        <p id="trend-message" class="inline-message trend-message"></p>
-      </section>
 
-      <p id="report-message" class="inline-message"></p>
+        <div class="insight-list">
+          <article class="insight-card">
+            <span>חודש בדוח</span>
+            <strong id="insight-month">--/----</strong>
+          </article>
+          <article class="insight-card">
+            <span>שירות דומיננטי</span>
+            <strong id="insight-top-service">-</strong>
+          </article>
+          <article class="insight-card">
+            <span>היקף ממוצע לשירות</span>
+            <strong id="insight-average">0</strong>
+          </article>
+        </div>
+
+        <p id="report-message" class="inline-message"></p>
+      </section>
+    </section>
+
+    <section class="surface trend-surface" aria-labelledby="trend-title">
+      <div class="section-head">
+        <div>
+          <p class="section-kicker">השוואת חודשים</p>
+          <h2 id="trend-title">מגמת פיצ'רים שבוצעו</h2>
+        </div>
+        <div class="section-chip soft">
+          <span id="trend-peak">-</span>
+          <small>חודש שיא</small>
+        </div>
+      </div>
+      <div id="trend-chart" class="trend-chart" aria-live="polite"></div>
+      <p id="trend-message" class="inline-message trend-message"></p>
     </section>
   </main>
 

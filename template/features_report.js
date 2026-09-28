@@ -13,6 +13,15 @@ const reportLoadingText = document.getElementById("report-loading-text");
 const trendChart = document.getElementById("trend-chart");
 const trendRange = document.getElementById("trend-range");
 const trendMessage = document.getElementById("trend-message");
+const reportServicesCount = document.getElementById("report-services-count");
+const reportChildrenCount = document.getElementById("report-children-count");
+const reportTopServiceCount = document.getElementById("report-top-service-count");
+const reportTopServiceLabel = document.getElementById("report-top-service-label");
+const reportSummaryTotalChip = document.getElementById("report-summary-total-chip");
+const insightMonth = document.getElementById("insight-month");
+const insightTopService = document.getElementById("insight-top-service");
+const insightAverage = document.getElementById("insight-average");
+const trendPeak = document.getElementById("trend-peak");
 
 let currentReport = null;
 
@@ -48,10 +57,36 @@ function setReportLoading(isLoading, text = "Loading report...") {
   });
 }
 
+function reportInsights(report) {
+  const services = Array.isArray(report.services) ? report.services : [];
+  const servicesCount = services.filter((service) => Number(service.count || 0) > 0).length;
+  const topService = services.reduce((best, service) => {
+    if (!best || Number(service.count || 0) > Number(best.count || 0)) {
+      return service;
+    }
+    return best;
+  }, null);
+  const average = services.length ? (Number(report.total || 0) / services.length) : 0;
+  return {
+    servicesCount,
+    topService,
+    average,
+  };
+}
+
 function renderReport(report) {
   currentReport = report;
   reportMonthLabel.textContent = `\u05d7\u05d5\u05d3\u05e9 ${report.month_display}`;
   reportTotal.textContent = report.total;
+  reportSummaryTotalChip.textContent = report.total;
+  insightMonth.textContent = report.month_display || "--/----";
+  const insights = reportInsights(report);
+  reportServicesCount.textContent = insights.servicesCount;
+  reportChildrenCount.textContent = Number(report.waiting_total || 0);
+  reportTopServiceCount.textContent = insights.topService ? insights.topService.count : 0;
+  reportTopServiceLabel.textContent = insights.topService ? insights.topService.label : "-";
+  insightTopService.textContent = insights.topService ? insights.topService.label : "-";
+  insightAverage.textContent = insights.average.toFixed(1).replace(".0", "");
   reportBody.innerHTML = report.services
     .map((service) => {
       const children = (service.children || [])
@@ -88,12 +123,15 @@ function renderTrendChart(months, startMonth, endMonth) {
   if (!months.length) {
     trendChart.innerHTML = "";
     trendRange.textContent = "--/---- - --/----";
+    trendPeak.textContent = "-";
     setTrendMessage("No monthly data available.", true);
     return;
   }
 
   const maxTotal = Math.max(...months.map((item) => item.total), 1);
+  const peakMonth = months.reduce((best, item) => (item.total > best.total ? item : best), months[0]);
   trendRange.textContent = `${startMonth} - ${endMonth}`;
+  trendPeak.textContent = `${peakMonth.month_display} • ${peakMonth.total}`;
   trendChart.innerHTML = months
     .map((item) => {
       const height = Math.max((item.total / maxTotal) * 100, item.total > 0 ? 8 : 0);
@@ -148,6 +186,14 @@ async function loadReport(loadingText = "Loading report...") {
     currentReport = null;
     reportBody.innerHTML = "";
     reportTotal.textContent = "0";
+    reportSummaryTotalChip.textContent = "0";
+    reportServicesCount.textContent = "0";
+    reportChildrenCount.textContent = "0";
+    reportTopServiceCount.textContent = "0";
+    reportTopServiceLabel.textContent = "-";
+    insightMonth.textContent = "--/----";
+    insightTopService.textContent = "-";
+    insightAverage.textContent = "0";
     setMessage(`\u05e9\u05d2\u05d9\u05d0\u05d4 \u05d1\u05d8\u05e2\u05d9\u05e0\u05ea \u05d4\u05d3\u05d5\"\u05d7: ${error.message}`, true);
   } finally {
     setReportLoading(false);
@@ -178,6 +224,7 @@ async function loadMonthlyTotals() {
   } catch (error) {
     trendChart.innerHTML = "";
     trendRange.textContent = "--/---- - --/----";
+    trendPeak.textContent = "-";
     setTrendMessage(`Failed to load monthly totals: ${error.message}`, true);
   }
 }

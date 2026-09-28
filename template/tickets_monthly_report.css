@@ -426,6 +426,34 @@ body.tickets-monthly-report-page {
   gap: 14px;
 }
 
+.trend-legend {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+  color: var(--tickets-report-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.legend-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-left: 6px;
+  border-radius: 999px;
+  vertical-align: middle;
+}
+
+.legend-swatch.total {
+  background: linear-gradient(180deg, #4f93ff 0%, #1e4f9b 100%);
+}
+
+.legend-swatch.coordinated {
+  background: linear-gradient(180deg, #2de3d0 0%, #118f8a 100%);
+}
+
 .trend-bar-card {
   display: flex;
   flex-direction: column;
@@ -487,6 +515,7 @@ body.tickets-monthly-report-page {
 .trend-bar {
   width: 30px;
   border-radius: 14px 14px 6px 6px;
+  cursor: help;
 }
 
 .trend-bar.total {

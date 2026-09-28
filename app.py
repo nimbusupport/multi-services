@@ -2257,7 +2257,10 @@ def build_ticket_monthly_report(month_value=""):
     )
 
     trend_months = []
-    trend_start = add_months(selected_month, -(TICKET_MONTHLY_REPORT_MONTHS_BACK - 1))
+    trend_end = month_start(israel_now())
+    if selected_month > trend_end:
+        trend_end = selected_month
+    trend_start = add_months(trend_end, -(TICKET_MONTHLY_REPORT_MONTHS_BACK - 1))
     for offset in range(TICKET_MONTHLY_REPORT_MONTHS_BACK):
         trend_month = add_months(trend_start, offset)
         bucket_start = month_start(trend_month)
@@ -4369,6 +4372,24 @@ def service_dashboard_entry(service_name, waiting_loader):
         }
 
 
+def dashboard_services_waiting_total():
+    entries = [
+        service_dashboard_entry("sms", lambda: len(get_pending_customers())),
+        service_dashboard_entry("bot", lambda: len(get_bot_customers())),
+        service_dashboard_entry("f2m", lambda: len(get_f2m_customers())),
+        service_dashboard_entry("recordings", get_recordings_waiting_count),
+        service_dashboard_entry("recording_storage", lambda: len(get_recording_storage_customers())),
+        service_dashboard_entry("human_service", lambda: len(get_human_service_customers())),
+    ]
+    total = 0
+    for entry in entries:
+        try:
+            total += int(entry.get("waiting") or 0)
+        except (TypeError, ValueError):
+            continue
+    return total
+
+
 def load_service_account_info():
     creds_source = CREDENTIALS_FILE.strip()
     if not creds_source:
@@ -5081,6 +5102,7 @@ def get_feature_report_counts(month_value, use_cache=True, allow_stale_on_error=
         if use_cache:
             cached_report = keyed_cache_get(FEATURE_REPORT_COUNTS_CACHE, cache_key)
             if cached_report is not None:
+                cached_report["waiting_total"] = dashboard_services_waiting_total()
                 return cached_report
 
         client = get_gspread_client()
@@ -5133,6 +5155,7 @@ def get_feature_report_counts(month_value, use_cache=True, allow_stale_on_error=
             "month_display": selected_month.strftime("%m/%Y"),
             "services": reports,
             "total": sum(item["count"] for item in reports),
+            "waiting_total": dashboard_services_waiting_total(),
         }
         return keyed_cache_set(
             FEATURE_REPORT_COUNTS_CACHE,
@@ -5149,6 +5172,7 @@ def get_feature_report_counts(month_value, use_cache=True, allow_stale_on_error=
         ):
             stale_report = keyed_cache_stale_get(FEATURE_REPORT_COUNTS_CACHE, cache_key)
             if stale_report is not None:
+                stale_report["waiting_total"] = dashboard_services_waiting_total()
                 return stale_report
         raise
 
