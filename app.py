@@ -4355,7 +4355,14 @@ def get_active_users_for(service_name: str):
 
 
 def api_error(message, status=500, code="server_error"):
-    return jsonify({"ok": False, "code": code, "message": str(message)}), status
+    raw_message = str(message)
+    if is_google_sheets_quota_error(raw_message):
+        user_message = "המערכת עמוסה כרגע בשל מגבלת קריאה זמנית מול Google Sheets. נסה/י שוב בעוד דקה."
+    elif code == "google_auth_or_sheet_error":
+        user_message = "אירעה שגיאה זמנית בטעינת הנתונים מהמערכת. נסה/י שוב בעוד רגע."
+    else:
+        user_message = raw_message
+    return jsonify({"ok": False, "code": code, "message": user_message}), status
 
 
 def _supabase_login_user(username):

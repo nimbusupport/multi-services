@@ -306,7 +306,9 @@ statusCounterGrid?.addEventListener("click", (event) => {
   }
   const nextValue = String(trigger.dataset.statusCounter || "");
   statusFilterSelect.value = statusFilterSelect.value === nextValue ? "" : nextValue;
-  loadFeatureStatuses();
+  loadFeatureStatuses().then(() => {
+    resultsSurface?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
 });
 
 loadFeatureStatuses();
