@@ -4,37 +4,148 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>סטטוס פיצ'רים</title>
+  <link rel="icon" type="image/jpeg" href="/favicon/favicon.jpg">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&display=swap">
   <link rel="stylesheet" href="/home.css">
   <link rel="stylesheet" href="/features_status.css">
 </head>
-<body class="dashboard-page">
+<body class="dashboard-page features-status-page">
   {% set active_nav = "report" %}
   {% include "_dashboard_top_nav.html" %}
-  <main class="feature-status-shell">
-    <section class="feature-status-panel">
-      <header class="feature-status-hero">
-        <div>
-          <p class="eyebrow">Nimbus Support</p>
-          <h1>סטטוס פיצ'רים</h1>
-          <p class="subtitle">בדיקה מרוכזת של כל השירותים לפי מספר ח.פ מתוך כל הגיליונות הרלוונטיים.</p>
+
+  <main class="features-status-wrap">
+    <section class="status-hero">
+      <div class="status-hero-copy">
+        <a class="dashboard-back-link" href="/dashboard-reports">
+          <i class="fa-solid fa-arrow-right"></i>
+          <span>חזרה לכרטיס הדוחות</span>
+        </a>
+        <p class="status-kicker">סטטוס פיצ'רים חודשי</p>
+        <h1>סטטוס פיצ'רים</h1>
+        <p class="status-subtitle">
+          תצוגת כל הפיצ'רים של החודש הנבחר בלבד, עם חיפוש לפי ח.פ או מספר הזמנה, ופילטר מהיר לפי סטטוס.
+        </p>
+      </div>
+
+      <div class="status-hero-visual" aria-hidden="true">
+        <div class="hero-glow hero-glow-large"></div>
+        <div class="hero-glow hero-glow-small"></div>
+        <div class="hero-tags">
+          <span>SMS</span>
+          <span>פתיח</span>
+          <span>BOT</span>
+          <span>מוקד אנושי</span>
+          <span>F2M</span>
+          <span>Storage</span>
         </div>
-        <a class="back-link" href="/home"><i class="fa-solid fa-arrow-right"></i><span>חזרה לדשבורד</span></a>
-      </header>
+        <div class="hero-bars">
+          <span style="--bar-size: 38%"></span>
+          <span style="--bar-size: 52%"></span>
+          <span style="--bar-size: 66%"></span>
+          <span style="--bar-size: 48%"></span>
+          <span style="--bar-size: 72%"></span>
+          <span style="--bar-size: 58%"></span>
+        </div>
+      </div>
+    </section>
 
-      <section class="lookup-card">
-        <form id="feature-status-form" class="lookup-form">
-          <label class="lookup-field" for="customer-id-input">
-            <span>מספר ח.פ</span>
-            <input id="customer-id-input" name="customer_id" type="search" inputmode="numeric" placeholder="יש להזין מספר ח.פ של העסק" autocomplete="off">
-          </label>
-          <button id="lookup-submit-btn" class="lookup-btn" type="submit">הצג</button>
-        </form>
-        <p id="lookup-message" class="lookup-message">הקלידו מספר ח.פ ולחצו על הצג כדי לראות את סטטוס הפיצ'רים.</p>
-      </section>
+    <section class="surface toolbar-surface">
+      <form id="feature-status-form" class="toolbar-form">
+        <label class="toolbar-field" for="status-month-input">
+          <span>חודש</span>
+          <input id="status-month-input" name="month" type="month">
+        </label>
 
-      <section id="feature-status-summary" class="summary-card hidden"></section>
-      <section id="feature-status-results" class="results-grid"></section>
+        <label class="toolbar-field compact" for="query-type-select">
+          <span>חיפוש לפי</span>
+          <select id="query-type-select" name="query_type">
+            <option value="all">כללי</option>
+            <option value="customer_id">ח.פ</option>
+            <option value="order_id">מספר הזמנה</option>
+            <option value="project_manager">מנהל פרויקט</option>
+          </select>
+        </label>
+
+        <label class="toolbar-field" id="query-text-field" for="query-input">
+          <span>חיפוש</span>
+          <input id="query-input" name="query" type="search" placeholder="ח.פ / מספר הזמנה / שם עסק" autocomplete="off">
+        </label>
+
+        <label class="toolbar-field compact" for="status-filter-select">
+          <span>סטטוס</span>
+          <select id="status-filter-select" name="status">
+            <option value="">הכול</option>
+          </select>
+        </label>
+
+        <label class="toolbar-field compact hidden" id="project-manager-query-field" for="project-manager-filter-select">
+          <span>מנהל פרויקט</span>
+          <select id="project-manager-filter-select" name="project_manager">
+            <option value="">הכול</option>
+          </select>
+        </label>
+
+        <button id="lookup-submit-btn" class="toolbar-btn" type="submit">
+          <i class="fa-solid fa-magnifying-glass"></i>
+          <span>הצג</span>
+        </button>
+      </form>
+      <p id="lookup-message" class="page-message">הדף טוען את כל הפיצ'רים של החודש הנבחר. אפשר לסנן לפי ח.פ, מספר הזמנה או סטטוס.</p>
+    </section>
+
+    <section class="kpi-grid">
+      <article class="kpi-card">
+        <span class="kpi-label">סה"כ פיצ'רים בחודש</span>
+        <strong id="summary-total-count">0</strong>
+        <p id="summary-month-label">--/----</p>
+      </article>
+      <article class="kpi-card accent-teal">
+        <span class="kpi-label">בוצעו</span>
+        <strong id="summary-done-count">0</strong>
+        <p>פיצ'רים בסטטוס בוצע</p>
+      </article>
+      <article class="kpi-card accent-amber">
+        <span class="kpi-label">ממתינים</span>
+        <strong id="summary-waiting-count">0</strong>
+        <p>פיצ'רים בסטטוס ממתין</p>
+      </article>
+      <article class="kpi-card accent-slate">
+        <span class="kpi-label">שירותים מוצגים</span>
+        <strong id="summary-services-count">0</strong>
+        <p>שירותים עם תוצאות בחודש</p>
+      </article>
+    </section>
+
+    <section class="surface summary-surface">
+      <div class="section-head">
+        <div>
+          <p class="section-kicker">פילוח חודשי</p>
+          <h2>סיכום מסונן של פיצ'רים</h2>
+        </div>
+        <div class="section-chip">
+          <span id="active-filter-label">כל הסטטוסים</span>
+          <small>פילטר פעיל</small>
+        </div>
+      </div>
+      <div id="status-counter-grid" class="status-counter-grid"></div>
+      <div id="feature-status-summary" class="summary-grid"></div>
+    </section>
+
+    <section class="surface results-surface">
+      <div class="section-head">
+        <div>
+          <p class="section-kicker">תוצאות</p>
+          <h2>כל הפיצ'רים של החודש</h2>
+        </div>
+        <div class="section-chip soft">
+          <span id="results-count-label">0</span>
+          <small>תוצאות</small>
+        </div>
+      </div>
+      <div id="feature-status-results" class="results-grid"></div>
     </section>
   </main>
 

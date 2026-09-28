@@ -151,39 +151,105 @@ FEATURE_STATUS_SERVICES = [
         "key": "sms",
         "label": "SMS",
         "sheet": SHEET_NAME,
+        "business_col": 1,
+        "customer_col": 2,
+        "order_col": 5,
+        "project_manager_col": 6,
         "status_col": 8,  # H
+        "date_col": 7,  # G - תאריך הזמנה
+        "date_order": "dmy",
     },
     {
         "key": "recording_opening",
         "label": "הקלטת פתיח",
         "sheet": RECORDING_OPENING_SHEET_NAME,
+        "business_col": 1,
+        "customer_col": 2,
+        "order_col": 5,
+        "project_manager_col": 6,
         "status_col": 9,  # I
+        "date_col": 7,  # G - תאריך הזמנה
+        "date_order": "dmy",
     },
     {
         "key": "bot",
         "label": "שירות מענה - בוט",
         "sheet": BOT_SHEET_NAME,
+        "business_col": 1,
+        "customer_col": 2,
+        "order_col": 5,
+        "project_manager_col": 6,
         "status_col": 8,  # H
+        "date_col": 7,  # G - תאריך הזמנה
+        "date_order": "dmy",
     },
     {
         "key": "human_service",
         "label": "שירות מענה - אנושי",
         "sheet": HUMAN_SERVICE_SHEET_NAME,
+        "business_col": 1,
+        "customer_col": 2,
+        "order_col": 5,
+        "project_manager_col": 6,
         "status_col": 8,  # H
+        "date_col": 15,  # O - תאריך שינוי סטטוס
+        "date_order": "mdy",
     },
     {
         "key": "f2m",
         "label": "m2f / f2m",
         "sheet": F2M_SHEET_NAME,
+        "business_col": 1,
+        "customer_col": 2,
+        "order_col": 5,
+        "project_manager_col": 6,
         "status_col": 8,  # H
+        "date_col": 7,  # G - תאריך הזמנה
+        "date_order": "dmy",
+        "completed_date_col": 9,  # I - תאריך ביצוע
     },
     {
         "key": "recording_storage",
         "label": "איחסון הקלטות",
         "sheet": RECORDING_STORAGE_SHEET_NAME,
+        "business_col": 1,
+        "customer_col": 2,
+        "order_col": 5,
+        "project_manager_col": 6,
         "status_col": 8,  # H
+        "date_col": 7,  # G - תאריך הזמנה
+        "date_order": "dmy",
     },
 ]
+
+FEATURE_STATUS_PROJECT_MANAGERS_ORDER = [
+    "בת אל כחלון",
+    "מעין כהן",
+    "נויה נריה",
+    "סיון זגורי",
+    "יזדי,אליהו",
+    "אלי בקשי",
+    "אורן רוזנבלום",
+]
+FEATURE_STATUS_COUNTER_ORDER = [
+    "בוצע",
+    "טעות במספר",
+    "כפילות",
+    "לא הוגדר",
+    "לא הועבר נוסח",
+    "מבוטל",
+    "ממתין",
+    "נשלחה הודעה",
+]
+FEATURE_STATUS_PROJECT_MANAGER_ALIASES = {
+    "בת אל כחלון": ["בת אל כחלון", "בתאל כחלון", "בת אל", "כחלון"],
+    "מעין כהן": ["מעין כהן", "מעין", "כהן"],
+    "נויה נריה": ["נויה נריה", "נויה", "נריה"],
+    "סיון זגורי": ["סיון זגורי", "סיוון זגורי", "סיון", "סיוון", "זגורי"],
+    "יזדי,אליהו": ["יזדי,אליהו", "יזדי אליהו", "אליהו יזדי", "יזדי", "אליהו"],
+    "אלי בקשי": ["אלי בקשי", "אלי", "בקשי"],
+    "אורן רוזנבלום": ["אורן רוזנבלום", "אורן", "רוזנבלום"],
+}
 
 PDF_FONT_CANDIDATES = {
     "hebrew": {
@@ -4871,6 +4937,11 @@ def parse_report_date(value, preferred_order="mdy"):
     if not raw:
         return None
 
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00")).date()
+    except ValueError:
+        pass
+
     raw = raw.split()[0]
     parts = re.split(r"[./-]", raw)
     if len(parts) != 3:
@@ -5248,6 +5319,272 @@ def normalize_feature_status_customer_id(value):
     if not digits_only:
         return ""
     return digits_only.lstrip("0") or digits_only
+
+
+def normalize_feature_status_order_id(value):
+    digits_only_value = re.sub(r"\D", "", str(value or ""))
+    if not digits_only_value:
+        return ""
+    return digits_only_value.lstrip("0") or digits_only_value
+
+
+def normalize_feature_status_text(value):
+    text = str(value or "").strip()
+    text = re.sub(r"\s+", " ", text)
+    text = text.replace(", ", ",").replace(" ,", ",")
+    return text
+
+
+def normalize_feature_status_lookup_text(value):
+    text = normalize_feature_status_text(value)
+    text = re.sub(r"\d+", " ", text)
+    text = re.sub(r"[_\-–—/\\]+", " ", text)
+    text = re.sub(r"[^\w\u0590-\u05FF, ]+", " ", text, flags=re.UNICODE)
+    return re.sub(r"\s+", " ", text).strip().lower()
+
+
+def canonicalize_feature_status_project_manager(value):
+    raw_text = normalize_feature_status_text(value)
+    if not raw_text:
+        return ""
+    lookup_text = normalize_feature_status_lookup_text(raw_text)
+    compact_lookup = lookup_text.replace(" ", "")
+    for canonical_name in FEATURE_STATUS_PROJECT_MANAGERS_ORDER:
+        canonical_lookup = normalize_feature_status_lookup_text(canonical_name)
+        canonical_tokens = [token for token in re.split(r"[\s,]+", canonical_lookup) if token]
+        if canonical_lookup and canonical_lookup in lookup_text:
+            return canonical_name
+        if canonical_tokens and all(token in lookup_text for token in canonical_tokens):
+            return canonical_name
+        if canonical_tokens and all(token in compact_lookup for token in [token.replace(" ", "") for token in canonical_tokens]):
+            return canonical_name
+    for canonical_name, aliases in FEATURE_STATUS_PROJECT_MANAGER_ALIASES.items():
+        for alias in aliases:
+            alias_lookup = normalize_feature_status_lookup_text(alias)
+            alias_tokens = [token for token in re.split(r"[\s,]+", alias_lookup) if token]
+            if alias_lookup and alias_lookup in lookup_text:
+                return canonical_name
+            if alias_tokens and all(token in lookup_text for token in alias_tokens):
+                return canonical_name
+    return raw_text
+
+
+def canonicalize_feature_status_label(value):
+    raw_text = normalize_feature_status_text(value)
+    if not raw_text:
+        return "לא הוגדר"
+    lookup_text = normalize_feature_status_lookup_text(raw_text)
+    if "בוצע" in lookup_text:
+        return "בוצע"
+    if "טעות" in lookup_text and "מספר" in lookup_text:
+        return "טעות במספר"
+    if "כפילות" in lookup_text:
+        return "כפילות"
+    if "לא הוגדר" in lookup_text:
+        return "לא הוגדר"
+    if "לא הועבר" in lookup_text and "נוסח" in lookup_text:
+        return "לא הועבר נוסח"
+    if "מבוטל" in lookup_text or "בוטל" in lookup_text:
+        return "מבוטל"
+    if "ממתין" in lookup_text:
+        return "ממתין"
+    if "נשלחה" in lookup_text and "הודעה" in lookup_text:
+        return "נשלחה הודעה"
+    if "נשלח" in lookup_text and "הודעה" in lookup_text:
+        return "נשלחה הודעה"
+    return raw_text
+
+
+def resolve_feature_status_value(row, config):
+    status_value = (row[config["status_col"] - 1] if len(row) >= config["status_col"] else "").strip()
+    if status_value:
+        return status_value
+
+    completed_date_col = config.get("completed_date_col")
+    if completed_date_col and len(row) >= completed_date_col:
+        completed_date_value = (row[completed_date_col - 1] or "").strip()
+        if parse_report_date(completed_date_value, config.get("date_order", "mdy")):
+            return STATUS_DONE
+
+    return "לא הוגדר"
+
+
+def feature_status_selected_month(month_value=""):
+    raw = str(month_value or "").strip()
+    if raw:
+        try:
+            parsed = datetime.strptime(raw, "%Y-%m")
+            return parsed.date().replace(day=1)
+        except ValueError as exc:
+            raise ValueError("חודש לא תקין") from exc
+    now = datetime.now(ZoneInfo("Asia/Jerusalem")).date()
+    return now.replace(day=1)
+
+
+def feature_status_entry_matches(entry, query_text="", query_type="all", status_filter="", project_manager_filter=""):
+    normalized_status_filter = canonicalize_feature_status_label(status_filter) if status_filter else ""
+    entry_status = canonicalize_feature_status_label(entry.get("status"))
+    if normalized_status_filter == "סטטוס אחר":
+        if entry_status in FEATURE_STATUS_COUNTER_ORDER:
+            return False
+    elif normalized_status_filter and entry_status != normalized_status_filter:
+        return False
+    normalized_manager_filter = canonicalize_feature_status_project_manager(project_manager_filter) if project_manager_filter else ""
+    if normalized_manager_filter and canonicalize_feature_status_project_manager(entry.get("project_manager")) != normalized_manager_filter:
+        return False
+
+    normalized_query = normalize_feature_status_text(query_text)
+    if not normalized_query:
+        return True
+
+    if query_type == "customer_id":
+        return normalize_feature_status_customer_id(entry.get("customer_id")) == normalize_feature_status_customer_id(normalized_query)
+    if query_type == "order_id":
+        return normalize_feature_status_order_id(entry.get("order_id")) == normalize_feature_status_order_id(normalized_query)
+    if query_type == "project_manager":
+        return canonicalize_feature_status_project_manager(entry.get("project_manager")) == canonicalize_feature_status_project_manager(normalized_query)
+
+    text_query = normalized_query.lower()
+    return any(
+        text_query in str(entry.get(field_name) or "").lower()
+        for field_name in ("business_name", "customer_id", "order_id", "status", "service_label", "project_manager")
+    ) or normalize_feature_status_customer_id(normalized_query) == normalize_feature_status_customer_id(entry.get("customer_id")) \
+        or normalize_feature_status_order_id(normalized_query) == normalize_feature_status_order_id(entry.get("order_id"))
+
+
+def sort_feature_status_project_managers(managers):
+    ordered = []
+    seen = set()
+    for name in FEATURE_STATUS_PROJECT_MANAGERS_ORDER:
+        if name in managers and name not in seen:
+            ordered.append(name)
+            seen.add(name)
+    for name in sorted(managers):
+        if name not in seen:
+            ordered.append(name)
+            seen.add(name)
+    return ordered
+
+
+def build_feature_status_dashboard(month_value="", query_text="", query_type="all", status_filter="", project_manager_filter=""):
+    selected_month = feature_status_selected_month(month_value)
+    client = get_gspread_client()
+    spreadsheet = client.open_by_key(SPREADSHEET_ID)
+    services = []
+    all_entries = []
+    query_scope_entries = []
+    available_statuses = set()
+    available_project_managers = set()
+
+    for config in FEATURE_STATUS_SERVICES:
+        ws = spreadsheet.worksheet(config["sheet"])
+        rows = ws.get_all_values()
+        entries = []
+        scoped_entries = []
+
+        for row_index, row in enumerate(rows[1:], start=2):
+            status_value = resolve_feature_status_value(row, config)
+            date_value = (row[config["date_col"] - 1] if len(row) >= config.get("date_col", 0) else "").strip()
+            entry_date = parse_report_date(date_value, config.get("date_order", "mdy"))
+            if not entry_date:
+                continue
+            if entry_date.year != selected_month.year or entry_date.month != selected_month.month:
+                continue
+
+            business_name = (row[config.get("business_col", 1) - 1] if len(row) >= config.get("business_col", 1) else "").strip()
+            customer_id = (row[config.get("customer_col", 2) - 1] if len(row) >= config.get("customer_col", 2) else "").strip()
+            order_id = (row[config.get("order_col", 5) - 1] if len(row) >= config.get("order_col", 5) else "").strip()
+            project_manager = (row[config.get("project_manager_col", 6) - 1] if len(row) >= config.get("project_manager_col", 6) else "").strip()
+            canonical_project_manager = canonicalize_feature_status_project_manager(project_manager)
+            canonical_status = canonicalize_feature_status_label(status_value)
+            display_status = canonical_status if canonical_status in set(FEATURE_STATUS_COUNTER_ORDER) | {"לא הוגדר"} else status_value
+
+            entry = {
+                "row": row_index,
+                "business_name": business_name,
+                "customer_id": customer_id,
+                "order_id": order_id,
+                "project_manager": canonical_project_manager or project_manager,
+                "project_manager_raw": project_manager,
+                "status": display_status,
+                "status_raw": status_value,
+                "status_category": canonical_status,
+                "date": entry_date.strftime("%Y-%m-%d"),
+                "date_display": entry_date.strftime("%d/%m/%Y"),
+                "service_key": config["key"],
+                "service_label": config["label"],
+                "sheet": config["sheet"],
+            }
+            available_statuses.add(canonical_status)
+            if canonical_project_manager or project_manager:
+                available_project_managers.add(canonical_project_manager or project_manager)
+            if not feature_status_entry_matches(
+                entry,
+                query_text=query_text,
+                query_type=query_type,
+                status_filter="",
+                project_manager_filter=project_manager_filter,
+            ):
+                continue
+            scoped_entries.append(entry)
+            query_scope_entries.append(entry)
+            if not feature_status_entry_matches(
+                entry,
+                query_text="",
+                query_type="all",
+                status_filter=status_filter,
+                project_manager_filter="",
+            ):
+                continue
+            entries.append(entry)
+            all_entries.append(entry)
+
+        services.append({
+            "key": config["key"],
+            "label": config["label"],
+            "sheet": config["sheet"],
+            "found": bool(entries),
+            "entry_count": len(entries),
+            "done_count": len([entry for entry in entries if entry.get("status_category") == "בוצע"]),
+            "waiting_count": len([entry for entry in entries if entry.get("status_category") == "ממתין"]),
+            "entries": entries,
+        })
+
+    all_entries.sort(key=lambda item: (item.get("date") or "", item.get("service_label") or "", item.get("business_name") or ""), reverse=True)
+    services = sorted(services, key=lambda item: (-item["entry_count"], item["label"]))
+    total_entries = len(all_entries)
+    done_count = len([entry for entry in all_entries if entry.get("status_category") == "בוצע"])
+    waiting_count = len([entry for entry in all_entries if entry.get("status_category") == "ממתין"])
+    other_count = total_entries - done_count - waiting_count
+    status_counts = {status_name: 0 for status_name in FEATURE_STATUS_COUNTER_ORDER}
+    status_counts["סטטוס אחר"] = 0
+    for entry in query_scope_entries:
+        status_name = canonicalize_feature_status_label(entry.get("status"))
+        if status_name in status_counts:
+            status_counts[status_name] += 1
+        else:
+            status_counts["סטטוס אחר"] += 1
+
+    return {
+        "month": selected_month.strftime("%Y-%m"),
+        "month_display": selected_month.strftime("%m/%Y"),
+        "query": str(query_text or "").strip(),
+        "query_type": query_type if query_type in {"all", "customer_id", "order_id", "project_manager"} else "all",
+        "status_filter": str(status_filter or "").strip(),
+        "project_manager_filter": str(project_manager_filter or "").strip(),
+        "services": services,
+        "entries": all_entries,
+        "available_statuses": sorted(available_statuses),
+        "available_project_managers": sort_feature_status_project_managers(set(FEATURE_STATUS_PROJECT_MANAGERS_ORDER) | available_project_managers),
+        "status_counts": [{"label": label, "count": status_counts.get(label, 0)} for label in FEATURE_STATUS_COUNTER_ORDER + ["סטטוס אחר"]],
+        "summary": {
+            "total_entries": total_entries,
+            "done_count": done_count,
+            "waiting_count": waiting_count,
+            "other_count": other_count,
+            "services_count": len([service for service in services if service["entry_count"] > 0]),
+        },
+    }
 
 
 def collapse_feature_status_entries(entries):
@@ -5798,11 +6135,16 @@ def features_status_page():
 
 @app.route("/features-status-data")
 def features_status_data():
-    customer_id = request.args.get("customer_id", "")
     try:
-        payload = lookup_feature_status_by_customer_id(customer_id)
+        payload = build_feature_status_dashboard(
+            month_value=request.args.get("month", ""),
+            query_text=request.args.get("query", "") or request.args.get("customer_id", ""),
+            query_type=request.args.get("query_type", "all"),
+            status_filter=request.args.get("status", ""),
+            project_manager_filter=request.args.get("project_manager", ""),
+        )
     except ValueError as exc:
-        return api_error(exc, 400, "missing_customer_id")
+        return api_error(exc, 400, "invalid_features_status_query")
     except Exception as exc:
         return api_error(exc, 500, "google_auth_or_sheet_error")
     return jsonify({"ok": True, **payload})
