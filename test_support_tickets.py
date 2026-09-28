@@ -5,6 +5,7 @@ import json
 import os
 import sys
 import tempfile
+import time
 import types
 import unittest
 from datetime import datetime
@@ -1546,6 +1547,32 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertTrue(second_payload["ok"])
         self.assertEqual(second_payload["report"]["total"], 1)
         self.assertEqual(second_payload["report"]["services"][0]["label"], "Test Feature")
+
+    def test_features_report_cached_response_uses_cached_waiting_total(self):
+        self.app_module.FEATURE_REPORT_COUNTS_CACHE["2026-07"] = {
+            "expires_at": time.time() + 60,
+            "value": {
+                "month": "2026-07",
+                "month_display": "07/2026",
+                "services": [{"key": "test_feature", "label": "Test Feature", "count": 1}],
+                "total": 1,
+                "waiting_total": 1,
+            },
+        }
+        self.app_module.DASHBOARD_WAITING_TOTAL_CACHE["expires_at"] = time.time() + 60
+        self.app_module.DASHBOARD_WAITING_TOTAL_CACHE["value"] = 7
+        self.app_module.get_gspread_client = lambda: (_ for _ in ()).throw(
+            AssertionError("expected cached report response without extra Google Sheets reads")
+        )
+
+        self.login("admin@nimbusip.com")
+        response = self.client.get("/features-report-data?month=2026-07")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["report"]["total"], 1)
+        self.assertEqual(payload["report"]["waiting_total"], 7)
 
     def test_features_report_monthly_totals_uses_stale_cache_when_google_sheets_quota_is_exceeded(self):
         class FakeWorksheet:

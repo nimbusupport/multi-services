@@ -610,6 +610,8 @@ FEATURE_REPORT_COUNTS_CACHE_TTL_SECONDS = 60
 FEATURE_REPORT_MONTHLY_TOTALS_CACHE_TTL_SECONDS = 120
 FEATURE_REPORT_COUNTS_CACHE = {}
 FEATURE_REPORT_MONTHLY_TOTALS_CACHE = {}
+DASHBOARD_WAITING_TOTAL_CACHE_TTL_SECONDS = 30
+DASHBOARD_WAITING_TOTAL_CACHE = {"expires_at": 0.0, "value": None}
 
 
 def invalidate_sms_sheet_cache():
@@ -617,11 +619,17 @@ def invalidate_sms_sheet_cache():
     SMS_PENDING_CACHE["value"] = None
     SMS_CGR_CACHE["expires_at"] = 0.0
     SMS_CGR_CACHE["value"] = None
+    invalidate_dashboard_waiting_total_cache()
 
 
 def invalidate_feature_report_cache():
     FEATURE_REPORT_COUNTS_CACHE.clear()
     FEATURE_REPORT_MONTHLY_TOTALS_CACHE.clear()
+
+
+def invalidate_dashboard_waiting_total_cache():
+    DASHBOARD_WAITING_TOTAL_CACHE["expires_at"] = 0.0
+    DASHBOARD_WAITING_TOTAL_CACHE["value"] = None
 
 
 def cache_clone(value):
@@ -4445,22 +4453,41 @@ def service_dashboard_entry(service_name, waiting_loader):
         }
 
 
-def dashboard_services_waiting_total():
-    entries = [
-        service_dashboard_entry("sms", lambda: len(get_pending_customers())),
-        service_dashboard_entry("bot", lambda: len(get_bot_customers())),
-        service_dashboard_entry("f2m", lambda: len(get_f2m_customers())),
-        service_dashboard_entry("recordings", get_recordings_waiting_count),
-        service_dashboard_entry("recording_storage", lambda: len(get_recording_storage_customers())),
-        service_dashboard_entry("human_service", lambda: len(get_human_service_customers())),
-    ]
-    total = 0
-    for entry in entries:
-        try:
-            total += int(entry.get("waiting") or 0)
-        except (TypeError, ValueError):
-            continue
-    return total
+def dashboard_services_waiting_total(use_cache=True, allow_stale_on_error=True):
+    try:
+        if use_cache:
+            cached_total = cache_get(DASHBOARD_WAITING_TOTAL_CACHE)
+            if cached_total is not None:
+                return int(cached_total)
+
+        entries = [
+            service_dashboard_entry("sms", lambda: len(get_pending_customers())),
+            service_dashboard_entry("bot", lambda: len(get_bot_customers())),
+            service_dashboard_entry("f2m", lambda: len(get_f2m_customers())),
+            service_dashboard_entry("recordings", get_recordings_waiting_count),
+            service_dashboard_entry("recording_storage", lambda: len(get_recording_storage_customers())),
+            service_dashboard_entry("human_service", lambda: len(get_human_service_customers())),
+        ]
+        total = 0
+        for entry in entries:
+            try:
+                total += int(entry.get("waiting") or 0)
+            except (TypeError, ValueError):
+                continue
+
+        return int(
+            cache_set(
+                DASHBOARD_WAITING_TOTAL_CACHE,
+                total,
+                DASHBOARD_WAITING_TOTAL_CACHE_TTL_SECONDS,
+            )
+        ) if use_cache else total
+    except Exception as exc:
+        if use_cache and allow_stale_on_error and is_google_sheets_quota_error(exc):
+            stale_total = DASHBOARD_WAITING_TOTAL_CACHE.get("value")
+            if stale_total is not None:
+                return int(stale_total)
+        raise
 
 
 def load_service_account_info():
@@ -5019,8 +5046,8 @@ def extract_recording_business_name(filename):
     return re.sub(r"\s+", " ", name).strip()
 
 
-def get_recording_music_type_by_order(client, config):
-    ws = client.open_by_key(SPREADSHEET_ID).worksheet(config["category_sheet"])
+def get_recording_music_type_by_order(spreadsheet, config):
+    ws = spreadsheet.worksheet(config["category_sheet"])
     rows = ws.get_all_values()[1:]
     order_col = config["order_col"]
     category_col = config["category_col"]
@@ -5037,8 +5064,8 @@ def get_recording_music_type_by_order(client, config):
     return music_by_order
 
 
-def get_done_recordings_for_month(selected_month, client, config):
-    music_by_order = get_recording_music_type_by_order(client, config)
+def get_done_recordings_for_month(selected_month, spreadsheet, config):
+    music_by_order = get_recording_music_type_by_order(spreadsheet, config)
     service = get_drive_service(readonly=True)
     query = (
         f"'{DRIVE_DONE_FOLDER_ID}' in parents and "
@@ -5079,8 +5106,8 @@ def get_done_recordings_for_month(selected_month, client, config):
     return recordings
 
 
-def count_done_recordings_from_drive(selected_month, client, config):
-    recordings = get_done_recordings_for_month(selected_month, client, config)
+def count_done_recordings_from_drive(selected_month, spreadsheet, config):
+    recordings = get_done_recordings_for_month(selected_month, spreadsheet, config)
     result = {
         "count": len(recordings),
         "children": [
@@ -5143,8 +5170,8 @@ def count_done_recordings_by_month(start_month, end_month):
     return totals
 
 
-def count_sheet_feature_by_month(config, start_month, end_month, client):
-    ws = client.open_by_key(SPREADSHEET_ID).worksheet(config["sheet"])
+def count_sheet_feature_by_month(config, start_month, end_month, spreadsheet):
+    ws = spreadsheet.worksheet(config["sheet"])
     rows = ws.get_all_values()[1:]
     totals = {month_value: 0 for month_value in iter_month_values(start_month, end_month)}
 
@@ -5184,11 +5211,15 @@ def get_feature_report_counts(month_value, use_cache=True, allow_stale_on_error=
                 return cached_report
 
         client = get_gspread_client()
+        spreadsheet = None
         reports = []
 
         for service_key, config in FEATURE_REPORT_SERVICES.items():
+            if spreadsheet is None:
+                spreadsheet = client.open_by_key(SPREADSHEET_ID)
+
             if config.get("source") == "drive_done":
-                recording_counts = count_done_recordings_from_drive(selected_month, client, config)
+                recording_counts = count_done_recordings_from_drive(selected_month, spreadsheet, config)
                 reports.append({
                     "key": service_key,
                     "label": config["label"],
@@ -5197,7 +5228,7 @@ def get_feature_report_counts(month_value, use_cache=True, allow_stale_on_error=
                 })
                 continue
 
-            ws = client.open_by_key(SPREADSHEET_ID).worksheet(config["sheet"])
+            ws = spreadsheet.worksheet(config["sheet"])
             rows = ws.get_all_values()[1:]
             count = 0
 
@@ -5270,12 +5301,16 @@ def get_feature_report_monthly_totals(start_month_value, end_month_value, use_ca
 
         monthly_totals = {month_value: 0 for month_value in iter_month_values(start_month, end_month)}
         client = get_gspread_client()
+        spreadsheet = None
 
         for config in FEATURE_REPORT_SERVICES.values():
+            if spreadsheet is None:
+                spreadsheet = client.open_by_key(SPREADSHEET_ID)
+
             if config.get("source") == "drive_done":
                 service_totals = count_done_recordings_by_month(start_month, end_month)
             else:
-                service_totals = count_sheet_feature_by_month(config, start_month, end_month, client)
+                service_totals = count_sheet_feature_by_month(config, start_month, end_month, spreadsheet)
 
             for month_value, count in service_totals.items():
                 monthly_totals[month_value] += count
