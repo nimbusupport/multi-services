@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>דו"ח קריאות חודשי</title>
+  <link rel="icon" type="image/jpeg" href="/favicon/favicon.jpg">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&display=swap">
+  <link rel="stylesheet" href="/home.css">
+  <link rel="stylesheet" href="/tickets_monthly_report.css">
+</head>
+<body class="dashboard-page tickets-monthly-report-page">
+  {% set active_nav = "report" %}
+  {% include "_dashboard_top_nav.html" %}
+
+  <main class="tickets-report-wrap">
+    <section class="tickets-report-hero">
+      <div class="tickets-report-copy">
+        <a class="dashboard-back-link" href="/dashboard-reports">
+          <i class="fa-solid fa-arrow-right"></i>
+          <span>חזרה לכרטיס הדוחות</span>
+        </a>
+        <p class="tickets-report-kicker">דו"ח קריאות מאוחד</p>
+        <h1>נימבוס, מפעל הפיס והוט במסך אחד</h1>
+        <p class="tickets-report-subtitle">
+          תמונת מצב חודשית לקריאות, תיאומי טכנאים והשוואת מגמות בין חודשים כדי לראות עומס, קצב תיאום וקריאות מפתח במקום אחד.
+        </p>
+      </div>
+
+      <div class="hero-visual">
+        <div class="hero-orb hero-orb-large"></div>
+        <div class="hero-orb hero-orb-small"></div>
+        <div class="hero-boards" aria-label="סינון לפי מקור קריאה">
+          <button type="button" class="hero-board-btn is-active" data-board-filter="all" aria-pressed="true">כללי</button>
+          <button type="button" class="hero-board-btn" data-board-filter="support" aria-pressed="false">נימבוס</button>
+          <button type="button" class="hero-board-btn" data-board-filter="pais" aria-pressed="false">מפעל הפיס</button>
+          <button type="button" class="hero-board-btn" data-board-filter="hot-kiryot" aria-pressed="false">הוט</button>
+        </div>
+        <div class="hero-bars">
+          <span style="--bar-size: 45%"></span>
+          <span style="--bar-size: 68%"></span>
+          <span style="--bar-size: 56%"></span>
+          <span style="--bar-size: 82%"></span>
+          <span style="--bar-size: 72%"></span>
+          <span style="--bar-size: 94%"></span>
+        </div>
+      </div>
+    </section>
+
+    <section class="report-surface report-toolbar">
+      <div class="toolbar-group">
+        <label for="monthly-report-month">חודש תצוגה</label>
+        <input id="monthly-report-month" type="month">
+      </div>
+      <button id="monthly-report-refresh" class="toolbar-btn" type="button">
+        <i class="fa-solid fa-rotate"></i>
+        <span>רענן דוח</span>
+      </button>
+      <div class="toolbar-meta">
+        <span class="toolbar-meta-label">טווח מוצג</span>
+        <strong id="monthly-report-range">--/---- - --/----</strong>
+      </div>
+    </section>
+
+    <section class="kpi-grid" aria-label="מדדי על">
+      <article class="kpi-card is-active" data-metric-filter="all" role="button" tabindex="0" aria-pressed="true">
+        <span class="kpi-label">סה"כ קריאות בחודש</span>
+        <strong id="kpi-total">0</strong>
+        <p>סך כל הקריאות משלושת הלוחות</p>
+      </article>
+      <article class="kpi-card accent-teal" data-metric-filter="coordinated" role="button" tabindex="0" aria-pressed="false">
+        <span class="kpi-label">קריאות מתואמות</span>
+        <strong id="kpi-coordinated">0</strong>
+        <p>קריאות בסטטוס תואם</p>
+      </article>
+      <article class="kpi-card accent-amber" data-metric-filter="coordination" role="button" tabindex="0" aria-pressed="false">
+        <span class="kpi-label">אחוז תיאום</span>
+        <strong id="kpi-rate">0%</strong>
+        <p>מתוך כלל הקריאות בחודש</p>
+      </article>
+      <article class="kpi-card accent-slate" data-metric-filter="open" role="button" tabindex="0" aria-pressed="false">
+        <span class="kpi-label">קריאות פתוחות</span>
+        <strong id="kpi-open">0</strong>
+        <p>קריאות שעדיין בטיפול</p>
+      </article>
+    </section>
+
+    <section class="report-main-grid">
+      <article class="report-surface report-trend-card">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">השוואת חודשים</p>
+            <h2>כמות קריאות מול תיאום טכנאי</h2>
+          </div>
+          <div class="section-chip">
+            <span id="trend-busiest-month">-</span>
+            <small>חודש שיא</small>
+          </div>
+        </div>
+        <div id="monthly-trend-chart" class="monthly-trend-chart" aria-live="polite"></div>
+        <p id="trend-empty-state" class="section-message" hidden>לא נמצאו נתוני מגמה לתצוגה.</p>
+      </article>
+
+      <article class="report-surface report-insights-card">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">פילוח לוחות</p>
+            <h2>תרומת כל מוקד לקריאות החודש</h2>
+          </div>
+          <div class="section-chip accent">
+            <span id="best-coordination-month">-</span>
+            <small>תיאום חזק</small>
+          </div>
+        </div>
+        <div id="boards-breakdown" class="boards-breakdown"></div>
+      </article>
+    </section>
+
+    <section class="report-surface coordinated-surface">
+      <div class="section-head">
+        <div>
+          <p class="section-kicker">קריאות מתואמות</p>
+          <h2 id="details-title">מספר קריאה ובית עסק / לקוח</h2>
+        </div>
+        <div class="section-chip soft">
+          <span id="coordinated-count-chip">0</span>
+          <small id="details-chip-label">תוצאות בחודש</small>
+        </div>
+      </div>
+      <div class="active-filter-strip">
+        <span class="active-filter-label">תצוגה פעילה</span>
+        <strong id="active-filter-summary">כללי • כל הקריאות</strong>
+      </div>
+
+      <div class="coordinated-table-wrap">
+        <table class="coordinated-table">
+          <thead>
+            <tr>
+              <th>מקור</th>
+              <th>מספר קריאה</th>
+              <th>בית עסק / לקוח</th>
+              <th>פרט משני</th>
+              <th>טכנאי מתואם</th>
+              <th>מועד ביקור</th>
+              <th>נוצר</th>
+            </tr>
+          </thead>
+          <tbody id="coordinated-table-body"></tbody>
+        </table>
+      </div>
+      <p id="coordinated-empty-state" class="section-message" hidden>אין קריאות מתואמות בחודש שנבחר.</p>
+    </section>
+
+    <p id="monthly-report-message" class="page-message" aria-live="polite"></p>
+  </main>
+
+  <script src="/nav.js"></script>
+  <script src="/tickets_monthly_report.js"></script>
+</body>
+</html>

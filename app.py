@@ -856,6 +856,8 @@ def route_page_key(path):
         return "hot_tickets"
     if normalized_path.startswith("/nastia-tickets"):
         return "nastia_tickets"
+    if normalized_path.startswith("/tickets-monthly-report"):
+        return "home"
     if normalized_path.startswith("/dashboard-data") or normalized_path in {
         "/home",
         "/dashboard-services",
@@ -2073,6 +2075,236 @@ def build_ticket_board_report(tickets, status_filter="", period="daily", date_fr
             "coordinated": len([ticket for ticket in filtered if ticket.get("status") == "תואם"]),
         },
         "leaderboard": leaderboard,
+    }
+
+
+TICKET_MONTHLY_REPORT_BOARD_SLUGS = ("support", "pais", "hot-kiryot")
+TICKET_MONTHLY_REPORT_MONTHS_BACK = 6
+
+
+def month_input_value(date_value):
+    return date_value.strftime("%Y-%m")
+
+
+def month_display_value(date_value):
+    return date_value.strftime("%m/%Y")
+
+
+def month_start(date_value):
+    return date_value.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+
+def next_month_start(date_value):
+    if date_value.month == 12:
+        return date_value.replace(year=date_value.year + 1, month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+    return date_value.replace(month=date_value.month + 1, day=1, hour=0, minute=0, second=0, microsecond=0)
+
+
+def add_months(date_value, delta_months):
+    year = date_value.year + ((date_value.month - 1 + delta_months) // 12)
+    month = ((date_value.month - 1 + delta_months) % 12) + 1
+    return date_value.replace(year=year, month=month, day=1, hour=0, minute=0, second=0, microsecond=0)
+
+
+def parse_ticket_report_month(month_value):
+    raw = str(month_value or "").strip()
+    if not raw:
+        return None
+    try:
+        parsed = datetime.strptime(raw, "%Y-%m")
+    except ValueError:
+        return None
+    return parsed.replace(tzinfo=ZoneInfo("Asia/Jerusalem"))
+
+
+def resolve_ticket_report_month(month_value=""):
+    parsed = parse_ticket_report_month(month_value)
+    if parsed:
+        return month_start(parsed)
+    return month_start(israel_now())
+
+
+def ticket_month_range(month_value=""):
+    selected_month = resolve_ticket_report_month(month_value)
+    start = month_start(selected_month)
+    end = next_month_start(start) - timedelta(seconds=1)
+    return selected_month, start, end
+
+
+def ticket_report_reference(ticket):
+    details = ticket.get("details") or {}
+    board_slug = (ticket.get("board_slug") or "").strip().lower()
+    if board_slug == "hot-kiryot":
+        return (details.get("call_number") or "").strip() or (ticket.get("ticket_id") or "")
+    if board_slug == "pais":
+        return (details.get("terminal_number") or "").strip() or (ticket.get("ticket_id") or "")
+    return ticket.get("ticket_id") or ""
+
+
+def ticket_report_business_name(ticket):
+    details = ticket.get("details") or {}
+    board_slug = (ticket.get("board_slug") or "").strip().lower()
+    if board_slug == "support":
+        return (
+            (details.get("business_name") or "").strip()
+            or (details.get("service_contact") or "").strip()
+            or (ticket.get("service_type") or "").strip()
+            or get_ticket_board(board_slug).get("name")
+            or ""
+        )
+    if board_slug == "hot-kiryot":
+        return (
+            (details.get("customer_name") or "").strip()
+            or (details.get("on_site_contact") or "").strip()
+            or (details.get("address") or "").strip()
+            or get_ticket_board(board_slug).get("name")
+            or ""
+        )
+    terminal_number = (details.get("terminal_number") or "").strip()
+    return (
+        (details.get("contact_name") or "").strip()
+        or (details.get("address") or "").strip()
+        or (f"מסוף {terminal_number}" if terminal_number else "")
+        or get_ticket_board(board_slug).get("name")
+        or ""
+    )
+
+
+def ticket_report_secondary_value(ticket):
+    details = ticket.get("details") or {}
+    board_slug = (ticket.get("board_slug") or "").strip().lower()
+    if board_slug == "support":
+        return (details.get("service_address") or "").strip()
+    return (details.get("address") or "").strip()
+
+
+def ticket_report_row(ticket):
+    details = ticket.get("details") or {}
+    board_slug = (ticket.get("board_slug") or "").strip().lower()
+    created_at = parse_ticket_created_at(ticket)
+    visit_date = (details.get("visit_date") or "").strip()
+    visit_hours = " - ".join(
+        [value for value in [(details.get("visit_hour_from") or "").strip(), (details.get("visit_hour_to") or "").strip()] if value]
+    )
+    return {
+        "id": int(ticket.get("id") or 0),
+        "ticket_id": ticket.get("ticket_id") or "",
+        "board_slug": board_slug,
+        "board_name": get_ticket_board(board_slug).get("name") or board_slug,
+        "reference_number": ticket_report_reference(ticket),
+        "business_name": ticket_report_business_name(ticket),
+        "secondary_value": ticket_report_secondary_value(ticket),
+        "status": normalize_ticket_status(board_slug, ticket.get("status")),
+        "assigned_to": (ticket.get("assigned_to") or "").strip(),
+        "coordinated_worker": (details.get("coordinated_worker") or "").strip(),
+        "visit_date": visit_date,
+        "visit_hours": visit_hours,
+        "created_at": created_at.isoformat() if created_at else "",
+        "created_at_display": ticket.get("created_at_display") or "",
+    }
+
+
+def summarize_ticket_report_tickets(tickets):
+    total = len(tickets)
+    coordinated = len([
+        ticket
+        for ticket in tickets
+        if normalize_ticket_status(ticket.get("board_slug"), ticket.get("status")) == "תואם"
+    ])
+    done = len([ticket for ticket in tickets if support_ticket_is_done(ticket)])
+    open_count = len([ticket for ticket in tickets if support_ticket_is_open(ticket)])
+    coordination_rate = round((coordinated / total) * 100, 1) if total else 0.0
+    return {
+        "total": total,
+        "coordinated": coordinated,
+        "done": done,
+        "open": open_count,
+        "coordination_rate": coordination_rate,
+    }
+
+
+def build_ticket_monthly_report(month_value=""):
+    selected_month, range_start, range_end = ticket_month_range(month_value)
+    all_tickets = [
+        ticket
+        for ticket in load_support_tickets()
+        if (ticket.get("board_slug") or "").strip().lower() in TICKET_MONTHLY_REPORT_BOARD_SLUGS
+    ]
+    month_tickets = filter_tickets_by_created_range(all_tickets, range_start, range_end)
+
+    boards = []
+    for board_slug in TICKET_MONTHLY_REPORT_BOARD_SLUGS:
+        board_tickets = [ticket for ticket in month_tickets if (ticket.get("board_slug") or "").strip().lower() == board_slug]
+        board_summary = summarize_ticket_report_tickets(board_tickets)
+        boards.append({
+            "slug": board_slug,
+            "name": get_ticket_board(board_slug).get("name") or board_slug,
+            **board_summary,
+        })
+
+    coordinated_rows = [
+        ticket_report_row(ticket)
+        for ticket in month_tickets
+        if normalize_ticket_status(ticket.get("board_slug"), ticket.get("status")) == "תואם"
+    ]
+    coordinated_rows.sort(
+        key=lambda item: (
+            item.get("visit_date") or "",
+            item.get("created_at") or "",
+            item.get("reference_number") or "",
+        ),
+        reverse=True,
+    )
+
+    trend_months = []
+    trend_start = add_months(selected_month, -(TICKET_MONTHLY_REPORT_MONTHS_BACK - 1))
+    for offset in range(TICKET_MONTHLY_REPORT_MONTHS_BACK):
+        trend_month = add_months(trend_start, offset)
+        bucket_start = month_start(trend_month)
+        bucket_end = next_month_start(bucket_start) - timedelta(seconds=1)
+        bucket_tickets = filter_tickets_by_created_range(all_tickets, bucket_start, bucket_end)
+        bucket_summary = summarize_ticket_report_tickets(bucket_tickets)
+        bucket_boards = {}
+        for board_slug in TICKET_MONTHLY_REPORT_BOARD_SLUGS:
+            board_bucket_tickets = [
+                ticket
+                for ticket in bucket_tickets
+                if (ticket.get("board_slug") or "").strip().lower() == board_slug
+            ]
+            bucket_boards[board_slug] = summarize_ticket_report_tickets(board_bucket_tickets)
+        trend_months.append({
+            "month": month_input_value(trend_month),
+            "month_display": month_display_value(trend_month),
+            "boards": bucket_boards,
+            **bucket_summary,
+        })
+
+    busiest_month = max(trend_months, key=lambda item: item["total"], default=None)
+    best_coordination_month = max(trend_months, key=lambda item: item["coordination_rate"], default=None)
+    all_ticket_rows = [ticket_report_row(ticket) for ticket in month_tickets]
+    all_ticket_rows.sort(
+        key=lambda item: (
+            item.get("visit_date") or "",
+            item.get("created_at") or "",
+            item.get("reference_number") or "",
+        ),
+        reverse=True,
+    )
+
+    return {
+        "month": month_input_value(selected_month),
+        "month_display": month_display_value(selected_month),
+        "date_from": range_start.strftime("%Y-%m-%d"),
+        "date_to": range_end.strftime("%Y-%m-%d"),
+        "summary": summarize_ticket_report_tickets(month_tickets),
+        "boards": boards,
+        "trend_months": trend_months,
+        "highlights": {
+            "busiest_month": busiest_month or {"month_display": "-", "total": 0},
+            "best_coordination_month": best_coordination_month or {"month_display": "-", "coordination_rate": 0},
+        },
+        "all_tickets": all_ticket_rows,
+        "coordinated_tickets": coordinated_rows,
     }
 
 
@@ -5414,6 +5646,23 @@ def dashboard_service_tickets_page():
 @app.route("/dashboard-reports")
 def dashboard_reports_page():
     return render_dashboard_group_page("dashboard_reports.html")
+
+
+@app.route("/tickets-monthly-report")
+def tickets_monthly_report_page():
+    return render_dashboard_group_page("tickets_monthly_report.html")
+
+
+@app.route("/tickets-monthly-report-data")
+def tickets_monthly_report_data():
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+    if not user_can_access_page("home"):
+        return redirect(first_allowed_route())
+
+    month_value = (request.args.get("month") or "").strip()
+    report = build_ticket_monthly_report(month_value)
+    return jsonify({"ok": True, "report": report})
 
 
 @app.route("/portals")

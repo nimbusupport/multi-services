@@ -3,6 +3,14 @@
   --dashboard-nav-z: 1200;
 }
 
+.theme-ticket-report .card-hero {
+  background: linear-gradient(135deg, #12395e 0%, #176b86 52%, #24b5a7 100%);
+}
+
+.theme-ticket-report .card-icon {
+  color: #1b7d89;
+}
+
 *,
 *::before,
 *::after {
