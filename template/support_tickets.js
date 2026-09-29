@@ -32,6 +32,7 @@ const canUploadTicketAttachments = supportTicketsContext.canUploadTicketAttachme
 const canManageExistingTicketAttachments = supportTicketsContext.canManageExistingTicketAttachments === true || supportTicketsContext.canManageExistingTicketAttachments === "true";
 const canDeleteTicketAttachments = supportTicketsContext.canDeleteTicketAttachments === true || supportTicketsContext.canDeleteTicketAttachments === "true";
 const canEditExistingTickets = supportTicketsContext.canEditExistingTickets === true || supportTicketsContext.canEditExistingTickets === "true";
+const canViewBoardReport = supportTicketsContext.canViewBoardReport === true || supportTicketsContext.canViewBoardReport === "true";
 const defaultTicketScope = String(supportTicketsContext.defaultTicketScope || "all");
 const isNastyaQueuePage = pageMode === "nastia" || ticketQueue === "nastia";
 const isAssignedTechnicianMode = ticketOperatorMode === "assigned_technician";
@@ -52,7 +53,7 @@ function boardSupportsCoordination(boardSlugValue) {
 }
 
 function boardSupportsReport(boardSlugValue) {
-  return boardConfig(boardSlugValue).report_enabled === true;
+  return canViewBoardReport && boardConfig(boardSlugValue).report_enabled === true;
 }
 
 function isCoordinationTicket(ticket) {

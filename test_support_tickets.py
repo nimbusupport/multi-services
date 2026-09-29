@@ -1828,6 +1828,7 @@ class SupportTicketsTestCase(unittest.TestCase):
 
         hot_response = self.client.get("/hot-kiryot-tickets", follow_redirects=False)
         self.assertEqual(hot_response.status_code, 200)
+        self.assertIn(b'canViewBoardReport: false', hot_response.data)
 
         blocked_response = self.client.get("/support-tickets-data?board=support", follow_redirects=False)
         self.assertEqual(blocked_response.status_code, 403)
