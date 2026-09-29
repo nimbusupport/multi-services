@@ -366,6 +366,11 @@ FULL_ACCESS_PAGES = {
 }
 TICKETS_ONLY_ALLOWED_PAGES = {"support_tickets", "pais_tickets", "hot_tickets", "nastia_tickets"}
 LOGIN_USER_OVERRIDES = {
+    "business.support@hot.net.il": {
+        "password": "bizQazwsx3#ticket",
+        "role": "hot_submitter",
+        "allowed_pages": ["hot_tickets"],
+    },
     "nastya@nimbusip.com": {
         "password": "tygeydfuyw5t3g",
         "role": "tickets_only",
@@ -723,6 +728,8 @@ def israel_now():
 def support_user_name():
     raw = (session.get("username") or session.get("email") or "").strip()
     local = raw.split("@")[0].lower()
+    if raw.lower() == "business.support@hot.net.il":
+        return "HOT"
     if local in {"admin", "isaac"}:
         return "Admin"
     if local in {"eugeni", "yevgeni", "evgeni"}:
@@ -749,6 +756,10 @@ def support_user_is_admin():
 
 def support_user_is_assigned_technician():
     return (session.get("role") or "").strip().lower() == "assigned_technician"
+
+
+def support_user_is_hot_submitter():
+    return (session.get("role") or "").strip().lower() == "hot_submitter"
 
 
 def assigned_technician_allowed_statuses():
@@ -843,6 +854,8 @@ def allowed_pages_for_role(role):
     normalized_role = (role or "").strip().lower()
     if normalized_role == "tickets_only":
         return sorted(TICKETS_ONLY_ALLOWED_PAGES)
+    if normalized_role == "hot_submitter":
+        return ["hot_tickets"]
     if normalized_role == "assigned_technician":
         return ["hot_tickets", "pais_tickets", "support_tickets"]
     return sorted(FULL_ACCESS_PAGES)
@@ -4403,7 +4416,8 @@ def _supabase_login_user(username):
 
 def authenticate_login(username, password):
     username = (username or "").strip().lower()
-    if not username.endswith(f"@{ALLOWED_EMAIL_DOMAIN}"):
+    override = LOGIN_USER_OVERRIDES.get(username)
+    if not override and not username.endswith(f"@{ALLOWED_EMAIL_DOMAIN}"):
         return None
 
     supabase_user = _supabase_login_user(username)
@@ -4416,7 +4430,6 @@ def authenticate_login(username, password):
             }
         return None
 
-    override = LOGIN_USER_OVERRIDES.get(username)
     if override:
         if password == override["password"]:
             return {
@@ -6362,6 +6375,7 @@ def render_ticket_board_page(board_slug):
     register_service_activity(support_page_key(board_slug))
     allowed_pages = allowed_pages_for_current_user()
     assigned_technician_mode = support_user_is_assigned_technician()
+    hot_submitter_mode = support_user_is_hot_submitter()
     return render_template(
         "support_tickets.html",
         current_user=session.get("username", ""),
@@ -6377,7 +6391,7 @@ def render_ticket_board_page(board_slug):
         page_icon_path=board.get("icon_path") or "",
         ticket_queue="",
         show_create_button=not assigned_technician_mode,
-        show_pais_report=board_has_coordination_report(board["slug"]) and not assigned_technician_mode,
+        show_pais_report=board_has_coordination_report(board["slug"]) and not assigned_technician_mode and not hot_submitter_mode,
         service_types=SUPPORT_SERVICE_TYPES,
         ticket_types=SUPPORT_TICKET_TYPES,
         priorities=SUPPORT_PRIORITIES,
@@ -6388,7 +6402,9 @@ def render_ticket_board_page(board_slug):
         nastia_notification_email=configured_nastia_notification_email(),
         ticket_operator_mode="assigned_technician" if assigned_technician_mode else "default",
         can_upload_ticket_attachments=True,
-        can_delete_ticket_attachments=not assigned_technician_mode,
+        can_manage_existing_ticket_attachments=not hot_submitter_mode,
+        can_delete_ticket_attachments=not assigned_technician_mode and not hot_submitter_mode,
+        can_edit_existing_tickets=not hot_submitter_mode,
         default_ticket_scope="my" if assigned_technician_mode else "all",
         can_access_home="home" in allowed_pages,
         can_access_support="support_tickets" in allowed_pages,
@@ -6738,6 +6754,11 @@ def support_tickets_create():
     assigned_to = (request.form.get("assigned_to") or "").strip()
     details = {}
 
+    if support_user_is_hot_submitter() and board["slug"] != "hot-kiryot":
+        return jsonify({"ok": False, "message": "HOT accounts can only create HOT tickets"}), 403
+    if support_user_is_hot_submitter():
+        assigned_to = ""
+
     if assigned_to and assigned_to not in TECHNICIAN_SUPPORT_USERS:
         return jsonify({"ok": False, "message": "Invalid assignee"}), 400
 
@@ -6896,6 +6917,8 @@ def support_tickets_create():
 def support_tickets_update():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
+    if support_user_is_hot_submitter():
+        return jsonify({"ok": False, "message": "HOT accounts can only view tickets and create new ones"}), 403
 
     payload = request.get_json(silent=True) or {}
     actor = support_user_name()
@@ -7039,6 +7062,8 @@ def support_tickets_send_email():
 def support_tickets_attachments():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
+    if support_user_is_hot_submitter():
+        return jsonify({"ok": False, "message": "HOT accounts cannot modify existing tickets"}), 403
 
     ticket_id = (request.form.get("ticket_id") or "").strip()
     if support_user_is_assigned_technician():
@@ -7113,6 +7138,8 @@ def support_tickets_field_report():
 def support_tickets_attachment_delete():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
+    if support_user_is_hot_submitter():
+        return jsonify({"ok": False, "message": "HOT accounts cannot modify existing tickets"}), 403
     if support_user_is_assigned_technician():
         return jsonify({"ok": False, "message": "Technician accounts cannot delete attachments"}), 403
 

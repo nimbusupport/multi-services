@@ -1816,6 +1816,77 @@ class SupportTicketsTestCase(unittest.TestCase):
         tickets_response = self.client.get("/support-tickets", follow_redirects=False)
         self.assertEqual(tickets_response.status_code, 200)
 
+    def test_hot_submitter_is_redirected_to_hot_board_only(self):
+        response = self.login("business.support@hot.net.il", "bizQazwsx3#ticket")
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response.headers["Location"].endswith("/hot-kiryot-tickets"))
+
+        home_response = self.client.get("/home", follow_redirects=False)
+        self.assertEqual(home_response.status_code, 302)
+        self.assertTrue(home_response.headers["Location"].endswith("/hot-kiryot-tickets"))
+
+        hot_response = self.client.get("/hot-kiryot-tickets", follow_redirects=False)
+        self.assertEqual(hot_response.status_code, 200)
+
+        blocked_response = self.client.get("/support-tickets-data?board=support", follow_redirects=False)
+        self.assertEqual(blocked_response.status_code, 403)
+        self.assertFalse(blocked_response.get_json()["ok"])
+
+    def test_hot_submitter_creates_unassigned_waiting_hot_ticket(self):
+        self.login("business.support@hot.net.il", "bizQazwsx3#ticket")
+
+        response = self.client.post(
+            "/support-tickets-create",
+            data={
+                "board_slug": "hot-kiryot",
+                "call_number": "275749117",
+                "address": "הנביאים 1, חיפה",
+                "customer_name": "חיים",
+                "issue_summary": "PANCODE לא עובד",
+                "assigned_to": "גולן",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["ticket"]["board_slug"], "hot-kiryot")
+        self.assertEqual(payload["ticket"]["assigned_to"], "")
+        self.assertEqual(payload["ticket"]["status"], "ממתין")
+        self.assertEqual(payload["ticket"]["creator"], "HOT")
+
+    def test_hot_submitter_cannot_update_existing_ticket(self):
+        self.login("business.support@hot.net.il", "bizQazwsx3#ticket")
+
+        response = self.client.post(
+            "/support-tickets-update",
+            json={"ticket_id": 1, "status": "בוצע"},
+        )
+
+        self.assertEqual(response.status_code, 403)
+        payload = response.get_json()
+        self.assertFalse(payload["ok"])
+
+    def test_hot_submitter_cannot_create_non_hot_ticket(self):
+        self.login("business.support@hot.net.il", "bizQazwsx3#ticket")
+
+        response = self.client.post(
+            "/support-tickets-create",
+            data={
+                "board_slug": "support",
+                "ticket_type": "שאלה",
+                "service_type": "מרכזייה",
+                "domain": "example.com",
+                "priority": "Medium",
+                "description": "No access expected",
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+        payload = response.get_json()
+        self.assertFalse(payload["ok"])
+
     def test_assigned_technician_login_redirects_to_tickets_menu_page(self):
         response = self.login("golan@nimbusip.com", "0503009456!")
 

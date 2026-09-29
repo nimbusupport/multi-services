@@ -403,6 +403,7 @@
             <option value="Low">Low</option>
           </select>
         </label>
+        {% if can_edit_existing_tickets %}
         <label>
           <span>Assign</span>
           <select name="assigned_to">
@@ -412,6 +413,7 @@
             {% endfor %}
           </select>
         </label>
+        {% endif %}
       </div>
 
       <section class="detail-description detail-edit-card service-mode-card">
@@ -503,6 +505,7 @@
           <span>איש קשר - מספר</span>
           <input name="contact_phone" type="text">
         </label>
+        {% if can_edit_existing_tickets %}
         <label>
           <span>Assign</span>
           <select name="assigned_to">
@@ -512,6 +515,7 @@
             {% endfor %}
           </select>
         </label>
+        {% endif %}
       </div>
 
       <label class="description-field">
@@ -574,6 +578,7 @@
           <span>שעות פעילות / זמינות לקוח</span>
           <input name="availability_hours" type="text">
         </label>
+        {% if can_edit_existing_tickets %}
         <label>
           <span>Assign</span>
           <select name="assigned_to">
@@ -583,6 +588,7 @@
             {% endfor %}
           </select>
         </label>
+        {% endif %}
       </div>
 
       <label class="description-field">
@@ -924,7 +930,9 @@
       ticketQueue: {{ ticket_queue|tojson }},
       ticketOperatorMode: {{ ticket_operator_mode|tojson }},
       canUploadTicketAttachments: {{ can_upload_ticket_attachments|tojson }},
+      canManageExistingTicketAttachments: {{ can_manage_existing_ticket_attachments|tojson }},
       canDeleteTicketAttachments: {{ can_delete_ticket_attachments|tojson }},
+      canEditExistingTickets: {{ can_edit_existing_tickets|tojson }},
       defaultTicketScope: {{ default_ticket_scope|tojson }}
     };
   </script>

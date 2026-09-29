@@ -29,7 +29,9 @@ const pageMode = String(supportTicketsContext.pageMode || "board");
 const ticketQueue = String(supportTicketsContext.ticketQueue || "");
 const ticketOperatorMode = String(supportTicketsContext.ticketOperatorMode || "default");
 const canUploadTicketAttachments = supportTicketsContext.canUploadTicketAttachments === true || supportTicketsContext.canUploadTicketAttachments === "true";
+const canManageExistingTicketAttachments = supportTicketsContext.canManageExistingTicketAttachments === true || supportTicketsContext.canManageExistingTicketAttachments === "true";
 const canDeleteTicketAttachments = supportTicketsContext.canDeleteTicketAttachments === true || supportTicketsContext.canDeleteTicketAttachments === "true";
+const canEditExistingTickets = supportTicketsContext.canEditExistingTickets === true || supportTicketsContext.canEditExistingTickets === "true";
 const defaultTicketScope = String(supportTicketsContext.defaultTicketScope || "all");
 const isNastyaQueuePage = pageMode === "nastia" || ticketQueue === "nastia";
 const isAssignedTechnicianMode = ticketOperatorMode === "assigned_technician";
@@ -1514,6 +1516,12 @@ function exportPaisReport() {
 }
 
 async function updateTicket(ticketId, changes) {
+  const ticket = getTicket(ticketId);
+  if (ticket && !canEditExistingTickets && !canAssignedTechnicianEditTicket(ticket)) {
+    openNotificationErrorModal("למשתמש זה יש הרשאת צפייה בלבד על קריאות קיימות");
+    await loadTickets();
+    return;
+  }
   if (Object.prototype.hasOwnProperty.call(changes || {}, "status") && !changes?.status) {
     return;
   }
@@ -2384,8 +2392,8 @@ function renderTickets(tickets, users) {
         ${escapeHtml(ticket.creator)}<br>${escapeHtml(ticketListTimestamp(ticket))}
         ${coordinationMarkup || ""}
       </div>
-      <select class="assignee-select" data-ticket-id="${ticket.id}" ${(isAssignedTechnicianMode || (isNastyaQueuePage && isCoordinationTicket(ticket))) ? "disabled" : ""}>${assigneeOptions}</select>
-      <select class="status-select" data-ticket-id="${ticket.id}" ${((isAssignedTechnicianMode && !technicianCanUpdate) || (isNastyaQueuePage && isCoordinationTicket(ticket) && !canNastyaEditPaisInlineStatus(ticket))) ? "disabled" : ""}>${statusOptionsForTicket(ticket)}</select>
+      <select class="assignee-select" data-ticket-id="${ticket.id}" ${(!canEditExistingTickets || isAssignedTechnicianMode || (isNastyaQueuePage && isCoordinationTicket(ticket))) ? "disabled" : ""}>${assigneeOptions}</select>
+      <select class="status-select" data-ticket-id="${ticket.id}" ${((!canEditExistingTickets && !technicianCanUpdate) || (isAssignedTechnicianMode && !technicianCanUpdate) || (isNastyaQueuePage && isCoordinationTicket(ticket) && !canNastyaEditPaisInlineStatus(ticket))) ? "disabled" : ""}>${statusOptionsForTicket(ticket)}</select>
       <div class="ticket-actions">
         <span class="pill ${statusClass}">${escapeHtml(displayTicketStatus(ticket))}</span>
         <span class="pill ${priorityClass(ticket.priority || "Medium")}">${escapeHtml(ticket.priority || "Medium")}</span>
@@ -2438,6 +2446,9 @@ function coordinationStatusEditor(ticket) {
       </select>
     </section>`;
   }
+  if (!canEditExistingTickets) {
+    return "";
+  }
   const isCoordinatorView = isNastyaQueuePage;
   const showCoordinatorStatus = isCoordinatorView && NASTYA_EDITABLE_STATUSES.includes(ticket.status);
   const coordinatorStatusOptions = [
@@ -2471,7 +2482,7 @@ function coordinationStatusEditor(ticket) {
 }
 
 function coordinationSchedulingEditor(ticket, details) {
-  if (isAssignedTechnicianMode) return "";
+  if (isAssignedTechnicianMode || !canEditExistingTickets) return "";
   const isCoordinatorView = isNastyaQueuePage;
   const technicianOptions = ['<option value="">בחר עובד</option>']
     .concat(technicianUsers.map((user) => `<option value="${escapeHtml(user)}" ${details.coordinated_worker === user ? "selected" : ""}>${escapeHtml(user)}</option>`))
@@ -2508,6 +2519,18 @@ function renderHotDetailSections(ticket) {
   const details = ticketDetails(ticket);
   const technicianMode = canAssignedTechnicianEditTicket(ticket);
   const showFailureNotes = ticket.status === "נכשל";
+  if (!technicianMode && !canEditExistingTickets) {
+    return `
+      ${detailSection("מהות התקלה", details.issue_summary)}
+      ${detailSection("בדיקות שבוצעו מרחוק", details.remote_checks)}
+      ${detailSection("פעולות / בדיקות שטכנאי צריך לבצע", details.technician_actions)}
+      ${details.equipment_type ? detailSection("סוג ציוד קיים אצל הלקוח", details.equipment_type) : ""}
+      ${details.service_agreement ? detailSection("הסכם שירות ואיזה ציוד באחריות הוט", details.service_agreement) : ""}
+      ${details.technical_notes ? detailSection("פרטים טכניים נוספים", details.technical_notes) : ""}
+      ${details.field_report ? fieldReportSummaryCard(ticket, false) : ""}
+      ${details.failure_notes ? detailSection("הערות", details.failure_notes) : ""}
+    `;
+  }
   if (technicianMode) {
     return `
       ${detailSection("מהות התקלה", details.issue_summary)}
@@ -2611,6 +2634,18 @@ function renderSupportDetailSections(ticket) {
   const details = ticketDetails(ticket);
   const technicianMode = canAssignedTechnicianEditTicket(ticket);
   const showFailureNotes = normalizePendingStatus(ticket.status) === "נכשל";
+  if (!technicianMode && !canEditExistingTickets) {
+    return `
+      ${detailSection("תיאור", ticket.description)}
+      ${detailSection("פתרון", ticket.solution)}
+      ${details.customer_type ? detailSection("סוג לקוח", details.customer_type) : ""}
+      ${details.service_mode ? detailSection("סוג טיפול", details.service_mode) : ""}
+      ${details.business_name ? detailSection("שם העסק", details.business_name) : ""}
+      ${details.service_contact ? detailSectionHtml("איש קשר", renderContactWithPhone(details.service_contact)) : ""}
+      ${details.service_address ? detailSectionHtml("כתובת", renderAddressValue(details.service_address)) : ""}
+      ${details.failure_notes ? detailSection("למה קריאה נכשלה", details.failure_notes) : ""}
+    `;
+  }
   if (technicianMode) {
     return `
       ${detailSection("תיאור", ticket.description)}
@@ -2924,6 +2959,10 @@ async function cancelTicketCoordination(ticketId) {
 async function saveTicketDetailWithFeedback(ticketId, options = {}) {
   const currentTicket = getTicket(ticketId);
   if (!currentTicket) return;
+  if (!canEditExistingTickets && !canAssignedTechnicianEditTicket(currentTicket)) {
+    openNotificationErrorModal("למשתמש זה יש הרשאת צפייה בלבד על קריאות קיימות");
+    return;
+  }
 
   const cancelCoordination = Boolean(options.cancelCoordination);
   const currentDetails = ticketDetails(currentTicket);
@@ -3179,7 +3218,7 @@ function openTicketDetail(ticketId) {
   syncDetailAttachmentInputState();
   const detailUploadPanel = document.getElementById("detail-upload-panel");
   if (detailUploadPanel) {
-    detailUploadPanel.hidden = !canUploadTicketAttachments;
+    detailUploadPanel.hidden = !canUploadTicketAttachments || !canManageExistingTicketAttachments;
   }
   const detailEmailPanel = document.getElementById("detail-email-panel");
   const detailEmailInput = document.getElementById("detail-email-input");
