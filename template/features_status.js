@@ -22,6 +22,11 @@ const summaryWaitingCount = document.getElementById("summary-waiting-count");
 const summaryServicesCount = document.getElementById("summary-services-count");
 const activeFilterLabel = document.getElementById("active-filter-label");
 const resultsCountLabel = document.getElementById("results-count-label");
+const resultsExportActions = document.getElementById("results-export-actions");
+const resultsExportHint = document.getElementById("results-export-hint");
+const exportButtons = Array.from(document.querySelectorAll("[data-export-format]"));
+
+let currentPayload = null;
 
 function currentMonthValue() {
   const now = new Date();
@@ -69,6 +74,39 @@ function syncQueryMode() {
     return;
   }
   projectManagerFilterSelect.value = "";
+}
+
+function buildRequestParams() {
+  const queryType = queryTypeSelect.value;
+  const projectManagerValue = projectManagerFilterSelect.value;
+  const queryValue = queryType === "project_manager" ? projectManagerValue : queryInput.value.trim();
+  return new URLSearchParams({
+    month: monthInput.value || currentMonthValue(),
+    query: queryValue,
+    query_type: queryType,
+    status: statusFilterSelect.value,
+    project_manager: queryType === "project_manager" ? "" : projectManagerValue,
+  });
+}
+
+function activeProjectManagerValue(payload) {
+  if (!payload) {
+    return "";
+  }
+  if (payload.query_type === "project_manager") {
+    return String(payload.query || "").trim();
+  }
+  return String(payload.project_manager_filter || "").trim();
+}
+
+function syncExportState(payload) {
+  currentPayload = payload;
+  const canExport = Boolean(activeProjectManagerValue(payload)) && Number(payload?.summary?.total_entries || 0) > 0;
+  resultsExportActions?.classList.toggle("hidden", !canExport);
+  resultsExportHint?.classList.toggle("hidden", canExport);
+  exportButtons.forEach((buttonElement) => {
+    buttonElement.disabled = !canExport;
+  });
 }
 
 function setLoadingState(isLoading) {
@@ -235,16 +273,7 @@ async function loadFeatureStatuses() {
   renderLoadingState();
 
   try {
-    const queryType = queryTypeSelect.value;
-    const projectManagerValue = projectManagerFilterSelect.value;
-    const queryValue = queryType === "project_manager" ? projectManagerValue : queryInput.value.trim();
-    const params = new URLSearchParams({
-      month,
-      query: queryValue,
-      query_type: queryType,
-      status: statusFilterSelect.value,
-      project_manager: queryType === "project_manager" ? "" : projectManagerValue,
-    });
+    const params = buildRequestParams();
     const res = await fetch(`/features-status-data?${params.toString()}`);
     const data = await res.json().catch(() => ({}));
 
@@ -261,11 +290,13 @@ async function loadFeatureStatuses() {
     renderStatusCounters(data);
     renderSummary(data);
     renderResults(Array.isArray(data.services) ? data.services : []);
+    syncExportState(data);
     setMessage("הנתונים עודכנו בהצלחה.");
   } catch (err) {
     statusCounterGrid.innerHTML = "";
     summaryGrid.innerHTML = "";
     results.innerHTML = "";
+    syncExportState(null);
     setMessage(err.message || "אירעה שגיאה בזמן שליפת הנתונים", true);
   } finally {
     setLoadingState(false);
@@ -296,6 +327,7 @@ monthInput?.addEventListener("change", loadFeatureStatuses);
 statusFilterSelect?.addEventListener("change", loadFeatureStatuses);
 projectManagerFilterSelect?.addEventListener("change", () => {
   if (queryTypeSelect.value === "project_manager" && !projectManagerFilterSelect.value) {
+    syncExportState(null);
     setMessage("בחר/י מנהל פרויקט כדי לטעון את הנתונים.");
     return;
   }
@@ -305,6 +337,7 @@ queryTypeSelect?.addEventListener("change", () => {
   syncQueryMode();
   if (queryTypeSelect.value === "project_manager") {
     if (!projectManagerFilterSelect.value) {
+      syncExportState(null);
       setMessage("בחר/י מנהל פרויקט כדי לטעון את הנתונים.");
       return;
     }
@@ -314,6 +347,18 @@ queryTypeSelect?.addEventListener("change", () => {
   loadFeatureStatuses();
 });
 resetButton?.addEventListener("click", resetFeatureStatusFilters);
+
+exportButtons.forEach((buttonElement) => {
+  buttonElement.addEventListener("click", () => {
+    if (!currentPayload) {
+      return;
+    }
+    const format = String(buttonElement.dataset.exportFormat || "pdf").toLowerCase();
+    const params = buildRequestParams();
+    params.set("format", format);
+    window.location.href = `/features-status-export?${params.toString()}`;
+  });
+});
 
 statusCounterGrid?.addEventListener("click", (event) => {
   const trigger = event.target.closest("[data-status-counter]");
@@ -327,4 +372,5 @@ statusCounterGrid?.addEventListener("click", (event) => {
   });
 });
 
+syncExportState(null);
 loadFeatureStatuses();

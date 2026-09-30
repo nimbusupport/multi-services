@@ -5642,6 +5642,21 @@ def build_feature_status_dashboard(month_value="", query_text="", query_type="al
     }
 
 
+def build_feature_status_export_rows(entries):
+    rows = []
+    for entry in entries or []:
+        rows.append([
+            entry.get("service_label") or "-",
+            entry.get("business_name") or "-",
+            entry.get("status") or entry.get("status_category") or "לא הוגדר",
+            entry.get("order_id") or "-",
+            entry.get("customer_id") or "-",
+            entry.get("project_manager") or entry.get("project_manager_raw") or "-",
+            entry.get("date_display") or entry.get("date") or "-",
+        ])
+    return rows
+
+
 def collapse_feature_status_entries(entries):
     if not entries:
         return []
@@ -5877,7 +5892,7 @@ def build_pdf_buffer(title, metadata_rows, headers, rows, rtl_columns=None, emph
         story.append(
             Table(
                 [[
-                    pdf_paragraph(label, meta_label_style, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
+                    pdf_paragraph(label, meta_label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
                     pdf_paragraph(value, value_style, rtl=True, latin_font_name=latin_extra_bold_font if str(label) in emphasis_meta_labels else latin_bold_font, hebrew_font_name=hebrew_extra_bold_font if str(label) in emphasis_meta_labels else hebrew_bold_font),
                 ]],
                 colWidths=[40 * mm, 130 * mm],
@@ -5891,7 +5906,7 @@ def build_pdf_buffer(title, metadata_rows, headers, rows, rtl_columns=None, emph
     story.append(Spacer(1, 10))
 
     table_data = [[
-        pdf_paragraph(header, header_style, latin_font_name=latin_extra_bold_font, hebrew_font_name=hebrew_extra_bold_font)
+        pdf_paragraph(header, header_style, rtl=True, latin_font_name=latin_extra_bold_font, hebrew_font_name=hebrew_extra_bold_font)
         for header in headers
     ]]
     for row in rows:
@@ -6203,6 +6218,73 @@ def features_status_data():
     except Exception as exc:
         return api_error(exc, 500, "google_auth_or_sheet_error")
     return jsonify({"ok": True, **payload})
+
+
+@app.route("/features-status-export")
+def features_status_export():
+    export_format = (request.args.get("format") or "pdf").strip().lower()
+    if export_format not in {"csv", "pdf"}:
+        export_format = "pdf"
+
+    try:
+        payload = build_feature_status_dashboard(
+            month_value=request.args.get("month", ""),
+            query_text=request.args.get("query", "") or request.args.get("customer_id", ""),
+            query_type=request.args.get("query_type", "all"),
+            status_filter=request.args.get("status", ""),
+            project_manager_filter=request.args.get("project_manager", ""),
+        )
+    except ValueError as exc:
+        return api_error(exc, 400, "invalid_features_status_query")
+    except Exception as exc:
+        return api_error(exc, 500, "google_auth_or_sheet_error")
+
+    rows = build_feature_status_export_rows(payload.get("entries") or [])
+    headers = ["שירות", "שם עסק", "סטטוס", "מספר הזמנה", "ח.פ", "מנהל פרויקט", "תאריך"]
+    query_type_label = {
+        "all": "כללי",
+        "customer_id": "ח.פ",
+        "order_id": "מספר הזמנה",
+        "project_manager": "מנהל פרויקט",
+    }.get(payload.get("query_type"), "כללי")
+    active_project_manager = payload.get("query") if payload.get("query_type") == "project_manager" else payload.get("project_manager_filter")
+
+    if export_format == "csv":
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(headers)
+        writer.writerows(rows)
+        csv_buffer = io.BytesIO(("\ufeff" + output.getvalue()).encode("utf-8"))
+        csv_buffer.seek(0)
+        return send_file(
+            csv_buffer,
+            mimetype="text/csv",
+            as_attachment=True,
+            download_name=f"features-status-{payload['month']}.csv",
+        )
+
+    pdf_rows = rows or [["-", "לא נמצאו תוצאות לייצוא", "-", "-", "-", "-", "-"]]
+    pdf_buffer = build_pdf_buffer(
+        title="דו\"ח סטטוס פיצ'רים",
+        metadata_rows=[
+            ("חודש", payload.get("month_display") or ""),
+            ("מנהל פרויקט", active_project_manager or "כל המנהלים"),
+            ("סטטוס", payload.get("status_filter") or "כל הסטטוסים"),
+            ("סוג חיפוש", query_type_label),
+            ("תוצאות", len(rows)),
+        ],
+        headers=headers,
+        rows=pdf_rows,
+        rtl_columns={0, 1, 2, 5},
+        emphasis_columns={2},
+        emphasis_meta_labels={"חודש", "מנהל פרויקט", "סטטוס", "תוצאות"},
+    )
+    return send_file(
+        pdf_buffer,
+        mimetype="application/pdf",
+        as_attachment=True,
+        download_name=f"features-status-{payload['month']}.pdf",
+    )
 
 
 @app.route("/features-report-data")

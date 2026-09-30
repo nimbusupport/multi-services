@@ -88,14 +88,16 @@
           </select>
         </label>
 
-        <button id="lookup-submit-btn" class="toolbar-btn" type="submit">
-          <i class="fa-solid fa-magnifying-glass"></i>
-          <span>הצג</span>
-        </button>
-        <button id="lookup-reset-btn" class="toolbar-btn toolbar-btn-ghost" type="button">
-          <i class="fa-solid fa-rotate-right"></i>
-          <span>איפוס</span>
-        </button>
+        <div class="toolbar-actions">
+          <button id="lookup-submit-btn" class="toolbar-btn toolbar-btn-compact" type="submit">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <span>הצג</span>
+          </button>
+          <button id="lookup-reset-btn" class="toolbar-btn toolbar-btn-ghost" type="button">
+            <i class="fa-solid fa-rotate-right"></i>
+            <span>איפוס</span>
+          </button>
+        </div>
       </form>
       <p id="lookup-message" class="page-message">הדף טוען את כל הפיצ'רים של החודש הנבחר. אפשר לסנן לפי ח.פ, מספר הזמנה או סטטוס.</p>
     </section>
@@ -144,11 +146,25 @@
           <p class="section-kicker">תוצאות</p>
           <h2>כל הפיצ'רים של החודש</h2>
         </div>
-        <div class="section-chip soft">
-          <span id="results-count-label">0</span>
-          <small>תוצאות</small>
+        <div class="results-head-side">
+          <div class="section-chip soft">
+            <span id="results-count-label">0</span>
+            <small>תוצאות</small>
+          </div>
+          <div id="results-export-actions" class="results-export-actions hidden">
+            <span class="results-export-label">הורדת תוצאות</span>
+            <button type="button" class="toolbar-btn toolbar-btn-ghost export-btn" data-export-format="pdf">
+              <i class="fa-regular fa-file-pdf"></i>
+              <span>PDF</span>
+            </button>
+            <button type="button" class="toolbar-btn toolbar-btn-ghost export-btn" data-export-format="csv">
+              <i class="fa-solid fa-file-csv"></i>
+              <span>CSV</span>
+            </button>
+          </div>
         </div>
       </div>
+      <p id="results-export-hint" class="results-export-hint">אפשרות ההורדה זמינה אחרי סינון לפי מנהל פרויקט.</p>
       <div id="feature-status-results" class="results-grid"></div>
     </section>
   </main>

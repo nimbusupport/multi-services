@@ -599,6 +599,149 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertEqual(payload["services"][4]["entries"][0]["status"], "בוצע")
         self.assertEqual(payload["services"][5]["entries"][0]["status"], "לא הוגדר")
 
+    def test_features_status_csv_export_respects_project_manager_filter(self):
+        class FakeWorksheet:
+            def __init__(self, rows):
+                self.rows = rows
+
+            def get_all_values(self):
+                return self.rows
+
+        class FakeSpreadsheet:
+            def __init__(self, worksheets):
+                self.worksheets = worksheets
+
+            def worksheet(self, name):
+                return FakeWorksheet(self.worksheets[name])
+
+        class FakeGspreadClient:
+            def __init__(self, worksheets):
+                self.worksheets = worksheets
+
+            def open_by_key(self, key):
+                return FakeSpreadsheet(self.worksheets)
+
+        def make_row(config, business_name, customer_id, order_id, project_manager, status, date_value):
+            width = max(
+                config.get("business_col", 1),
+                config.get("customer_col", 1),
+                config.get("order_col", 1),
+                config.get("project_manager_col", 1),
+                config.get("status_col", 1),
+                config.get("date_col", 1),
+                config.get("completed_date_col", 0),
+            )
+            row = [""] * width
+            row[config["business_col"] - 1] = business_name
+            row[config["customer_col"] - 1] = customer_id
+            row[config["order_col"] - 1] = order_id
+            row[config["project_manager_col"] - 1] = project_manager
+            row[config["status_col"] - 1] = status
+            row[config["date_col"] - 1] = date_value
+            return row
+
+        worksheets = {}
+        for config in self.app_module.FEATURE_STATUS_SERVICES:
+            width = max(
+                config.get("business_col", 1),
+                config.get("customer_col", 1),
+                config.get("order_col", 1),
+                config.get("project_manager_col", 1),
+                config.get("status_col", 1),
+                config.get("date_col", 1),
+                config.get("completed_date_col", 0),
+            )
+            header = [f"col{i}" for i in range(1, width + 1)]
+            date_value = "05/07/2026" if config.get("date_order") == "dmy" else "07/05/2026"
+            rows = [header]
+            if config["key"] in {"sms", "bot"}:
+                rows.append(make_row(config, f"Match {config['key']}", "514684125", f"ORD-{config['key']}", "מעין כהן", "בוצע", date_value))
+            rows.append(make_row(config, f"Other {config['key']}", "999999999", f"OTHER-{config['key']}", "נויה נריה", "ממתין", date_value))
+            worksheets[config["sheet"]] = rows
+
+        self.app_module.get_gspread_client = lambda: FakeGspreadClient(worksheets)
+
+        response = self.client.get("/features-status-export?month=2026-07&query_type=project_manager&query=מעין כהן&format=csv")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.mimetype, "text/csv")
+        self.assertIn("features-status-2026-07.csv", response.headers["Content-Disposition"])
+        payload = response.data.decode("utf-8-sig")
+        self.assertIn("Match sms", payload)
+        self.assertIn("Match bot", payload)
+        self.assertIn("מעין כהן", payload)
+        self.assertNotIn("Other sms", payload)
+        self.assertNotIn("Other bot", payload)
+
+    def test_features_status_pdf_export_downloads_attachment(self):
+        class FakeWorksheet:
+            def __init__(self, rows):
+                self.rows = rows
+
+            def get_all_values(self):
+                return self.rows
+
+        class FakeSpreadsheet:
+            def __init__(self, worksheets):
+                self.worksheets = worksheets
+
+            def worksheet(self, name):
+                return FakeWorksheet(self.worksheets[name])
+
+        class FakeGspreadClient:
+            def __init__(self, worksheets):
+                self.worksheets = worksheets
+
+            def open_by_key(self, key):
+                return FakeSpreadsheet(self.worksheets)
+
+        def make_row(config, business_name, customer_id, order_id, project_manager, status, date_value):
+            width = max(
+                config.get("business_col", 1),
+                config.get("customer_col", 1),
+                config.get("order_col", 1),
+                config.get("project_manager_col", 1),
+                config.get("status_col", 1),
+                config.get("date_col", 1),
+                config.get("completed_date_col", 0),
+            )
+            row = [""] * width
+            row[config["business_col"] - 1] = business_name
+            row[config["customer_col"] - 1] = customer_id
+            row[config["order_col"] - 1] = order_id
+            row[config["project_manager_col"] - 1] = project_manager
+            row[config["status_col"] - 1] = status
+            row[config["date_col"] - 1] = date_value
+            return row
+
+        worksheets = {}
+        for config in self.app_module.FEATURE_STATUS_SERVICES:
+            width = max(
+                config.get("business_col", 1),
+                config.get("customer_col", 1),
+                config.get("order_col", 1),
+                config.get("project_manager_col", 1),
+                config.get("status_col", 1),
+                config.get("date_col", 1),
+                config.get("completed_date_col", 0),
+            )
+            header = [f"col{i}" for i in range(1, width + 1)]
+            date_value = "05/07/2026" if config.get("date_order") == "dmy" else "07/05/2026"
+            worksheets[config["sheet"]] = [
+                header,
+                make_row(config, f"PDF {config['key']}", "514684125", f"PDF-{config['key']}", "מעין כהן", "בוצע", date_value),
+            ]
+
+        self.app_module.get_gspread_client = lambda: FakeGspreadClient(worksheets)
+
+        response = self.client.get("/features-status-export?month=2026-07&query_type=project_manager&query=מעין כהן&format=pdf")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.mimetype, "application/pdf")
+        self.assertTrue(response.headers["Content-Disposition"].startswith("attachment;"))
+        self.assertIn("features-status-2026-07.pdf", response.headers["Content-Disposition"])
+        self.assertTrue(response.data.startswith(b"%PDF"))
+
     def test_recording_storage_data_excludes_not_interested_customers(self):
         class FakeWorksheet:
             def __init__(self, rows):
