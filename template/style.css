@@ -31,6 +31,9 @@ display:flex;
 flex-direction:column;
 gap:12px;
 width:min(460px, calc(100vw - 32px));
+max-height:calc(100vh - 56px);
+overflow-y:auto;
+padding-right:4px;
 z-index:2500;
 pointer-events:none;
 }
@@ -79,6 +82,70 @@ font-size:14px;
 line-height:1.6;
 white-space:pre-wrap;
 word-break:break-word;
+}
+
+.start-create-summary{
+display:flex;
+flex-direction:column;
+gap:12px;
+}
+
+.start-create-headline{
+display:flex;
+flex-direction:column;
+gap:6px;
+padding:10px 12px;
+border-radius:12px;
+background:rgba(255,255,255,.08);
+border:1px solid rgba(255,255,255,.12);
+}
+
+.start-create-headline-line{
+font-weight:700;
+}
+
+.start-create-customer-list{
+display:flex;
+flex-direction:column;
+gap:8px;
+}
+
+.start-create-customer-row{
+display:flex;
+align-items:center;
+justify-content:space-between;
+flex-wrap:wrap;
+gap:10px;
+padding:10px 12px;
+border-radius:12px;
+background:rgba(255,255,255,.06);
+border:1px solid rgba(255,255,255,.1);
+}
+
+.start-create-customer-main{
+display:flex;
+flex-direction:column;
+gap:2px;
+min-width:0;
+}
+
+.start-create-customer-domain{
+font-weight:800;
+font-size:14px;
+}
+
+.start-create-customer-number{
+font-size:13px;
+color:rgba(246,242,233,.88);
+}
+
+.app-notice-inline-copy{
+flex:none;
+}
+
+.start-create-steps{
+padding-top:4px;
+border-top:1px solid rgba(255,255,255,.12);
 }
 
 .app-notice-actions{

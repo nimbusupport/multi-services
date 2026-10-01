@@ -15,10 +15,28 @@ const FEATURE_STATUS_SERVICES = [
   { key: 'recording_storage', label: 'איחסון הקלטות', sheet: RECORDING_STORAGE_SHEET_NAME, statusCol: 8 },
 ];
 
+const FIREBERRY_API_BASE_URL = 'https://api.fireberry.com/api';
+const FIREBERRY_ORDER_OBJECT_TYPE = 13;
+const FIREBERRY_TOKEN_PROPERTY = 'FIREBERRY_TOKEN';
+const FIREBERRY_SMS_ORDER_FIELD_PROPERTY = 'FIREBERRY_SMS_ORDER_FIELD';
+const FIREBERRY_SMS_ACTIVE_STATUS_NAME_PROPERTY = 'FIREBERRY_SMS_ACTIVE_STATUS_NAME';
+const FIREBERRY_SMS_ACTIVE_STATUS_CODE_PROPERTY = 'FIREBERRY_SMS_ACTIVE_STATUS_CODE';
+const FIREBERRY_SMS_ORDER_FIELD_CANDIDATES = ['ordernumber', 'name'];
+const FIREBERRY_SMS_ACTIVE_STATUS_NAME = 'לקוח פעיל';
+
+const SMS_ORDER_NUMBER_COL = 5; // E
+const SMS_ORDER_DATE_COL = 7; // G
+const SMS_INSTALLED_MARKER_COL = 11; // K
+const SMS_INSTALLED_MARKER_VALUE = 'לקוח הותקן';
+
 function normalizeCustomerId(value) {
   const digitsOnly = String(value || '').replace(/\D/g, '');
   if (!digitsOnly) return '';
   return digitsOnly.replace(/^0+/, '') || digitsOnly;
+}
+
+function normalizeTextCompare_(value) {
+  return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
 }
 
 function collapseFeatureStatusEntries(entries) {
@@ -114,6 +132,258 @@ function lookupFeatureStatusByCustomerId(customerId) {
   };
 }
 
+function getFireberrySmsSyncConfig_() {
+  const props = PropertiesService.getScriptProperties();
+  const token = String(props.getProperty(FIREBERRY_TOKEN_PROPERTY) || '').trim();
+  const configuredOrderField = String(props.getProperty(FIREBERRY_SMS_ORDER_FIELD_PROPERTY) || '').trim();
+  const configuredActiveStatusName = String(props.getProperty(FIREBERRY_SMS_ACTIVE_STATUS_NAME_PROPERTY) || '').trim();
+  const configuredActiveStatusCode = String(props.getProperty(FIREBERRY_SMS_ACTIVE_STATUS_CODE_PROPERTY) || '').trim();
+
+  return {
+    token: token,
+    objectType: FIREBERRY_ORDER_OBJECT_TYPE,
+    orderFields: configuredOrderField ? [configuredOrderField] : FIREBERRY_SMS_ORDER_FIELD_CANDIDATES.slice(),
+    activeStatusName: configuredActiveStatusName || FIREBERRY_SMS_ACTIVE_STATUS_NAME,
+    activeStatusCode: configuredActiveStatusCode,
+  };
+}
+
+function parseSheetDate_(value) {
+  if (value instanceof Date && !isNaN(value.getTime())) {
+    return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+  }
+
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+
+  const isoDate = new Date(raw);
+  if (!isNaN(isoDate.getTime())) {
+    return new Date(isoDate.getFullYear(), isoDate.getMonth(), isoDate.getDate());
+  }
+
+  const datePart = raw.split(' ')[0];
+  const parts = datePart.split(/[./-]/);
+  if (parts.length !== 3) return null;
+
+  const first = parseInt(parts[0], 10);
+  const second = parseInt(parts[1], 10);
+  let year = parseInt(parts[2], 10);
+  if (!first || !second || !year) return null;
+  if (year < 100) year += 2000;
+
+  let day = first;
+  let month = second;
+  if (first <= 12 && second > 12) {
+    month = first;
+    day = second;
+  }
+
+  const parsed = new Date(year, month - 1, day);
+  if (isNaN(parsed.getTime())) return null;
+  return parsed;
+}
+
+function getStartOfCurrentMonth_() {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), 1);
+}
+
+function buildFireberrySmsQueryPayload_(fieldName, orderNumber, objectType) {
+  return {
+    objectType: objectType,
+    fields: [
+      { name: fieldName },
+      { name: 'statuscode' },
+    ],
+    filter: [
+      {
+        type: 'AND',
+        conditions: [
+          {
+            fieldName: fieldName,
+            operator: 'eq',
+            value: String(orderNumber),
+          },
+        ],
+      },
+    ],
+    pageSize: 10,
+    pageNumber: 1,
+  };
+}
+
+function queryFireberryOrdersByField_(fieldName, orderNumber, config) {
+  const response = UrlFetchApp.fetch(`${FIREBERRY_API_BASE_URL}/v3/query`, {
+    method: 'post',
+    contentType: 'application/json',
+    muteHttpExceptions: true,
+    headers: {
+      tokenid: config.token,
+      accept: 'application/json',
+    },
+    payload: JSON.stringify(buildFireberrySmsQueryPayload_(fieldName, orderNumber, config.objectType)),
+  });
+
+  const statusCode = response.getResponseCode();
+  const bodyText = response.getContentText() || '';
+  let body = {};
+  try {
+    body = JSON.parse(bodyText);
+  } catch (err) {
+    body = {};
+  }
+
+  if (statusCode >= 200 && statusCode < 300) {
+    return {
+      invalidField: false,
+      records: Array.isArray(body.data) ? body.data : [],
+    };
+  }
+
+  const message = String(body.message || body.Message || body.error || bodyText || '').trim();
+  if (statusCode === 400 && /invalid field/i.test(message)) {
+    return {
+      invalidField: true,
+      records: [],
+    };
+  }
+
+  throw new Error(`Fireberry query failed for field ${fieldName}: ${statusCode} ${message}`);
+}
+
+function findFireberryOrderByNumber_(orderNumber, config) {
+  let invalidFieldCount = 0;
+
+  for (let i = 0; i < config.orderFields.length; i += 1) {
+    const fieldName = config.orderFields[i];
+    const result = queryFireberryOrdersByField_(fieldName, orderNumber, config);
+    if (result.invalidField) {
+      invalidFieldCount += 1;
+      continue;
+    }
+
+    if (result.records.length) {
+      PropertiesService.getScriptProperties().setProperty(FIREBERRY_SMS_ORDER_FIELD_PROPERTY, fieldName);
+      return {
+        fieldName: fieldName,
+        records: result.records,
+      };
+    }
+  }
+
+  if (invalidFieldCount === config.orderFields.length) {
+    throw new Error('לא נמצא שדה תקין למספר הזמנה ב-Fireberry. יש להגדיר Script Property בשם FIREBERRY_SMS_ORDER_FIELD.');
+  }
+
+  return null;
+}
+
+function isFireberryRecordActive_(record, config) {
+  const statusName = normalizeTextCompare_(record && record.statuscodename);
+  const expectedStatusName = normalizeTextCompare_(config.activeStatusName);
+  if (expectedStatusName && statusName === expectedStatusName) {
+    return true;
+  }
+
+  const expectedStatusCode = String(config.activeStatusCode || '').trim();
+  const statusCode = String(record && record.statuscode || '').trim();
+  if (expectedStatusCode && statusCode === expectedStatusCode) {
+    return true;
+  }
+
+  return false;
+}
+
+function syncSmsInstalledCustomersFromFireberry() {
+  const config = getFireberrySmsSyncConfig_();
+  if (!config.token) {
+    throw new Error('חסר Fireberry token. יש להגדיר Script Property בשם FIREBERRY_TOKEN.');
+  }
+
+  const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = spreadsheet.getSheetByName(SHEET_NAME);
+  if (!sheet) {
+    throw new Error('גיליון SMS לא נמצא.');
+  }
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow <= 1) {
+    return { ok: true, scanned: 0, updated: 0, skipped: 0 };
+  }
+
+  const startOfMonth = getStartOfCurrentMonth_();
+  const numRows = lastRow - 1;
+  const lastCol = Math.max(SMS_INSTALLED_MARKER_COL, SMS_ORDER_DATE_COL, SMS_ORDER_NUMBER_COL);
+  const values = sheet.getRange(2, 1, numRows, lastCol).getValues();
+  const installedValues = sheet.getRange(2, SMS_INSTALLED_MARKER_COL, numRows, 1).getValues();
+
+  const pendingRows = [];
+  const uniqueOrderNumbers = {};
+  let skippedRows = 0;
+
+  for (let index = 0; index < values.length; index += 1) {
+    const row = values[index];
+    const installedMarker = String(installedValues[index][0] || '').trim();
+    if (installedMarker) {
+      skippedRows += 1;
+      continue;
+    }
+
+    const orderDate = parseSheetDate_(row[SMS_ORDER_DATE_COL - 1]);
+    if (!orderDate || orderDate < startOfMonth) {
+      skippedRows += 1;
+      continue;
+    }
+
+    const orderNumber = String(row[SMS_ORDER_NUMBER_COL - 1] || '').trim();
+    if (!orderNumber) {
+      skippedRows += 1;
+      continue;
+    }
+
+    pendingRows.push({
+      rowIndex: index,
+      sheetRow: index + 2,
+      orderNumber: orderNumber,
+    });
+    uniqueOrderNumbers[orderNumber] = true;
+  }
+
+  const orderStatusCache = {};
+  const orderNumbers = Object.keys(uniqueOrderNumbers);
+  orderNumbers.forEach((orderNumber) => {
+    orderStatusCache[orderNumber] = findFireberryOrderByNumber_(orderNumber, config);
+  });
+
+  let updatedRows = 0;
+  pendingRows.forEach((entry) => {
+    const lookupResult = orderStatusCache[entry.orderNumber];
+    if (!lookupResult || !lookupResult.records || !lookupResult.records.length) {
+      return;
+    }
+
+    const hasActiveRecord = lookupResult.records.some((record) => isFireberryRecordActive_(record, config));
+    if (!hasActiveRecord) {
+      return;
+    }
+
+    installedValues[entry.rowIndex][0] = SMS_INSTALLED_MARKER_VALUE;
+    updatedRows += 1;
+  });
+
+  if (updatedRows > 0) {
+    sheet.getRange(2, SMS_INSTALLED_MARKER_COL, numRows, 1).setValues(installedValues);
+  }
+
+  return {
+    ok: true,
+    scanned: pendingRows.length,
+    updated: updatedRows,
+    skipped: skippedRows,
+    checked_orders: orderNumbers.length,
+  };
+}
+
 function outputJson(payload) {
   return ContentService
     .createTextOutput(JSON.stringify(payload))
@@ -144,4 +414,3 @@ function doGet(e) {
     return outputJson(payload);
   }
 }
-

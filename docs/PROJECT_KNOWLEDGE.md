@@ -55,3 +55,8 @@ Queue pages should show this empty state when there are no waiting customers:
 
 The side navigation is shared and should stay visually consistent across all pages. Recordings uses the same nav direction and empty-state behavior as the queue pages.
 
+## ToDoFeatures Memory
+
+- Persistent memory for postponed user-management and scoped-access work: `docs/ToDoFeatures.md`
+- Draft Supabase schema for that work: `docs/supabase_todo_features_users.sql`
+

@@ -32,8 +32,12 @@ function showAppNotice(message, type = "info", timeout = 30000){
     typeof timeout === "number"
       ? { timeout }
       : (timeout && typeof timeout === "object" ? timeout : {});
+  const shouldAutoClose = normalizedOptions.timeout !== null && normalizedOptions.timeout !== false;
   const noticeTimeout = Number.isFinite(normalizedOptions.timeout) ? normalizedOptions.timeout : 30000;
   const actions = Array.isArray(normalizedOptions.actions) ? normalizedOptions.actions : [];
+  const title = normalizedOptions.title;
+  const messageHtml = normalizedOptions.messageHtml;
+  const onRender = typeof normalizedOptions.onRender === "function" ? normalizedOptions.onRender : null;
 
   const notice = document.createElement("section");
   notice.className = `app-notice is-${type}`;
@@ -56,8 +60,12 @@ function showAppNotice(message, type = "info", timeout = 30000){
 
   notice.innerHTML = `
     <div class="app-notice-body">
-      <p class="app-notice-title">${titleByType[type] || titleByType.info}</p>
-      <p class="app-notice-message">${escapeHtml(String(message ?? ""))}</p>
+      <p class="app-notice-title">${escapeHtml(String(title || titleByType[type] || titleByType.info))}</p>
+      ${
+        messageHtml
+          ? `<div class="app-notice-message">${messageHtml}</div>`
+          : `<p class="app-notice-message">${escapeHtml(String(message ?? ""))}</p>`
+      }
       ${actions.length ? '<div class="app-notice-actions"></div>' : ""}
     </div>
     <button class="app-notice-close app-notice-endmark" type="button" aria-label="${endLabelByType[type] || endLabelByType.info}">${endSymbolByType[type] || endSymbolByType.info}</button>
@@ -86,7 +94,10 @@ function showAppNotice(message, type = "info", timeout = 30000){
     });
   }
   region.appendChild(notice);
-  window.setTimeout(close, noticeTimeout);
+  onRender?.(notice);
+  if(shouldAutoClose && noticeTimeout > 0){
+    window.setTimeout(close, noticeTimeout);
+  }
 }
 
 function showAppSuccess(message){
@@ -453,11 +464,46 @@ function buildStartCreateHeader(selected){
   }).join("\n");
 }
 
+function buildStartCreateNoticeHtml(selected, stepResults){
+  const headlineHtml = selected.map(item => {
+    const domain = (item.domain || "-").trim() || "-";
+    const numberCgr = (item.numbercgr || "-").trim() || "-";
+    return `<div class="start-create-headline-line">${escapeHtml(`Create Ring Group 410 in Domain ${domain} Add NumberCGRT ${numberCgr}`)}</div>`;
+  }).join("");
+
+  const customersHtml = selected.map(item => {
+    const domain = (item.domain || "-").trim() || "-";
+    const numberCgr = (item.numbercgr || "-").trim() || "-";
+    return `
+      <div class="start-create-customer-row">
+        <div class="start-create-customer-main">
+          <div class="start-create-customer-domain">Domain: ${escapeHtml(domain)}</div>
+          <div class="start-create-customer-number">NumberCGRT: ${escapeHtml(numberCgr)}</div>
+        </div>
+        <button class="app-notice-action app-notice-inline-copy" type="button" data-copy-value="${escapeHtml(numberCgr)}">Copy</button>
+      </div>
+    `;
+  }).join("");
+
+  const stepsText = Array.isArray(stepResults) ? stepResults.filter(Boolean).join("\n\n") : "";
+  const stepsHtml = stepsText
+    ? `<div class="start-create-steps">${escapeHtml(stepsText)}</div>`
+    : "";
+
+  return `
+    <div class="start-create-summary">
+      <div class="start-create-headline">${headlineHtml}</div>
+      <div class="start-create-customer-list">${customersHtml}</div>
+      ${stepsHtml}
+    </div>
+  `;
+}
+
 async function copyTextToClipboard(text){
   await navigator.clipboard.writeText(String(text ?? ""));
 }
 
-function showStartCreateNotice(message, type, selected){
+function showStartCreateNotice(message, type, selected, stepResults = []){
   const numberCgrValues = collectSelectedNumberCgrValues(selected);
   const actions = [];
 
@@ -479,12 +525,36 @@ function showStartCreateNotice(message, type, selected){
   });
 
   showAppNotice(message, type, {
-    timeout: 60000,
-    actions
+    timeout: false,
+    actions,
+    title: "Create Ring Group 410",
+    messageHtml: buildStartCreateNoticeHtml(selected, stepResults),
+    onRender: (notice) => {
+      notice.querySelectorAll("[data-copy-value]").forEach(button => {
+        button.addEventListener("click", async () => {
+          const value = button.getAttribute("data-copy-value") || "";
+          if(!value){
+            return;
+          }
+          await copyTextToClipboard(value);
+          showAppSuccess("NumberCGRT copied");
+        });
+      });
+    }
   });
 }
 
-function showCustomerFlowNotice(message, type, customers){
+function buildCustomerNoticeTitle(customer){
+  const name = String(customer?.name || "").trim();
+  const domain = String(customer?.domain || "").trim();
+
+  if(name && domain){
+    return `${name} - ${domain}`;
+  }
+  return name || domain || "Customer";
+}
+
+function showCustomerFlowNotice(message, type, customers, options = {}){
   const numberCgrValues = (Array.isArray(customers) ? customers : [])
     .map(customer => (customer?.numbercgr || "").trim())
     .filter(Boolean);
@@ -508,8 +578,9 @@ function showCustomerFlowNotice(message, type, customers){
   });
 
   showAppNotice(message, type, {
-    timeout: 60000,
-    actions
+    timeout: false,
+    actions,
+    title: options.title
   });
 }
 
@@ -519,6 +590,23 @@ function buildCustomerFlowHeader(customers){
     const numberCgr = (customer?.numbercgr || "-").trim() || "-";
     return `Create Ring Group 410 in Domain ${domain} Add NumberCGRT ${numberCgr}`;
   }).join("\n");
+}
+
+function buildCustomerFlowNoticeMessage(customer, stepResults){
+  const name = String(customer?.name || "").trim() || "-";
+  const domain = String(customer?.domain || "").trim() || "-";
+  const did = String(customer?.did || "").trim() || "-";
+  const numberCgr = String(customer?.numbercgr || "").trim() || "-";
+  const formattedSteps = Array.isArray(stepResults) ? stepResults.filter(Boolean).join("\n\n") : "";
+
+  return [
+    `Customer: ${name}`,
+    `Domain: ${domain}`,
+    `DID: ${did}`,
+    `NumberCGRT: ${numberCgr}`,
+    formattedSteps ? "" : null,
+    formattedSteps || null
+  ].filter(part => part !== null).join("\n");
 }
 
 function renderManualNumberCgr(){
@@ -1119,14 +1207,14 @@ async function createSMS(){
   
   }
 
-async function runMarkDoneStep(){
-  const selected = getSelected();
+async function runMarkDoneStepForCustomers(customers, options = {}){
+  const selected = Array.isArray(customers) ? customers.filter(Boolean) : [];
 
   if(selected.length === 0){
     return { ok: false, message: "לא נבחרו לקוחות." };
   }
 
-  const customers = selected.map(x => ({
+  const payloadCustomers = selected.map(x => ({
     sheet_row: x.sheet_row,
     name: x.name || "",
     domain: (x.domain || "").trim(),
@@ -1138,7 +1226,7 @@ async function runMarkDoneStep(){
     const res = await fetch("/mark-done", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ customers })
+      body: JSON.stringify({ customers: payloadCustomers })
     });
 
     const json = await readJsonResponse(res);
@@ -1150,7 +1238,9 @@ async function runMarkDoneStep(){
       };
     }
 
-    await loadData();
+    if(options.reloadAfter !== false){
+      await loadData();
+    }
 
     return {
       ok: true,
@@ -1162,6 +1252,10 @@ async function runMarkDoneStep(){
       message: `שגיאה בעדכון סטטוס: ${formatErrorMessage(e)}`
     };
   }
+}
+
+async function runMarkDoneStep(){
+  return runMarkDoneStepForCustomers(getSelected());
 }
 
 async function runInforuMailStep(){
@@ -1183,12 +1277,21 @@ async function runInforuMailStep(){
 
   dids = [...new Set(dids)];
   const skippedDidCount = selected.length - dids.length;
+  const newDids = dids.filter(did => !inforuSentNumbers.has(did));
+
+  if(newDids.length === 0){
+    return {
+      ok: true,
+      skipped: true,
+      message: "Inforu Mail skipped: DID already logged"
+    };
+  }
 
   try{
     const res = await fetch("/send-inforu-mail", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ dids })
+      body: JSON.stringify({ dids: newDids })
     });
     const json = await readJsonResponse(res);
 
@@ -1210,10 +1313,13 @@ async function runInforuMailStep(){
       await openInforuLog(true);
     }
 
-    const added = Number(json.added || sentNumbers.length || dids.length);
+    const added = Number(json.added || sentNumbers.length || newDids.length);
     const messageParts = [`Mail sent to Inforu (${added})`];
     if(skippedDidCount > 0){
       messageParts.push(`Skipped non-numeric DID: ${skippedDidCount}`);
+    }
+    if(newDids.length !== dids.length){
+      messageParts.push(`Skipped already logged DID: ${dids.length - newDids.length}`);
     }
     if(json.warning){
       messageParts.push(`Warning: ${json.warning}`);
@@ -1252,12 +1358,21 @@ async function runInforuMailStepForCustomers(customers){
 
   dids = [...new Set(dids)];
   const skippedDidCount = normalizedCustomers.length - dids.length;
+  const newDids = dids.filter(did => !inforuSentNumbers.has(did));
+
+  if(newDids.length === 0){
+    return {
+      ok: true,
+      skipped: true,
+      message: "Inforu Mail skipped: DID already logged"
+    };
+  }
 
   try{
     const res = await fetch("/send-inforu-mail", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ dids })
+      body: JSON.stringify({ dids: newDids })
     });
     const json = await readJsonResponse(res);
 
@@ -1270,11 +1385,22 @@ async function runInforuMailStepForCustomers(customers){
 
     const sentNumbers = Array.isArray(json.numbers) ? json.numbers : [];
     sentNumbers.forEach(number => inforuSentNumbers.add(normalizeDidValue(number)));
+    refreshAllInforuSentFlags();
+    inforuLogEntries = [];
 
-    const added = Number(json.added || sentNumbers.length || dids.length);
+    renderTable();
+
+    if(document.getElementById("inforuLogCard")?.style.display !== "none"){
+      await openInforuLog(true);
+    }
+
+    const added = Number(json.added || sentNumbers.length || newDids.length);
     const messageParts = [`Mail sent to Inforu (${added})`];
     if(skippedDidCount > 0){
       messageParts.push(`Skipped non-numeric DID: ${skippedDidCount}`);
+    }
+    if(newDids.length !== dids.length){
+      messageParts.push(`Skipped already logged DID: ${dids.length - newDids.length}`);
     }
     if(json.warning){
       messageParts.push(`Warning: ${json.warning}`);
@@ -1481,7 +1607,8 @@ async function startCreateFlow(){
     showStartCreateNotice(
       `${buildStartCreateHeader(selected)}\n\n${stepResults.join("\n\n")}`,
       "error",
-      selected
+      selected,
+      stepResults
     );
     return;
   }
@@ -1492,7 +1619,8 @@ async function startCreateFlow(){
     showStartCreateNotice(
       `${buildStartCreateHeader(selected)}\n\n${stepResults.join("\n\n")}`,
       "error",
-      selected
+      selected,
+      stepResults
     );
     return;
   }
@@ -1503,7 +1631,8 @@ async function startCreateFlow(){
   showStartCreateNotice(
     `${buildStartCreateHeader(selected)}\n\n${stepResults.join("\n\n")}`,
     markDoneResult.ok ? "success" : "error",
-    selected
+    selected,
+    stepResults
   );
 }
 
@@ -1540,9 +1669,10 @@ async function startManualCreateFlow(){
   stepResults.push(`1. Inforu Mail\n${inforuResult.message}`);
   if(!inforuResult.ok){
     showCustomerFlowNotice(
-      `${buildCustomerFlowHeader(customers)}\n\n${stepResults.join("\n\n")}`,
+      buildCustomerFlowNoticeMessage(customer, stepResults),
       "error",
-      customers
+      customers,
+      { title: buildCustomerNoticeTitle(customer) }
     );
     return;
   }
@@ -1552,9 +1682,10 @@ async function startManualCreateFlow(){
 
   if(!createResult.ok){
     showCustomerFlowNotice(
-      `${buildCustomerFlowHeader(customers)}\n\n${stepResults.join("\n\n")}`,
+      buildCustomerFlowNoticeMessage(customer, stepResults),
       "error",
-      customers
+      customers,
+      { title: buildCustomerNoticeTitle(customer) }
     );
     return;
   }
@@ -1563,9 +1694,10 @@ async function startManualCreateFlow(){
   stepResults.push(`3. חיפ_סמס\n${reserveResult.message}`);
 
   showCustomerFlowNotice(
-    `${buildCustomerFlowHeader(customers)}\n\n${stepResults.join("\n\n")}`,
+    buildCustomerFlowNoticeMessage(customer, stepResults),
     reserveResult.ok ? "success" : "error",
-    customers
+    customers,
+    { title: buildCustomerNoticeTitle(customer) }
   );
 
   if(createResult.ok && reserveResult.ok){
