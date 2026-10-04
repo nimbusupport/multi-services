@@ -1986,12 +1986,12 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"Set your password", response.data)
 
-    def test_vercel_routes_all_paths_to_app_py(self):
+    def test_vercel_config_keeps_app_py_function_entry(self):
         with open("vercel.json", "r", encoding="utf-8") as handle:
             config = json.load(handle)
 
-        self.assertIn("rewrites", config)
-        self.assertIn({"source": "/(.*)", "destination": "/app.py"}, config["rewrites"])
+        self.assertIn("functions", config)
+        self.assertIn("app.py", config["functions"])
 
     def test_user_without_monthly_report_permission_is_redirected_from_monthly_report(self):
         with self.client.session_transaction() as session:
