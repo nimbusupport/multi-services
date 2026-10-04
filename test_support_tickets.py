@@ -1950,6 +1950,43 @@ class SupportTicketsTestCase(unittest.TestCase):
         normalized = self.app_module.normalize_allowed_pages(["features_report", "features_status"])
         self.assertIn("tickets_monthly_report", normalized)
 
+    def test_admin_without_user_management_role_keeps_admin_access_but_hides_user_management_page(self):
+        pages = self.app_module.allowed_pages_for_role("admin_no_user_management")
+
+        self.assertIn("home", pages)
+        self.assertIn("configuration", pages)
+        self.assertNotIn("user_management", pages)
+
+        with self.client.session_transaction() as session:
+            session["logged_in"] = True
+            session["username"] = "limited-admin@example.com"
+            session["role"] = "admin_no_user_management"
+            session["allowed_pages"] = pages
+
+        home_response = self.client.get("/home", follow_redirects=False)
+        self.assertEqual(home_response.status_code, 200)
+        self.assertNotIn("/user-management".encode("utf-8"), home_response.data)
+
+        blocked_response = self.client.get("/user-management", follow_redirects=False)
+        self.assertEqual(blocked_response.status_code, 302)
+
+    def test_selected_email_provider_honors_explicit_smtp_override(self):
+        original_email_provider = os.environ.get("EMAIL_PROVIDER")
+        original_resend_api_key = os.environ.get("RESEND_API_KEY")
+        try:
+            os.environ["EMAIL_PROVIDER"] = "smtp"
+            os.environ["RESEND_API_KEY"] = "re_test_123"
+            self.assertEqual(self.app_module.selected_email_provider(), "smtp")
+        finally:
+            if original_email_provider is None:
+                os.environ.pop("EMAIL_PROVIDER", None)
+            else:
+                os.environ["EMAIL_PROVIDER"] = original_email_provider
+            if original_resend_api_key is None:
+                os.environ.pop("RESEND_API_KEY", None)
+            else:
+                os.environ["RESEND_API_KEY"] = original_resend_api_key
+
     def test_build_user_invite_link_uses_login_host_when_base_url_missing(self):
         original_support_app_base_url = self.app_module.SUPPORT_APP_BASE_URL
         original_nastia_app_login_url = self.app_module.NASTIA_APP_LOGIN_URL
@@ -4616,13 +4653,14 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertEqual(sent_tickets[0]["details"]["call_number"], "275749117")
 
     def test_extended_assignee_list_is_available(self):
-        self.assertIn("איציק", self.app_module.SUPPORT_USERS)
+        self.assertIn("יצחק.ק", self.app_module.SUPPORT_USERS)
         self.assertIn("זורה", self.app_module.SUPPORT_USERS)
         self.assertIn("מוסטפה.א", self.app_module.SUPPORT_USERS)
         self.assertIn("מוסטפה.ח", self.app_module.SUPPORT_USERS)
         self.assertIn("נסטיה", self.app_module.SUPPORT_USERS)
         self.assertIn(self.app_module.COORDINATION_PENDING_STATUS, self.app_module.PAIS_STATUSES)
         self.assertIn("אין מענה", self.app_module.PAIS_STATUSES)
+        self.assertIn(self.app_module.CANCELLED_TICKET_STATUS, self.app_module.PAIS_STATUSES)
 
     def test_pais_report_filters_by_status_and_date(self):
         tickets = self.app_module.load_support_tickets()
@@ -4688,6 +4726,170 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertEqual(payload["summary"]["total"], 1)
         self.assertEqual(len(payload["tickets"]), 1)
         self.assertEqual(payload["tickets"][0]["details"]["terminal_number"], "2001")
+
+    def test_technician_support_user_choices_canonicalize_legacy_names_without_duplicates(self):
+        users = self.app_module.technician_support_user_choices([
+            {
+                "assigned_to": "איציק",
+                "details": {"coordinated_worker": "זוהרה"},
+            },
+            {
+                "assigned_to": "יצחק.ק",
+                "details": {"coordinated_worker": "זורה"},
+            },
+        ])
+
+        self.assertEqual(users.count("יצחק.ק"), 1)
+        self.assertEqual(users.count("זורה"), 1)
+        self.assertIn("גולן", users)
+
+    def test_only_admin_or_nastya_can_set_cancelled_status(self):
+        tickets = self.app_module.load_support_tickets()
+        tickets.append({
+            "id": 2,
+            "board_slug": "pais",
+            "created_at": "2026-10-04T09:00:00+03:00",
+            "created_at_display": "04/10/2026 09:00",
+            "creator": "Admin",
+            "ticket_type": "שירות",
+            "service_type": "מפעל הפיס",
+            "domain": "",
+            "priority": "Medium",
+            "description": "",
+            "solution": "",
+            "status": "תואם",
+            "assigned_to": "נסטיה",
+            "details": {
+                "terminal_number": "6002",
+                "address": "Scheduled address",
+                "customer_request": "R5",
+                "actions_taken": "",
+                "coordinated_worker": "גולן",
+                "visit_date": "2026-10-10",
+                "visit_hour_from": "09:00",
+                "visit_hour_to": "10:00",
+            },
+            "attachments": [],
+            "updates": [],
+        })
+        self.app_module.save_support_tickets(tickets)
+
+        self.login("eugeni@nimbusip.com")
+        response = self.client.post(
+            "/support-tickets-update",
+            json={
+                "ticket_id": 2,
+                "status": self.app_module.CANCELLED_TICKET_STATUS,
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(response.get_json()["ok"])
+
+    def test_cancelled_status_cannot_replace_done_status(self):
+        tickets = self.app_module.load_support_tickets()
+        tickets.append({
+            "id": 2,
+            "board_slug": "pais",
+            "created_at": "2026-10-04T09:00:00+03:00",
+            "created_at_display": "04/10/2026 09:00",
+            "creator": "Admin",
+            "ticket_type": "שירות",
+            "service_type": "מפעל הפיס",
+            "domain": "",
+            "priority": "Medium",
+            "description": "",
+            "solution": "",
+            "status": "בוצע",
+            "assigned_to": "נסטיה",
+            "details": {
+                "terminal_number": "7002",
+                "address": "Done street 1",
+                "customer_request": "Need visit",
+                "actions_taken": "",
+                "coordinated_worker": "אסף",
+                "visit_date": "2026-10-10",
+                "visit_hour_from": "11:00",
+                "visit_hour_to": "12:00",
+            },
+            "attachments": [],
+            "updates": [],
+        })
+        self.app_module.save_support_tickets(tickets)
+
+        self.login("admin@nimbusip.com")
+        response = self.client.post(
+            "/support-tickets-update",
+            json={
+                "ticket_id": 2,
+                "status": self.app_module.CANCELLED_TICKET_STATUS,
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("סטטוס בוצע", response.get_json()["message"])
+
+    def test_cancelled_status_clears_coordination_and_emails_nastya_and_worker(self):
+        tickets = self.app_module.load_support_tickets()
+        tickets.append({
+            "id": 2,
+            "board_slug": "pais",
+            "created_at": "2026-10-04T09:00:00+03:00",
+            "created_at_display": "04/10/2026 09:00",
+            "creator": "Admin",
+            "ticket_type": "שירות",
+            "service_type": "מפעל הפיס",
+            "domain": "",
+            "priority": "Medium",
+            "description": "",
+            "solution": "",
+            "status": "תואם",
+            "assigned_to": "נסטיה",
+            "details": {
+                "terminal_number": "8899",
+                "address": "Cancel street 5",
+                "customer_request": "Need visit",
+                "actions_taken": "",
+                "coordinated_worker": "אסף",
+                "visit_date": "2026-10-10",
+                "visit_hour_from": "11:00",
+                "visit_hour_to": "12:00",
+            },
+            "attachments": [],
+            "updates": [],
+        })
+        self.app_module.save_support_tickets(tickets)
+
+        sent_to = []
+        def fake_send_plain_email(to_address, subject, body, from_address=None, html_body=None, attachments=None):
+            sent_to.append(to_address)
+
+        self.app_module.send_plain_email = fake_send_plain_email
+
+        self.login("admin@nimbusip.com")
+        response = self.client.post(
+            "/support-tickets-update",
+            json={
+                "ticket_id": 2,
+                "status": self.app_module.CANCELLED_TICKET_STATUS,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["ticket"]["status"], self.app_module.CANCELLED_TICKET_STATUS)
+        self.assertEqual(payload["ticket"]["details"]["coordinated_worker"], "")
+        self.assertEqual(payload["ticket"]["details"]["visit_date"], "")
+        self.assertEqual(payload["ticket"]["details"]["visit_hour_from"], "")
+        self.assertEqual(payload["ticket"]["details"]["visit_hour_to"], "")
+        self.assertTrue(payload["ticket"]["notification_attempted"])
+        self.assertTrue(payload["ticket"]["notification_sent"])
+        self.assertIn("nastya@nimbusip.com", sent_to)
+        self.assertIn("assafh@nimbusip.com", sent_to)
+        self.assertIn("nastya@nimbusip.com", payload["ticket"]["notification_recipients"])
+        self.assertIn("assafh@nimbusip.com", payload["ticket"]["notification_recipients"])
+        self.assertIn("nastya@nimbusip.com", payload["ticket"]["notification_message"])
+        self.assertIn("assafh@nimbusip.com", payload["ticket"]["notification_message"])
 
 if __name__ == "__main__":
     unittest.main()

@@ -13,18 +13,20 @@ let activeFieldReportSignatureTarget = "customer";
 let nastyaBoardFilter = "all";
 
 const AUTO_REFRESH_INTERVAL_MS = 10000;
-const NASTYA_EDITABLE_STATUSES = ["ממתין לתיאום", "תואם", "בוצע", "נכשל"];
-const NASTYA_FINAL_STATUSES = ["בוצע", "נכשל"];
+const CANCELLED_STATUS = "בוטל";
+const TECHNICIAN_FINAL_STATUSES = ["בוצע", "נכשל"];
+const COORDINATION_FINAL_STATUSES = [CANCELLED_STATUS, ...TECHNICIAN_FINAL_STATUSES];
+const NASTYA_EDITABLE_STATUSES = ["ממתין לתיאום", "תואם", ...COORDINATION_FINAL_STATUSES];
 
 const supportTicketsContext = normalizeLegacyHebrewData(window.supportTicketsContext || {});
 const boardSlug = String(supportTicketsContext.boardSlug || "support");
 const boardName = String(supportTicketsContext.boardName || "נימבוס");
 const isAdmin = supportTicketsContext.isAdmin === true || supportTicketsContext.isAdmin === "true";
-const supportUsers = Array.isArray(supportTicketsContext.supportUsers) ? supportTicketsContext.supportUsers : [];
-const technicianUsers = Array.isArray(supportTicketsContext.technicianUsers) ? supportTicketsContext.technicianUsers : [];
+const supportUsers = Array.isArray(supportTicketsContext.supportUsers) ? Array.from(new Set(supportTicketsContext.supportUsers.filter(Boolean))) : [];
+const technicianUsers = Array.isArray(supportTicketsContext.technicianUsers) ? Array.from(new Set(supportTicketsContext.technicianUsers.filter(Boolean))) : [];
 const currentSupportUser = String(supportTicketsContext.currentSupportUser || "");
 const supportStatuses = Array.isArray(supportTicketsContext.supportStatuses) ? supportTicketsContext.supportStatuses : ["Waiting", "Done"];
-const paisStatuses = Array.isArray(supportTicketsContext.paisStatuses) ? supportTicketsContext.paisStatuses : ["ממתין", "ממתין לתיאום", "תואם", "אין מענה", "בוצע", "נכשל"];
+const paisStatuses = Array.isArray(supportTicketsContext.paisStatuses) ? supportTicketsContext.paisStatuses : ["ממתין", "ממתין לתיאום", "תואם", "אין מענה", CANCELLED_STATUS, "בוצע", "נכשל"];
 const pageMode = String(supportTicketsContext.pageMode || "board");
 const ticketQueue = String(supportTicketsContext.ticketQueue || "");
 const ticketOperatorMode = String(supportTicketsContext.ticketOperatorMode || "default");
@@ -70,6 +72,25 @@ function isHotTicket(ticket) {
 
 function normalizePendingStatus(status) {
   return String(status || "") === "ממתין לתאום" ? "ממתין לתיאום" : String(status || "");
+}
+
+function canSetCancelledStatus() {
+  return isAdmin || currentSupportUser === "נסטיה";
+}
+
+function availablePaisStatusesForCurrentUser(currentStatus = "") {
+  const normalizedCurrentStatus = normalizePendingStatus(currentStatus);
+  const statuses = canSetCancelledStatus()
+    ? paisStatuses
+    : paisStatuses.filter((status) => normalizePendingStatus(status) !== CANCELLED_STATUS);
+  if (normalizedCurrentStatus && !statuses.includes(normalizedCurrentStatus)) {
+    return [normalizedCurrentStatus, ...statuses];
+  }
+  return statuses;
+}
+
+function coordinationFinalStatusesForCurrentUser() {
+  return canSetCancelledStatus() ? COORDINATION_FINAL_STATUSES : TECHNICIAN_FINAL_STATUSES;
 }
 
 function canAssignedTechnicianEditTicket(ticket) {
@@ -452,10 +473,10 @@ function coordinationMetaMarkup(ticket) {
 function applyReportQuickFilter(tickets) {
   if (!Array.isArray(tickets)) return [];
   if (reportQuickFilter === "done") {
-    return tickets.filter((ticket) => ["בוצע", "נכשל"].includes(normalizePendingStatus(ticket.status)));
+    return tickets.filter((ticket) => COORDINATION_FINAL_STATUSES.includes(normalizePendingStatus(ticket.status)));
   }
   if (reportQuickFilter === "open") {
-    return tickets.filter((ticket) => !["בוצע", "נכשל"].includes(normalizePendingStatus(ticket.status)));
+    return tickets.filter((ticket) => !COORDINATION_FINAL_STATUSES.includes(normalizePendingStatus(ticket.status)));
   }
   if (reportQuickFilter === "coordination") {
     return tickets.filter((ticket) => normalizePendingStatus(ticket.status) === "ממתין לתיאום");
@@ -604,7 +625,13 @@ function renderTickets(tickets, users) {
   });
   document.querySelectorAll(".status-select").forEach((select) => {
     if (select.disabled) return;
-    select.addEventListener("change", () => updateTicket(select.dataset.ticketId, { status: select.value }));
+    select.addEventListener("change", () => {
+      if (!confirmCancelledStatusChange(ticket, select.value)) {
+        select.value = ticket.status || "";
+        return;
+      }
+      updateTicket(select.dataset.ticketId, { status: select.value });
+    });
   });
   document.querySelectorAll(".ticket-attachment-indicator").forEach((button) => {
     button.addEventListener("click", (event) => {
@@ -981,7 +1008,7 @@ function renderPaisDetailSections(ticket) {
   const showCoordinatorStatus = isCoordinatorView && NASTYA_EDITABLE_STATUSES.includes(ticket.status);
   const coordinatorStatusOptions = [
     { value: ticket.status, label: displayTicketStatus(ticket) },
-    ...NASTYA_FINAL_STATUSES
+    ...coordinationFinalStatusesForCurrentUser()
       .filter((status) => status !== ticket.status)
       .map((status) => ({ value: status, label: status })),
   ]
@@ -1026,7 +1053,7 @@ function renderPaisDetailSections(ticket) {
     <section class="detail-description detail-edit-card">
       <h3>סטטוס</h3>
       <select id="detail-status-select">
-        ${paisStatuses.map((status) => `<option value="${escapeHtml(status)}" ${ticket.status === status ? "selected" : ""}>${escapeHtml(status)}</option>`).join("")}
+        ${availablePaisStatusesForCurrentUser(ticket.status).map((status) => `<option value="${escapeHtml(status)}" ${ticket.status === status ? "selected" : ""}>${escapeHtml(status)}</option>`).join("")}
       </select>
     </section>` : ""}
     ${showCoordination ? `
@@ -1114,7 +1141,7 @@ async function savePaisDetail(ticketId) {
   if (shouldMarkCoordinated && (!selectedStatus || selectedStatus === "ממתין לתיאום" || selectedStatus === "תואם")) {
     nextStatus = "תואם";
   }
-  const isFinalStatus = NASTYA_FINAL_STATUSES.includes(selectedStatus);
+  const isFinalStatus = COORDINATION_FINAL_STATUSES.includes(selectedStatus);
 
   const payload = {
     ticket_id: ticketId,
@@ -1182,7 +1209,7 @@ async function savePaisDetail(ticketId) {
     if (data?.ticket?.notification_error) {
       openNotificationErrorModal(data.ticket.notification_error);
     } else if (data?.ticket?.notification_sent === true) {
-      showSendSuccessToast();
+      showSendSuccessToast(data?.ticket?.notification_message || "מייל נשלח");
     } else if (payload.send_nastia_notification === true) {
       openNotificationErrorModal("הסטטוס עודכן אבל טריגר המייל לא הופעל.");
     }
@@ -1323,9 +1350,10 @@ function closeNotificationErrorModal() {
   modal.setAttribute("aria-hidden", "true");
 }
 
-function showSendSuccessToast() {
+function showSendSuccessToast(message = "מייל נשלח") {
   const toast = document.getElementById("send-success-toast");
   if (!toast) return;
+  toast.textContent = message || "מייל נשלח";
   toast.classList.add("visible");
   toast.setAttribute("aria-hidden", "false");
   if (sendSuccessToastTimer) {
@@ -1599,7 +1627,7 @@ async function updateTicket(ticketId, changes) {
   if (data?.ticket?.notification_error) {
     openNotificationErrorModal(data.ticket.notification_error);
   } else if (data?.ticket?.notification_sent === true) {
-    showSendSuccessToast();
+    showSendSuccessToast(data?.ticket?.notification_message || "מייל נשלח");
   } else if (payload.send_nastia_notification === true) {
     openNotificationErrorModal("הסטטוס עודכן אבל טריגר המייל לא הופעל.");
   }
@@ -2176,7 +2204,7 @@ async function submitFieldReport(event) {
       await loadTickets();
       openNotificationErrorModal(`הטופס נשמר, אך שליחת המייל נכשלה: ${data.ticket.field_report_error}`);
     } else {
-      showSendSuccessToast();
+      showSendSuccessToast(data?.ticket?.notification_message || "מייל נשלח");
       closeSignatureModal();
       closeFieldReportModal();
       closeTicketDetail();
@@ -2201,17 +2229,17 @@ function statusOptionsForTicket(ticket) {
   const normalizedStatus = normalizePendingStatus(ticket.status);
   if (canAssignedTechnicianEditTicket(ticket)) {
     const normalizedStatus = normalizePendingStatus(ticket.status);
-    const placeholder = NASTYA_FINAL_STATUSES.includes(normalizedStatus)
+    const placeholder = TECHNICIAN_FINAL_STATUSES.includes(normalizedStatus)
       ? ""
       : '<option value="" selected disabled>בחר סטטוס</option>';
-    return `${placeholder}${NASTYA_FINAL_STATUSES.map((status) => `
+    return `${placeholder}${TECHNICIAN_FINAL_STATUSES.map((status) => `
       <option value="${escapeHtml(status)}" ${normalizedStatus === status ? "selected" : ""}>${escapeHtml(status)}</option>
     `).join("")}`;
   }
   if (isCoordinationTicket(ticket) && isNastyaQueuePage && NASTYA_EDITABLE_STATUSES.includes(normalizedStatus)) {
     const options = [
       { value: normalizedStatus, label: displayTicketStatus(ticket) },
-      ...NASTYA_FINAL_STATUSES
+      ...coordinationFinalStatusesForCurrentUser()
         .filter((status) => status !== normalizedStatus)
         .map((status) => ({ value: status, label: status })),
     ];
@@ -2219,7 +2247,7 @@ function statusOptionsForTicket(ticket) {
       <option value="${escapeHtml(value)}" ${normalizedStatus === value ? "selected" : ""}>${escapeHtml(label)}</option>
     `).join("");
   }
-  const options = isCoordinationTicket(ticket) ? paisStatuses : supportStatuses;
+  const options = isCoordinationTicket(ticket) ? availablePaisStatusesForCurrentUser(ticket.status) : supportStatuses;
   return options.map((status) => `
     <option value="${escapeHtml(status)}" ${normalizedStatus === status ? "selected" : ""}>${escapeHtml(status)}</option>
   `).join("");
@@ -2227,6 +2255,19 @@ function statusOptionsForTicket(ticket) {
 
 function canNastyaEditPaisInlineStatus(ticket) {
   return isCoordinationTicket(ticket) && isNastyaQueuePage && NASTYA_EDITABLE_STATUSES.includes(normalizePendingStatus(ticket.status));
+}
+
+function confirmCancelledStatusChange(ticket, nextStatus) {
+  const normalizedNextStatus = normalizePendingStatus(nextStatus);
+  const currentStatus = normalizePendingStatus(ticket?.status);
+  if (normalizedNextStatus !== CANCELLED_STATUS || currentStatus === CANCELLED_STATUS) {
+    return true;
+  }
+  if (currentStatus === "בוצע") {
+    openNotificationErrorModal("לא ניתן להעביר קריאה עם סטטוס בוצע לסטטוס בוטל");
+    return false;
+  }
+  return window.confirm("האם להחליף סטטוס לבוטל?");
 }
 
 function ticketHeadline(ticket) {
@@ -2489,7 +2530,7 @@ function coordinationStatusEditor(ticket) {
   const showCoordinatorStatus = isCoordinatorView && NASTYA_EDITABLE_STATUSES.includes(ticket.status);
   const coordinatorStatusOptions = [
     { value: ticket.status, label: displayTicketStatus(ticket) },
-    ...NASTYA_FINAL_STATUSES
+    ...coordinationFinalStatusesForCurrentUser()
       .filter((status) => status !== ticket.status)
       .map((status) => ({ value: status, label: status })),
   ]
@@ -2510,7 +2551,7 @@ function coordinationStatusEditor(ticket) {
     <section class="detail-description detail-edit-card">
       <h3>סטטוס</h3>
       <select id="detail-status-select">
-        ${paisStatuses.map((status) => `<option value="${escapeHtml(status)}" ${ticket.status === status ? "selected" : ""}>${escapeHtml(status)}</option>`).join("")}
+        ${availablePaisStatusesForCurrentUser(ticket.status).map((status) => `<option value="${escapeHtml(status)}" ${ticket.status === status ? "selected" : ""}>${escapeHtml(status)}</option>`).join("")}
       </select>
     </section>`;
   }
@@ -2787,7 +2828,7 @@ async function savePaisDetail(ticketId) {
   if (shouldMarkCoordinated && (!selectedStatus || selectedStatus === "ממתין לתיאום" || selectedStatus === "תואם")) {
     nextStatus = "תואם";
   }
-  const isFinalStatus = NASTYA_FINAL_STATUSES.includes(selectedStatus);
+  const isFinalStatus = COORDINATION_FINAL_STATUSES.includes(selectedStatus);
   const payload = {
     ticket_id: ticketId,
     source_page_mode: pageMode,
@@ -2898,7 +2939,7 @@ async function savePaisDetail(ticketId) {
     if (data?.ticket?.notification_error) {
       openNotificationErrorModal(data.ticket.notification_error);
     } else if (data?.ticket?.notification_sent === true) {
-      showSendSuccessToast();
+      showSendSuccessToast(data?.ticket?.notification_message || "מייל נשלח");
     } else if (payload.send_nastia_notification === true) {
       openNotificationErrorModal("הסטטוס עודכן אבל טריגר המייל לא הופעל.");
     }
@@ -3027,7 +3068,7 @@ async function saveTicketDetailWithFeedback(ticketId, options = {}) {
   if (!cancelCoordination && shouldMarkCoordinated && (!selectedStatus || selectedStatus === "ממתין לתיאום" || selectedStatus === "תואם")) {
     nextStatus = "תואם";
   }
-  const isFinalStatus = NASTYA_FINAL_STATUSES.includes(selectedStatus);
+  const isFinalStatus = COORDINATION_FINAL_STATUSES.includes(selectedStatus);
   const payload = {
     ticket_id: ticketId,
     source_page_mode: pageMode,
@@ -3274,7 +3315,13 @@ function openTicketDetail(ticketId) {
   }
   if (isCoordinationTicket(ticket)) {
     clearCoordinationValidation();
-    document.getElementById("detail-status-select")?.addEventListener("change", syncPaisDetailStatusFields);
+    const detailStatusSelect = document.getElementById("detail-status-select");
+    detailStatusSelect?.addEventListener("change", () => {
+      if (!confirmCancelledStatusChange(ticket, detailStatusSelect.value)) {
+        detailStatusSelect.value = ticket.status || "";
+      }
+      syncPaisDetailStatusFields();
+    });
     const detailSections = document.getElementById("detail-sections");
     setupServiceModeSelectors(detailSections || document);
     document.getElementById("detail-visit-hour-from")?.addEventListener("change", syncPaisDetailVisitRange);
@@ -3489,7 +3536,7 @@ function renderPaisDetailSections(ticket) {
   const showCoordinatorStatus = isCoordinatorView && NASTYA_EDITABLE_STATUSES.includes(ticket.status);
   const coordinatorStatusOptions = [
     { value: ticket.status, label: displayTicketStatus(ticket) },
-    ...NASTYA_FINAL_STATUSES
+    ...coordinationFinalStatusesForCurrentUser()
       .filter((status) => status !== ticket.status)
       .map((status) => ({ value: status, label: status })),
   ]
@@ -3547,7 +3594,7 @@ function renderPaisDetailSections(ticket) {
     <section class="detail-description detail-edit-card">
       <h3>סטטוס</h3>
       <select id="detail-status-select">
-        ${paisStatuses.map((status) => `<option value="${escapeHtml(status)}" ${ticket.status === status ? "selected" : ""}>${escapeHtml(status)}</option>`).join("")}
+        ${availablePaisStatusesForCurrentUser(ticket.status).map((status) => `<option value="${escapeHtml(status)}" ${ticket.status === status ? "selected" : ""}>${escapeHtml(status)}</option>`).join("")}
       </select>
     </section>` : ""}
     ${showCoordination ? `

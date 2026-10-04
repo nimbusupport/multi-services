@@ -1,4 +1,49 @@
-﻿const PAGE_GROUPS = [
+const form = document.getElementById("user-invite-form");
+const usersTableBody = document.getElementById("users-table-body");
+const inviteMessage = document.getElementById("invite-message");
+const usersMessage = document.getElementById("users-message");
+const refreshUsersButton = document.getElementById("refresh-users");
+const pagesHost = document.getElementById("invite-pages");
+const roleSelect = document.getElementById("invite-role");
+const landingPageSelect = document.getElementById("invite-landing-page");
+const groupSelect = document.getElementById("invite-group-code");
+const accessLevelSelect = document.getElementById("invite-access-level");
+const scopeTypeSelect = document.getElementById("invite-scope-type");
+const scopeValueInput = document.getElementById("invite-scope-value");
+const editUserIdInput = document.getElementById("edit-user-id");
+const emailInput = document.getElementById("invite-email");
+const fullNameInput = document.getElementById("invite-full-name");
+const formKicker = document.getElementById("user-form-kicker");
+const formTitle = document.getElementById("user-form-title");
+const formModeBadge = document.getElementById("form-mode-badge");
+const submitLabel = document.getElementById("user-form-submit-label");
+const resetPasswordButton = document.getElementById("reset-password-btn");
+const cancelEditButton = document.getElementById("cancel-edit-btn");
+const blockUserButton = document.getElementById("block-user-btn");
+const blockUserButtonLabel = document.getElementById("block-user-btn-label");
+const editOnlyActions = document.getElementById("edit-only-actions");
+const userLogModal = document.getElementById("user-log-modal");
+const userLogClose = document.getElementById("user-log-close");
+const userLogContent = document.getElementById("user-log-content");
+const summaryTotalUsers = document.getElementById("summary-total-users");
+const summaryActiveUsers = document.getElementById("summary-active-users");
+const summaryPendingUsers = document.getElementById("summary-pending-users");
+const summaryBlockedUsers = document.getElementById("summary-blocked-users");
+const groupsOverview = document.getElementById("groups-overview");
+const usersSearchInput = document.getElementById("users-search");
+const usersStatusFilter = document.getElementById("users-status-filter");
+const usersRoleFilter = document.getElementById("users-role-filter");
+const usersGroupFilter = document.getElementById("users-group-filter");
+const usersResultsCount = document.getElementById("users-results-count");
+const userFormModal = document.getElementById("user-form-modal");
+const openCreateUserModalButton = document.getElementById("open-create-user-modal");
+const closeUserFormModalButton = document.getElementById("close-user-form-modal");
+const pagesFieldset = document.getElementById("pages-fieldset");
+const pagesToggleButton = document.getElementById("pages-toggle-btn");
+const pagesPanel = document.getElementById("pages-panel");
+const pagesToggleSummary = document.getElementById("pages-toggle-summary");
+
+const PAGE_GROUPS = [
   {
     title: "כללי",
     pages: [
@@ -9,111 +54,59 @@
   {
     title: "שירותים",
     pages: [
-      { key: "sms", label: "SMS" },
       { key: "bot", label: "בוט" },
+      { key: "sms", label: "SMS" },
+      { key: "storage", label: "הקלטות" },
       { key: "f2m", label: "F2M" },
-      { key: "recording_storage", label: "הקלטות" },
-      { key: "human_service", label: "מוקד אנושי" },
-      { key: "record", label: "הקלטה" },
+      { key: "hot", label: "HOT" },
+      { key: "cloud", label: "מוקד אנושי" },
     ],
   },
   {
     title: "דוחות",
     pages: [
       { key: "tickets_monthly_report", label: "דוח חודשי" },
-      { key: "features_report", label: "דוח פיצרים" },
-      { key: "features_status", label: "סטטוס פיצרים" },
+      { key: "features_report", label: "דוח פיצ'רים" },
+      { key: "features_status", label: "סטטוס פיצ'רים" },
     ],
   },
   {
     title: "תקלות",
     pages: [
       { key: "support_tickets", label: "קריאות שירות" },
-      { key: "pais_tickets", label: "פיס" },
-      { key: "hot_tickets", label: "HOT" },
-      { key: "nastia_tickets", label: "נסטיה" },
+      { key: "pais", label: "פיס" },
+      { key: "reports", label: "נסטיה" },
     ],
   },
 ];
 
 const PAGE_OPTIONS = PAGE_GROUPS.flatMap((group) => group.pages);
+const BASE_LANDING_OPTIONS = [
+  { value: "/home", label: "בית" },
+  { value: "/dashboard-services", label: "שירותים" },
+  { value: "/dashboard-service-tickets", label: "קריאות שירות" },
+  { value: "/dashboard-reports", label: "דוחות" },
+  { value: "/user-management", label: "ניהול משתמשים" },
+];
+
 const TABLE_LABELS = {
   full_name: "שם",
   email: "אימייל",
   role: "תפקיד",
+  group: "קבוצה",
   pages: "עמודים",
   landing_page: "עמוד נחיתה",
   status: "סטטוס",
   actions: "פעולות",
 };
 
-const BASE_LANDING_OPTIONS = [
-  { value: "/dashboard-services", label: "דשבורד שירותים ראשי" },
-  { value: "/dashboard-service-tickets", label: "דשבורד שירות" },
-  { value: "/dashboard-reports", label: "דוחות" },
-];
-
-const form = document.getElementById("user-invite-form");
-const inviteMessageEl = document.getElementById("invite-message");
-const usersMessageEl = document.getElementById("users-message");
-const landingPageSelect = document.getElementById("invite-landing-page");
-const pagesHost = document.getElementById("invite-pages");
-const usersTableBody = document.getElementById("users-table-body");
-const refreshUsersButton = document.getElementById("refresh-users");
-const groupSelect = document.getElementById("invite-group-code");
-const roleSelect = document.getElementById("invite-role");
-const userLogModal = document.getElementById("user-log-modal");
-const userLogContent = document.getElementById("user-log-content");
-const userLogClose = document.getElementById("user-log-close");
-const emailInput = document.getElementById("invite-email");
-const fullNameInput = document.getElementById("invite-full-name");
-const scopeTypeSelect = document.getElementById("invite-scope-type");
-const scopeValueInput = document.getElementById("invite-scope-value");
-const editUserIdInput = document.getElementById("edit-user-id");
-const formKicker = document.getElementById("user-form-kicker");
-const formTitle = document.getElementById("user-form-title");
-const submitLabel = document.getElementById("user-form-submit-label");
-const cancelEditButton = document.getElementById("cancel-edit-btn");
-const resetPasswordButton = document.getElementById("reset-password-btn");
-
-let usersMessageTimer = null;
-let currentUsersById = new Map();
 let currentEditUserId = "";
-let lastSyncedRole = roleSelect ? roleSelect.value : "";
-
-function setPanelMessage(element, text, kind = "") {
-  if (!element) return;
-  element.textContent = text;
-  element.className = `form-message${element === usersMessageEl ? " panel-message" : ""}${kind ? ` ${kind}` : ""}`;
-}
-
-function setInviteMessage(text, kind = "") {
-  setPanelMessage(inviteMessageEl, text, kind);
-}
-
-function setUsersMessage(text, kind = "") {
-  setPanelMessage(usersMessageEl, text, kind);
-  if (usersMessageTimer) {
-    clearTimeout(usersMessageTimer);
-    usersMessageTimer = null;
-  }
-  if (text && kind === "success") {
-    usersMessageTimer = window.setTimeout(() => {
-      setPanelMessage(usersMessageEl, "", "");
-      usersMessageTimer = null;
-    }, 5000);
-  }
-}
-
-async function readJson(response) {
-  const text = await response.text();
-  if (!text) return {};
-  try {
-    return JSON.parse(text);
-  } catch {
-    throw new Error("תגובת שרת לא תקינה");
-  }
-}
+let currentEditUserActive = true;
+let lastSyncedRole = "";
+let currentUsers = [];
+let currentUsersById = new Map();
+let currentGroups = [];
+let viewerCanWrite = true;
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -124,74 +117,63 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
-function isLimitedAdminRole(role) {
-  return role === "admin_no_user_management";
-}
-
-function landingOptionsForRole(role) {
-  const options = [{ value: "/home", label: "בית" }, ...BASE_LANDING_OPTIONS];
-  if (isLimitedAdminRole(role)) {
-    return options;
+async function readJson(response) {
+  const text = await response.text();
+  try {
+    return text ? JSON.parse(text) : {};
+  } catch {
+    return { ok: false, message: text || "התקבלה תשובה לא תקינה מהשרת" };
   }
-  return options;
 }
 
-function renderLandingOptions(selectedValue = "") {
-  const options = landingOptionsForRole(roleSelect ? roleSelect.value : "");
-  landingPageSelect.innerHTML = options.map((page) => `
-    <option value="${page.value}">${page.label}</option>
-  `).join("");
-
-  const nextValue = options.some((item) => item.value === selectedValue)
-    ? selectedValue
-    : options[0]?.value || "";
-  landingPageSelect.value = nextValue;
+function setMessage(node, message, tone = "") {
+  if (!node) {
+    return;
+  }
+  node.textContent = message || "";
+  node.classList.remove("success", "error");
+  if (tone) {
+    node.classList.add(tone);
+  }
 }
 
-function renderPageOptions() {
-  pagesHost.innerHTML = PAGE_GROUPS.map((group) => `
-    <section class="permission-group">
-      <p class="permission-group-title">${group.title}</p>
-      <div class="permission-group-grid">
-        ${group.pages.map((page) => `
-          <label class="page-option">
-            <input type="checkbox" value="${page.key}" ${page.key === "home" ? "checked" : ""}>
-            <span>${page.label}</span>
-          </label>
-        `).join("")}
-      </div>
-    </section>
-  `).join("");
-
-  syncRoleBasedPermissions();
+function setInviteMessage(message, tone = "") {
+  setMessage(inviteMessage, message, tone);
 }
 
-function checkedPages() {
-  return Array.from(pagesHost.querySelectorAll('input[type="checkbox"]:checked')).map((checkbox) => checkbox.value);
+function setUsersMessage(message, tone = "") {
+  setMessage(usersMessage, message, tone);
 }
 
-function setAllPagesChecked(checked) {
-  pagesHost.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
-    checkbox.checked = checked;
-  });
+function setPagesExpanded(expanded) {
+  if (!pagesToggleButton || !pagesPanel) {
+    return;
+  }
+  pagesToggleButton.setAttribute("aria-expanded", expanded ? "true" : "false");
+  pagesPanel.hidden = !expanded;
+  if (pagesFieldset) {
+    pagesFieldset.classList.toggle("is-open", expanded);
+  }
 }
 
-function renderGroups(groups) {
-  const options = ['<option value="">ללא</option>'];
-  (groups || []).forEach((group) => {
-    options.push(`<option value="${group.code}">${group.name || group.code}</option>`);
-  });
-  groupSelect.innerHTML = options.join("");
+function updatePagesSummary() {
+  if (!pagesToggleSummary) {
+    return;
+  }
+  const count = checkedPages().length;
+  pagesToggleSummary.textContent = count ? `${count} עמודים נבחרו` : "לחצו להצגת ההרשאות";
 }
 
-function landingLabel(value) {
-  const match = landingOptionsForRole("admin_no_user_management").find((item) => item.value === value);
-  return match ? match.label : (value || "-");
+function openUserFormModal() {
+  if (userFormModal) {
+    userFormModal.hidden = false;
+  }
 }
 
-function pageLabel(pageKey) {
-  const match = PAGE_OPTIONS.find((page) => page.key === pageKey);
-  return match ? match.label : pageKey;
+function closeUserFormModal() {
+  if (userFormModal) {
+    userFormModal.hidden = true;
+  }
 }
 
 function roleLabel(role) {
@@ -202,8 +184,83 @@ function roleLabel(role) {
     tickets_only: "תקלות בלבד",
     hot_submitter: "שולח HOT",
     assigned_technician: "טכנאי שירות שטח",
+    external_technician: "טכנאי חיצוני",
   };
   return roleMap[role] || role || "-";
+}
+
+function accessLevelLabel(value) {
+  return value === "read_only" ? "קריאה בלבד" : "קריאה ועריכה";
+}
+
+function landingOptionsForRole(role) {
+  if (role === "assigned_technician" || role === "external_technician") {
+    return [
+      { value: "/dashboard-service-tickets", label: "קריאות שירות" },
+      { value: "/home", label: "בית" },
+    ];
+  }
+  return BASE_LANDING_OPTIONS;
+}
+
+function landingLabel(value) {
+  const option = BASE_LANDING_OPTIONS.find((item) => item.value === value);
+  return option ? option.label : (value || "-");
+}
+
+function pageLabel(pageKey) {
+  const match = PAGE_OPTIONS.find((page) => page.key === pageKey);
+  return match ? match.label : pageKey;
+}
+
+function isLimitedAdminRole(role) {
+  return role === "admin_no_user_management";
+}
+
+function renderLandingOptions(selectedValue = "") {
+  const options = landingOptionsForRole(roleSelect ? roleSelect.value : "");
+  landingPageSelect.innerHTML = options
+    .map((option) => `<option value="${option.value}">${option.label}</option>`)
+    .join("");
+  const hasMatch = options.some((item) => item.value === selectedValue);
+  landingPageSelect.value = hasMatch ? selectedValue : options[0]?.value || "/home";
+}
+
+function renderPageOptions() {
+  pagesHost.innerHTML = PAGE_GROUPS.map((group) => `
+    <section class="permission-group">
+      <h3 class="permission-group-title">${group.title}</h3>
+      <div class="permission-group-grid">
+        ${group.pages.map((page) => `
+          <label class="page-option">
+            <input type="checkbox" value="${page.key}" ${page.key === "home" ? "checked" : ""}>
+            <span>${page.label}</span>
+          </label>
+        `).join("")}
+      </div>
+    </section>
+  `).join("");
+  syncRoleBasedPermissions();
+  updatePagesSummary();
+}
+
+function checkedPages() {
+  return Array.from(pagesHost.querySelectorAll('input[type="checkbox"]:checked')).map((checkbox) => checkbox.value);
+}
+
+function setCheckedPages(pageKeys) {
+  const selected = new Set(Array.isArray(pageKeys) ? pageKeys : []);
+  pagesHost.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
+    checkbox.checked = selected.has(checkbox.value);
+  });
+  updatePagesSummary();
+}
+
+function setAllPagesChecked(checked) {
+  pagesHost.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
+    checkbox.checked = checked;
+  });
+  updatePagesSummary();
 }
 
 function syncRoleBasedPermissions() {
@@ -218,53 +275,196 @@ function syncRoleBasedPermissions() {
   renderLandingOptions(isLimitedAdmin ? "/home" : landingPageSelect.value);
 
   const userManagementCheckbox = pagesHost.querySelector('input[value="user_management"]');
-  if (!userManagementCheckbox) {
-    lastSyncedRole = currentRole;
-    return;
-  }
-
-  if (isLimitedAdmin) {
-    userManagementCheckbox.checked = false;
-  }
-  userManagementCheckbox.disabled = isLimitedAdmin;
-
-  const option = userManagementCheckbox.closest(".page-option");
-  if (option) {
-    option.style.opacity = isLimitedAdmin ? "0.55" : "1";
+  if (userManagementCheckbox) {
+    if (isLimitedAdmin) {
+      userManagementCheckbox.checked = false;
+    }
+    userManagementCheckbox.disabled = isLimitedAdmin;
+    const option = userManagementCheckbox.closest(".page-option");
+    if (option) {
+      option.style.opacity = isLimitedAdmin ? "0.58" : "1";
+    }
   }
 
   lastSyncedRole = currentRole;
 }
 
+function renderGroups(groups) {
+  currentGroups = Array.isArray(groups) ? groups : [];
 
-function setCheckedPages(pageKeys) {
-  const selected = new Set(Array.isArray(pageKeys) ? pageKeys : []);
-  pagesHost.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
-    checkbox.checked = selected.has(checkbox.value);
+  const formOptions = ['<option value="">ללא</option>'];
+  const filterOptions = ['<option value="all">כל הקבוצות</option>'];
+
+  currentGroups.forEach((group) => {
+    const label = escapeHtml(group.name || group.code || "-");
+    const code = escapeHtml(group.code || "");
+    formOptions.push(`<option value="${code}">${label}</option>`);
+    filterOptions.push(`<option value="${code}">${label}</option>`);
   });
+
+  groupSelect.innerHTML = formOptions.join("");
+  usersGroupFilter.innerHTML = filterOptions.join("");
+
+  if (!currentGroups.length) {
+    groupsOverview.innerHTML = '<div class="group-card"><span class="group-card-name">לא הוגדרו קבוצות</span></div>';
+    return;
+  }
+
+  groupsOverview.innerHTML = currentGroups.map((group) => `
+    <article class="group-card">
+      <span class="group-card-code">#${escapeHtml(group.id || "-")}</span>
+      <strong class="group-card-name">${escapeHtml(group.name || group.code || "-")}</strong>
+      <div class="summary-note">קוד: ${escapeHtml(group.code || "-")}</div>
+    </article>
+  `).join("");
+}
+
+function statusMeta(user) {
+  if (user.active === false) {
+    return { key: "inactive", label: "חסום", className: "inactive" };
+  }
+  if (user.onboarded_at) {
+    return { key: "active", label: "פעיל", className: "done" };
+  }
+  return { key: "pending", label: "ממתין", className: "pending" };
+}
+
+function renderSummary(users) {
+  const list = Array.isArray(users) ? users : [];
+  const activeCount = list.filter((user) => statusMeta(user).key === "active").length;
+  const pendingCount = list.filter((user) => statusMeta(user).key === "pending").length;
+  const blockedCount = list.filter((user) => statusMeta(user).key === "inactive").length;
+
+  summaryTotalUsers.textContent = String(list.length);
+  summaryActiveUsers.textContent = String(activeCount);
+  summaryPendingUsers.textContent = String(pendingCount);
+  summaryBlockedUsers.textContent = String(blockedCount);
+}
+
+function formatLogDate(value) {
+  if (!value) {
+    return "-";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return new Intl.DateTimeFormat("he-IL", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
+function applyUserFilters(users) {
+  const searchTerm = (usersSearchInput?.value || "").trim().toLowerCase();
+  const statusFilter = usersStatusFilter?.value || "all";
+  const roleFilter = usersRoleFilter?.value || "all";
+  const groupFilter = usersGroupFilter?.value || "all";
+
+  return (Array.isArray(users) ? users : []).filter((user) => {
+    const meta = statusMeta(user);
+    const matchesSearch = !searchTerm || [user.full_name, user.email]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(searchTerm));
+    const matchesStatus = statusFilter === "all" || meta.key === statusFilter;
+    const matchesRole = roleFilter === "all" || (user.role || "") === roleFilter;
+    const matchesGroup = groupFilter === "all" || (user.group_code || "") === groupFilter;
+    return matchesSearch && matchesStatus && matchesRole && matchesGroup;
+  });
+}
+
+function renderUsers(users) {
+  const filteredUsers = applyUserFilters(users);
+  currentUsersById = new Map((currentUsers || []).map((user) => [String(user.id), user]));
+
+  usersResultsCount.textContent = `${filteredUsers.length} משתמשים`;
+
+  if (!filteredUsers.length) {
+    usersTableBody.innerHTML = '<tr><td colspan="9">לא נמצאו משתמשים לפי הסינון שנבחר</td></tr>';
+    return;
+  }
+
+  usersTableBody.innerHTML = filteredUsers.map((user) => {
+    const pages = Array.isArray(user.allowed_pages) && user.allowed_pages.length
+      ? user.allowed_pages.map((page) => `<span class="user-pill">${escapeHtml(pageLabel(page))}</span>`).join("")
+      : "-";
+    const meta = statusMeta(user);
+    const group = currentGroups.find((item) => (item.code || "") === (user.group_code || ""));
+    const groupLabel = group ? (group.name || group.code) : (user.group_code || "-");
+
+    return `
+      <tr>
+        <td data-label="${TABLE_LABELS.full_name}">${escapeHtml(user.full_name || "-")}</td>
+        <td data-label="${TABLE_LABELS.email}">
+          <div class="email-cell">
+            <span>${escapeHtml(user.email || "-")}</span>
+            <button class="ghost-btn user-log-trigger" type="button" data-user-id="${escapeHtml(user.id)}" title="יומן משתמש" aria-label="יומן משתמש">
+              <i class="fa-solid fa-clock-rotate-left"></i>
+            </button>
+          </div>
+        </td>
+        <td data-label="${TABLE_LABELS.role}">${escapeHtml(roleLabel(user.role))}</td>
+        <td data-label="${TABLE_LABELS.group}">${escapeHtml(groupLabel)}</td>
+        <td data-label="רמת הרשאה">${escapeHtml(accessLevelLabel(user.access_level))}</td>
+        <td data-label="${TABLE_LABELS.pages}">${pages}</td>
+        <td data-label="${TABLE_LABELS.landing_page}">${escapeHtml(landingLabel(user.landing_page))}</td>
+        <td data-label="${TABLE_LABELS.status}"><span class="status-pill ${meta.className}">${meta.label}</span></td>
+        <td data-label="${TABLE_LABELS.actions}">
+          <div class="table-actions">
+            <button class="ghost-btn edit-user-btn" type="button" data-user-id="${escapeHtml(user.id)}">
+              <i class="fa-solid fa-pen"></i>
+              <span>ערוך</span>
+            </button>
+            <button class="action-btn resend-invite-btn" type="button" data-user-id="${escapeHtml(user.id)}" ${viewerCanWrite ? "" : "disabled"}>
+              <i class="fa-solid fa-paper-plane"></i>
+              <span>שלח שוב</span>
+            </button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join("");
 }
 
 function updateFormMode() {
   const isEditing = Boolean(currentEditUserId);
   if (formKicker) {
-    formKicker.textContent = isEditing ? "עריכת משתמש" : "הזמנה חדשה";
+    formKicker.textContent = isEditing ? "עריכת משתמש" : "משתמש חדש";
   }
   if (formTitle) {
     formTitle.textContent = isEditing ? "עריכת משתמש והרשאות" : "הוספת משתמש ושליחת הזמנה";
   }
+  if (formModeBadge) {
+    formModeBadge.textContent = isEditing ? "עריכה" : "יצירה";
+  }
   if (submitLabel) {
     submitLabel.textContent = isEditing ? "שמור שינויים" : "הוספת משתמש ושליחת הזמנה";
   }
-  if (cancelEditButton) {
-    cancelEditButton.hidden = !isEditing;
+  if (form) {
+    Array.from(form.elements).forEach((element) => {
+      if (!(element instanceof HTMLElement)) {
+        return;
+      }
+      if (element.id === "cancel-edit-btn") {
+        element.disabled = false;
+        return;
+      }
+      if (!viewerCanWrite) {
+        element.disabled = element.type !== "hidden";
+      }
+    });
   }
-  if (resetPasswordButton) {
-    resetPasswordButton.hidden = !isEditing;
+  if (editOnlyActions) {
+    editOnlyActions.hidden = !isEditing;
+  }
+  if (blockUserButtonLabel) {
+    blockUserButtonLabel.textContent = currentEditUserActive ? "חסום משתמש" : "בטל חסימה";
   }
 }
 
-function resetUserForm(scrollToTop = false) {
+function openCreateUserMode() {
   currentEditUserId = "";
+  currentEditUserActive = true;
   if (editUserIdInput) {
     editUserIdInput.value = "";
   }
@@ -272,9 +472,44 @@ function resetUserForm(scrollToTop = false) {
   if (roleSelect) {
     roleSelect.value = "user";
   }
+  if (accessLevelSelect) {
+    accessLevelSelect.value = "read_write";
+  }
   renderPageOptions();
   setCheckedPages(["home"]);
-  renderLandingOptions(landingOptionsForRole(roleSelect ? roleSelect.value : "")[0]?.value || "/dashboard-services");
+  renderLandingOptions(landingOptionsForRole(roleSelect ? roleSelect.value : "")[0]?.value || "/home");
+  if (groupSelect) {
+    groupSelect.value = "";
+  }
+  if (scopeTypeSelect) {
+    scopeTypeSelect.value = "";
+  }
+  if (scopeValueInput) {
+    scopeValueInput.value = "";
+  }
+  setInviteMessage("");
+  syncRoleBasedPermissions();
+  updateFormMode();
+  setPagesExpanded(false);
+  openUserFormModal();
+}
+
+function resetUserForm(scrollToTop = false) {
+  currentEditUserId = "";
+  currentEditUserActive = true;
+  if (editUserIdInput) {
+    editUserIdInput.value = "";
+  }
+  form.reset();
+  if (roleSelect) {
+    roleSelect.value = "user";
+  }
+  if (accessLevelSelect) {
+    accessLevelSelect.value = "read_write";
+  }
+  renderPageOptions();
+  setCheckedPages(["home"]);
+  renderLandingOptions(landingOptionsForRole(roleSelect ? roleSelect.value : "")[0]?.value || "/home");
   if (groupSelect) {
     groupSelect.value = "";
   }
@@ -286,6 +521,8 @@ function resetUserForm(scrollToTop = false) {
   }
   syncRoleBasedPermissions();
   updateFormMode();
+  setPagesExpanded(false);
+  closeUserFormModal();
   if (scrollToTop) {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -296,6 +533,7 @@ function startEditUser(user) {
     return;
   }
   currentEditUserId = String(user.id || "");
+  currentEditUserActive = user.active !== false;
   if (editUserIdInput) {
     editUserIdInput.value = currentEditUserId;
   }
@@ -314,6 +552,9 @@ function startEditUser(user) {
   if (groupSelect) {
     groupSelect.value = user.group_code || "";
   }
+  if (accessLevelSelect) {
+    accessLevelSelect.value = user.access_level || "read_write";
+  }
   if (scopeTypeSelect) {
     scopeTypeSelect.value = user.scope_type || "";
   }
@@ -322,51 +563,34 @@ function startEditUser(user) {
   }
   syncRoleBasedPermissions();
   updateFormMode();
-  setInviteMessage("");
-  form.scrollIntoView({ behavior: "smooth", block: "start" });
+  setPagesExpanded(false);
+  openUserFormModal();
+  setInviteMessage(`כעת עורכים את המשתמש ${user.email || ""}`, "success");
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 function collectFormPayload() {
   return {
-    email: emailInput.value.trim(),
-    full_name: fullNameInput.value.trim(),
-    role: roleSelect.value,
-    group_code: groupSelect.value,
-    landing_page: landingPageSelect.value,
-    scope_type: scopeTypeSelect.value,
-    scope_value: scopeValueInput.value.trim(),
+    email: (emailInput?.value || "").trim(),
+    full_name: (fullNameInput?.value || "").trim(),
+    role: roleSelect?.value || "user",
+    group_code: groupSelect?.value || "",
+    access_level: accessLevelSelect?.value || "read_write",
+    landing_page: landingPageSelect?.value || "/home",
+    scope_type: scopeTypeSelect?.value || "",
+    scope_value: (scopeValueInput?.value || "").trim(),
     allowed_pages: checkedPages(),
   };
-}
-
-function formatLogDate(value) {
-  if (!value) {
-    return "-";
-  }
-
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return value;
-  }
-
-  return parsed.toLocaleString("he-IL", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 }
 
 function openUserLog(user) {
   if (!userLogModal || !userLogContent) {
     return;
   }
-
   if (!user) {
     userLogContent.innerHTML = `
       <div class="user-log-row">
-        <span class="user-log-label">סטטוס</span>
+        <span class="user-log-label">מידע</span>
         <span class="user-log-value">אין נתוני יומן זמינים עבור משתמש זה.</span>
       </div>
     `;
@@ -378,6 +602,7 @@ function openUserLog(user) {
     ["שם", user.full_name || "-"],
     ["אימייל", user.email || "-"],
     ["תפקיד", roleLabel(user.role)],
+    ["רמת הרשאה", accessLevelLabel(user.access_level)],
     ["עמוד נחיתה", landingLabel(user.landing_page)],
     ["נשלחה הזמנה", formatLogDate(user.invited_at)],
     ["הושלמה הרשמה", formatLogDate(user.onboarded_at)],
@@ -400,56 +625,8 @@ function closeUserLog() {
   if (!userLogModal || !userLogContent) {
     return;
   }
-
   userLogModal.hidden = true;
   userLogContent.innerHTML = "";
-}
-
-function renderUsers(users) {
-  currentUsersById = new Map((users || []).map((user) => [String(user.id), user]));
-
-  if (!Array.isArray(users) || users.length === 0) {
-    usersTableBody.innerHTML = '<tr><td colspan="7">לא נמצאו משתמשים</td></tr>';
-    return;
-  }
-
-  usersTableBody.innerHTML = users.map((user) => {
-    const pages = Array.isArray(user.allowed_pages)
-      ? user.allowed_pages.map((page) => `<span class="user-pill">${pageLabel(page)}</span>`).join("")
-      : "-";
-    const statusClass = user.active ? (user.onboarded_at ? "done" : "pending") : "inactive";
-    const statusLabel = user.active ? (user.onboarded_at ? "פעיל" : "ממתין להפעלה") : "לא פעיל";
-
-    return `
-      <tr>
-        <td data-label="${TABLE_LABELS.full_name}">${user.full_name || "-"}</td>
-        <td data-label="${TABLE_LABELS.email}">
-          <div class="email-cell">
-            <span>${user.email || "-"}</span>
-            <button class="ghost-btn user-log-trigger" type="button" data-user-id="${user.id}" title="יומן משתמש" aria-label="יומן משתמש">
-              <i class="fa-solid fa-clock-rotate-left"></i>
-            </button>
-          </div>
-        </td>
-        <td data-label="${TABLE_LABELS.role}">${roleLabel(user.role)}</td>
-        <td data-label="${TABLE_LABELS.pages}">${pages || "-"}</td>
-        <td data-label="${TABLE_LABELS.landing_page}">${landingLabel(user.landing_page)}</td>
-        <td data-label="${TABLE_LABELS.status}"><span class="status-pill ${statusClass}">${statusLabel}</span></td>
-        <td data-label="${TABLE_LABELS.actions}">
-          <div class="table-actions">
-            <button class="ghost-btn edit-user-btn" type="button" data-user-id="${user.id}">
-              <i class="fa-solid fa-pen"></i>
-              <span>ערוך</span>
-            </button>
-            <button class="action-btn resend-invite-btn" type="button" data-user-id="${user.id}">
-              <i class="fa-solid fa-paper-plane"></i>
-              <span>שלח שוב</span>
-            </button>
-          </div>
-        </td>
-      </tr>
-    `;
-  }).join("");
 }
 
 async function loadUsers() {
@@ -458,8 +635,14 @@ async function loadUsers() {
   if (!response.ok || !data.ok) {
     throw new Error(data.message || data.error || "טעינת המשתמשים נכשלה");
   }
+  viewerCanWrite = data.can_write !== false;
+  currentUsers = Array.isArray(data.users) ? data.users : [];
   renderGroups(data.groups || []);
-  renderUsers(data.users || []);
+  renderSummary(currentUsers);
+  renderUsers(currentUsers);
+  if (!viewerCanWrite) {
+    setInviteMessage("החשבון שלך מוגדר כקריאה בלבד. ניתן לצפות, אך לא לבצע שינויים.", "error");
+  }
 }
 
 form.addEventListener("submit", async (event) => {
@@ -480,6 +663,7 @@ form.addEventListener("submit", async (event) => {
     if (!response.ok || !data.ok) {
       throw new Error(data.message || data.error || (isEditing ? "שמירת המשתמש נכשלה" : "יצירת ההזמנה נכשלה"));
     }
+
     if (isEditing) {
       setInviteMessage(`פרטי המשתמש ${data.user?.email || payload.email} נשמרו בהצלחה`, "success");
       setUsersMessage(data.message || "פרטי המשתמש נשמרו", "success");
@@ -492,6 +676,7 @@ form.addEventListener("submit", async (event) => {
       setUsersMessage("");
       resetUserForm(true);
     }
+
     await loadUsers();
   } catch (error) {
     setInviteMessage(error.message, "error");
@@ -511,15 +696,15 @@ usersTableBody.addEventListener("click", async (event) => {
     return;
   }
 
-  const button = event.target.closest(".resend-invite-btn");
-  if (!button) {
+  const resendButton = event.target.closest(".resend-invite-btn");
+  if (!resendButton) {
     return;
   }
 
-  button.disabled = true;
+  resendButton.disabled = true;
   try {
     setUsersMessage("");
-    const response = await fetch(`/user-management/${button.dataset.userId}/resend-invite`, { method: "POST" });
+    const response = await fetch(`/user-management/${resendButton.dataset.userId}/resend-invite`, { method: "POST" });
     const data = await readJson(response);
     if (!response.ok || !data.ok) {
       throw new Error(data.message || data.error || "שליחה מחדש של ההזמנה נכשלה");
@@ -529,7 +714,7 @@ usersTableBody.addEventListener("click", async (event) => {
   } catch (error) {
     setUsersMessage(error.message, "error");
   } finally {
-    button.disabled = false;
+    resendButton.disabled = false;
   }
 });
 
@@ -542,15 +727,48 @@ refreshUsersButton.addEventListener("click", async () => {
   }
 });
 
+if (pagesToggleButton) {
+  pagesToggleButton.addEventListener("click", () => {
+    const expanded = pagesToggleButton.getAttribute("aria-expanded") === "true";
+    setPagesExpanded(!expanded);
+  });
+}
+
+if (pagesHost) {
+  pagesHost.addEventListener("change", (event) => {
+    const target = event.target;
+    if (target instanceof HTMLInputElement && target.type === "checkbox") {
+      updatePagesSummary();
+    }
+  });
+}
+
+if (openCreateUserModalButton) {
+  openCreateUserModalButton.addEventListener("click", () => {
+    openCreateUserMode();
+  });
+}
+
+if (closeUserFormModalButton) {
+  closeUserFormModalButton.addEventListener("click", () => {
+    if (currentEditUserId) {
+      resetUserForm(true);
+      return;
+    }
+    closeUserFormModal();
+  });
+}
+
+[usersSearchInput, usersStatusFilter, usersRoleFilter, usersGroupFilter].forEach((node) => {
+  if (node) {
+    node.addEventListener("input", () => renderUsers(currentUsers));
+    node.addEventListener("change", () => renderUsers(currentUsers));
+  }
+});
+
 if (userLogClose) {
   userLogClose.addEventListener("click", closeUserLog);
 }
-
-document.addEventListener("click", (event) => {
-  if (event.target.closest("#user-log-close")) {
-    closeUserLog();
-  }
-});
 
 if (userLogModal) {
   userLogModal.addEventListener("click", (event) => {
@@ -560,13 +778,61 @@ if (userLogModal) {
   });
 }
 
+if (userFormModal) {
+  userFormModal.addEventListener("click", (event) => {
+    if (event.target === userFormModal) {
+      if (currentEditUserId) {
+        resetUserForm(true);
+        return;
+      }
+      closeUserFormModal();
+    }
+  });
+}
+
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && userLogModal && !userLogModal.hidden) {
-    closeUserLog();
+  if (event.key === "Escape") {
+    if (userLogModal && !userLogModal.hidden) {
+      closeUserLog();
+      return;
+    }
+    if (userFormModal && !userFormModal.hidden && !currentEditUserId) {
+      closeUserFormModal();
+      return;
+    }
+    if (currentEditUserId) {
+      resetUserForm(true);
+    }
   }
 });
 
-resetUserForm();
+if (blockUserButton) {
+  blockUserButton.addEventListener("click", async () => {
+    if (!currentEditUserId) {
+      return;
+    }
+    blockUserButton.disabled = true;
+    try {
+      const response = await fetch(`/user-management/${currentEditUserId}/set-active`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ active: !currentEditUserActive }),
+      });
+      const data = await readJson(response);
+      if (!response.ok || !data.ok) {
+        throw new Error(data.message || data.error || "עדכון מצב המשתמש נכשל");
+      }
+      setInviteMessage(data.message || "מצב המשתמש עודכן", "success");
+      setUsersMessage(data.message || "מצב המשתמש עודכן", "success");
+      resetUserForm(true);
+      await loadUsers();
+    } catch (error) {
+      setInviteMessage(error.message, "error");
+    } finally {
+      blockUserButton.disabled = false;
+    }
+  });
+}
 
 if (cancelEditButton) {
   cancelEditButton.addEventListener("click", () => resetUserForm(true));
@@ -598,4 +864,7 @@ if (resetPasswordButton) {
 if (roleSelect) {
   roleSelect.addEventListener("change", syncRoleBasedPermissions);
 }
+
+resetUserForm();
+setPagesExpanded(false);
 loadUsers().catch((error) => setUsersMessage(error.message, "error"));

@@ -339,13 +339,14 @@ SUPABASE_KEY = (
     or os.environ.get("SUPABASE_ANON_KEY")
     or ""
 ).strip()
-SUPPORT_USERS = ["ניר", "יבגני", "גולן", "איציק", "זוהרה", "אסף", "מוסטפא.א", "מוסטפא.ח", "נסטיה"]
-COORDINATION_USERS = ["נסטיה"]
-TECHNICIAN_SUPPORT_USERS = [user for user in SUPPORT_USERS if user not in COORDINATION_USERS]
+SUPPORT_USERS = ["\u05e0\u05d9\u05e8", "\u05d9\u05d1\u05d2\u05e0\u05d9", "\u05d2\u05d5\u05dc\u05df", "\u05d9\u05e6\u05d7\u05e7.\u05e7", "\u05d6\u05d5\u05e8\u05d4", "\u05d0\u05e1\u05e3", "\u05d9\u05d5\u05e1\u05e3", "\u05de\u05d5\u05e1\u05d8\u05e4\u05d4.\u05d7", "\u05de\u05d5\u05e1\u05d8\u05e4\u05d4.\u05d0", "\u05e0\u05e1\u05d8\u05d9\u05d4"]
+COORDINATION_USERS = ["\u05e0\u05e1\u05d8\u05d9\u05d4"]
+TECHNICIAN_SUPPORT_USERS = ["\u05d6\u05d5\u05e8\u05d4", "\u05d2\u05d5\u05dc\u05df", "\u05d0\u05e1\u05e3", "\u05d9\u05e6\u05d7\u05e7.\u05e7", "\u05d9\u05d5\u05e1\u05e3", "\u05de\u05d5\u05e1\u05d8\u05e4\u05d4.\u05d7", "\u05de\u05d5\u05e1\u05d8\u05e4\u05d4.\u05d0"]
 COORDINATION_PENDING_STATUS = "ממתין לתיאום"
 COORDINATION_PENDING_ALIASES = {COORDINATION_PENDING_STATUS, "ממתין לתאום"}
+CANCELLED_TICKET_STATUS = "בוטל"
 SUPPORT_STATUSES = ["Waiting", "Done"]
-PAIS_STATUSES = ["ממתין", COORDINATION_PENDING_STATUS, "תואם", "אין מענה", "בוצע", "נכשל"]
+PAIS_STATUSES = ["ממתין", COORDINATION_PENDING_STATUS, "תואם", "אין מענה", CANCELLED_TICKET_STATUS, "בוצע", "נכשל"]
 ALL_TICKET_STATUSES = SUPPORT_STATUSES + [status for status in PAIS_STATUSES if status not in SUPPORT_STATUSES]
 SUPPORT_DELIVERY_OPTIONS = ["ביקור טכנאי בתשלום", "ביקור ללא תשלום", "משלוח"]
 SUPPORT_CUSTOMER_TYPES = ["לקוח נימבוס", "לקוח הוט"]
@@ -371,6 +372,9 @@ FULL_ACCESS_PAGES = {
 }
 REPORT_ALLOWED_PAGES = {"tickets_monthly_report", "features_report", "features_status"}
 TICKETS_ONLY_ALLOWED_PAGES = {"support_tickets", "pais_tickets", "hot_tickets", "nastia_tickets"}
+ACCESS_LEVEL_READ_ONLY = "read_only"
+ACCESS_LEVEL_READ_WRITE = "read_write"
+ACCESS_LEVEL_TOKEN_PREFIX = "access:"
 LOGIN_USER_OVERRIDES = {
     "business.support@hot.net.il": {
         "password": "bizQazwsx3#ticket",
@@ -462,7 +466,7 @@ LEGACY_HEBREW_TEXT_MAP = {
     "׳ ׳™׳¨": "ניר",
     "׳’׳•׳׳": "גולן",
     "׳׳™׳¦׳™׳§": "איציק",
-    "׳–׳•׳¨׳”": "זוהרה",
+    "׳–׳•׳¨׳”": "זורה",
     "׳׳¡׳£": "אסף",
     "׳׳•׳¡׳˜׳₪׳”.׳": "מוסטפא.א",
     "׳׳•׳¡׳˜׳₪׳”.׳—": "מוסטפא.ח",
@@ -501,6 +505,23 @@ def normalize_legacy_hebrew_text(value):
     return LEGACY_HEBREW_TEXT_MAP.get(repaired, repaired)
 
 
+SUPPORT_USER_NAME_ALIASES = {
+    "זוהרה": "זורה",
+    "זורה": "זורה",
+    "איציק": "יצחק.ק",
+    "יצחק.ק": "יצחק.ק",
+    "מוסטפא.ח": "מוסטפה.ח",
+    "מוסטפה.ח": "מוסטפה.ח",
+    "מוסטפא.א": "מוסטפה.א",
+    "מוסטפה.א": "מוסטפה.א",
+}
+
+
+def canonical_support_user_name(value):
+    normalized = normalize_legacy_hebrew_text(value)
+    return SUPPORT_USER_NAME_ALIASES.get(normalized, normalized)
+
+
 def normalize_legacy_hebrew_data(value):
     if isinstance(value, dict):
         return {key: normalize_legacy_hebrew_data(item) for key, item in value.items()}
@@ -533,14 +554,15 @@ PAIS_NOTIFICATION_FROM = (
     or ""
 ).strip()
 TECHNICIAN_NOTIFICATION_EMAILS = {
-    "גולן": "golan@nimbusip.com",
-    "אסף": "assafh@nimbusip.com",
-    "מוסטפה.ח": "pelecom2016@gmail.com",
-    "מוסטפה.א": "mostpc55@gmail.com",
-    "איציק": "isaace@nimbusip.com",
-    "זורה": "zura@nimbusip.com",
-    "ניר": "support@nimbusip.com",
-    "יבגני": "support@nimbusip.com",
+    "\u05d2\u05d5\u05dc\u05df": "golan@nimbusip.com",
+    "\u05d0\u05e1\u05e3": "assafh@nimbusip.com",
+    "\u05d9\u05d5\u05e1\u05e3": "yossigorbov@hotmail.com",
+    "\u05de\u05d5\u05e1\u05d8\u05e4\u05d4.\u05d7": "pelecom2016@gmail.com",
+    "\u05de\u05d5\u05e1\u05d8\u05e4\u05d4.\u05d0": "mostpc55@gmail.com",
+    "\u05d9\u05e6\u05d7\u05e7.\u05e7": "isaac@nimbusip.com",
+    "\u05d6\u05d5\u05e8\u05d4": "zura@nimbusip.com",
+    "\u05e0\u05d9\u05e8": "support@nimbusip.com",
+    "\u05d9\u05d1\u05d2\u05e0\u05d9": "support@nimbusip.com",
 }
 PAIS_CALENDAR_GUEST_EMAILS = dict(TECHNICIAN_NOTIFICATION_EMAILS)
 SUPPORT_APP_BASE_URL = (
@@ -829,11 +851,15 @@ def israel_now():
 
 
 def support_user_name():
+    role = (session.get("role") or "").strip().lower()
+    full_name = canonical_support_user_name(session.get("full_name") or "")
+    if role in {"assigned_technician", "external_technician"} and full_name:
+        return full_name
     raw = (session.get("username") or session.get("email") or "").strip()
     local = raw.split("@")[0].lower()
     if raw.lower() == "business.support@hot.net.il":
         return "HOT"
-    if local in {"admin", "isaac"}:
+    if local == "admin":
         return "Admin"
     if local in {"eugeni", "yevgeni", "evgeni"}:
         return "יבגני"
@@ -843,9 +869,19 @@ def support_user_name():
         return "גולן"
     if local in {"asaf", "assafh"}:
         return "אסף"
+    if local in {"zura", "zohara"}:
+        return "זורה"
+    if local == "isaac":
+        return "יצחק.ק"
+    if local in {"yossi", "yossigorbov"}:
+        return "יוסף"
+    if local in {"pelecom2016", "mustafa.h", "mostafa.h"}:
+        return "מוסטפה.ח"
+    if local in {"mostpc55", "mustafa.a", "mostafa.a"}:
+        return "מוסטפה.א"
     if local in {"nastia", "nastya", "nastiya"}:
         return "נסטיה"
-    return normalize_legacy_hebrew_text(raw.split("@")[0]) or "Admin"
+    return canonical_support_user_name(raw.split("@")[0]) or "Admin"
 
 
 def support_user_is_admin():
@@ -863,15 +899,30 @@ def support_user_can_manage_users():
         return True
     raw = (session.get("username") or session.get("email") or "").strip()
     local = raw.split("@")[0].lower()
-    return local in {"admin", "isaac"}
+    return local == "admin"
 
 
 def support_user_is_assigned_technician():
-    return (session.get("role") or "").strip().lower() == "assigned_technician"
+    return (session.get("role") or "").strip().lower() in {"assigned_technician", "external_technician"}
 
 
 def support_user_is_hot_submitter():
     return (session.get("role") or "").strip().lower() == "hot_submitter"
+
+
+def support_user_is_nastya():
+    raw = (session.get("username") or session.get("email") or "").strip()
+    local = raw.split("@")[0].lower()
+    if local in {"nastia", "nastya", "nastiya"}:
+        return True
+    return canonical_support_user_name(session.get("full_name") or support_user_name()) in COORDINATION_USERS
+
+
+def support_user_can_set_cancelled_status(actor_name=None):
+    if support_user_is_admin():
+        return True
+    actor = canonical_support_user_name(actor_name or support_user_name())
+    return actor in COORDINATION_USERS or support_user_is_nastya()
 
 
 def assigned_technician_allowed_statuses():
@@ -901,12 +952,12 @@ def ticket_owner_name(ticket):
     ticket = ticket or {}
     details = ticket.get("details") or {}
     if board_supports_coordination(ticket.get("board_slug")):
-        return normalize_legacy_hebrew_text(details.get("coordinated_worker"))
-    return normalize_legacy_hebrew_text(ticket.get("assigned_to"))
+        return canonical_support_user_name(details.get("coordinated_worker"))
+    return canonical_support_user_name(ticket.get("assigned_to"))
 
 
 def assigned_technician_can_access_ticket(ticket, actor_name=None):
-    actor_name = normalize_legacy_hebrew_text(actor_name or support_user_name())
+    actor_name = canonical_support_user_name(actor_name or support_user_name())
     return (
         support_user_is_assigned_technician()
         and ticket_owner_name(ticket) == actor_name
@@ -920,12 +971,12 @@ def normalize_support_ticket(ticket):
     ticket.setdefault("board_slug", "support")
     ticket["status"] = normalize_ticket_status(ticket.get("board_slug"), ticket.get("status"))
     ticket.setdefault("assigned_to", "")
-    ticket["assigned_to"] = normalize_legacy_hebrew_text(ticket.get("assigned_to"))
+    ticket["assigned_to"] = canonical_support_user_name(ticket.get("assigned_to"))
     ticket.setdefault("solution", "")
     ticket.setdefault("priority", "Medium")
     ticket.setdefault("details", {})
     if isinstance(ticket["details"], dict) and ticket["details"].get("coordinated_worker"):
-        ticket["details"]["coordinated_worker"] = normalize_legacy_hebrew_text(ticket["details"].get("coordinated_worker"))
+        ticket["details"]["coordinated_worker"] = canonical_support_user_name(ticket["details"].get("coordinated_worker"))
     ticket.setdefault("attachments", [])
     ticket.setdefault("updates", [])
     ticket["created_at_display"] = (ticket.get("created_at_display") or "").strip() or format_support_ticket_datetime(ticket.get("created_at"))
@@ -941,7 +992,7 @@ def normalize_support_ticket(ticket):
 
 
 def support_ticket_is_done(ticket):
-    return normalize_ticket_status(ticket.get("board_slug"), ticket.get("status")) in {"Done", "בוצע", "נכשל"}
+    return normalize_ticket_status(ticket.get("board_slug"), ticket.get("status")) in {"Done", CANCELLED_TICKET_STATUS, "בוצע", "נכשל"}
 
 
 def support_ticket_is_open(ticket):
@@ -953,7 +1004,11 @@ def normalize_allowed_pages(values):
         return sorted(FULL_ACCESS_PAGES)
     if isinstance(values, str):
         values = [values]
-    normalized = {str(value).strip().lower() for value in values if str(value).strip()}
+    normalized = {
+        str(value).strip().lower()
+        for value in values
+        if str(value).strip() and not str(value).strip().lower().startswith(ACCESS_LEVEL_TOKEN_PREFIX)
+    }
     if not normalized:
         return sorted(FULL_ACCESS_PAGES)
     if "all" in normalized:
@@ -969,6 +1024,32 @@ def normalize_allowed_pages(values):
     return sorted(normalized)
 
 
+def normalize_access_level(value):
+    normalized = (value or "").strip().lower()
+    if normalized in {ACCESS_LEVEL_READ_ONLY, "readonly", "read-only", "read only", "ro"}:
+        return ACCESS_LEVEL_READ_ONLY
+    return ACCESS_LEVEL_READ_WRITE
+
+
+def access_level_token(value):
+    return f"{ACCESS_LEVEL_TOKEN_PREFIX}{normalize_access_level(value)}"
+
+
+def access_level_from_allowed_pages(values):
+    if isinstance(values, str):
+        values = [values]
+    for value in values or []:
+        raw = str(value or "").strip().lower()
+        if raw.startswith(ACCESS_LEVEL_TOKEN_PREFIX):
+            return normalize_access_level(raw[len(ACCESS_LEVEL_TOKEN_PREFIX):])
+    return ACCESS_LEVEL_READ_WRITE
+
+
+def build_allowed_pages_payload(values, access_level=None):
+    normalized_pages = normalize_allowed_pages(values)
+    return sorted(set(normalized_pages + [access_level_token(access_level)]))
+
+
 def allowed_pages_for_role(role):
     normalized_role = (role or "").strip().lower()
     if normalized_role == "admin_no_user_management":
@@ -977,13 +1058,23 @@ def allowed_pages_for_role(role):
         return sorted(TICKETS_ONLY_ALLOWED_PAGES)
     if normalized_role == "hot_submitter":
         return ["hot_tickets"]
-    if normalized_role == "assigned_technician":
+    if normalized_role in {"assigned_technician", "external_technician"}:
         return ["hot_tickets", "pais_tickets", "support_tickets"]
     return sorted(FULL_ACCESS_PAGES)
 
 
 def allowed_pages_for_current_user():
     return set(normalize_allowed_pages(session.get("allowed_pages")))
+
+
+def current_user_access_level():
+    return normalize_access_level(
+        session.get("access_level") or access_level_from_allowed_pages(session.get("allowed_pages"))
+    )
+
+
+def current_user_can_write():
+    return current_user_access_level() == ACCESS_LEVEL_READ_WRITE
 
 
 def user_can_access_page(page_key):
@@ -1210,7 +1301,40 @@ def support_page_key(board_slug, queue_slug=""):
 
 
 def technician_notification_email(worker_name):
-    return TECHNICIAN_NOTIFICATION_EMAILS.get((worker_name or "").strip(), "")
+    return TECHNICIAN_NOTIFICATION_EMAILS.get(canonical_support_user_name(worker_name), "")
+
+
+def technician_support_user_choices(tickets=None):
+    known_names = {canonical_support_user_name(name) for name in TECHNICIAN_SUPPORT_USERS}
+    known_names.update(canonical_support_user_name(name) for name in TECHNICIAN_NOTIFICATION_EMAILS.keys())
+    seen = set()
+    choices = []
+
+    def add_name(value):
+        name = canonical_support_user_name(value)
+        if not name or name in seen or name not in known_names:
+            return
+        seen.add(name)
+        choices.append(name)
+
+    for worker_name in TECHNICIAN_SUPPORT_USERS:
+        add_name(worker_name)
+
+    if tickets is None:
+        try:
+            tickets = load_support_tickets()
+        except Exception:
+            tickets = []
+
+    for ticket in tickets or []:
+        add_name((ticket or {}).get("assigned_to"))
+        add_name(((ticket or {}).get("details") or {}).get("coordinated_worker"))
+
+    return choices
+
+
+def technician_support_user_set(tickets=None):
+    return set(technician_support_user_choices(tickets=tickets))
 
 
 def parse_iso_date_value(value):
@@ -1660,6 +1784,7 @@ def user_password_is_valid(password):
 def normalize_user_profile_row(row):
     row = dict(row or {})
     allowed_pages = normalize_allowed_pages(row.get("allowed_pages"))
+    access_level = access_level_from_allowed_pages(row.get("allowed_pages"))
     return {
         "id": (row.get("id") or "").strip(),
         "email": (row.get("email") or "").strip().lower(),
@@ -1667,6 +1792,7 @@ def normalize_user_profile_row(row):
         "role": (row.get("role") or "user").strip().lower(),
         "group_code": (row.get("group_code") or "").strip(),
         "allowed_pages": allowed_pages,
+        "access_level": access_level,
         "landing_page": (row.get("landing_page") or "").strip() or "/home",
         "scope_type": (row.get("scope_type") or "").strip(),
         "scope_value": (row.get("scope_value") or "").strip(),
@@ -1926,7 +2052,26 @@ def send_user_invite_email(to_address, invite_link, full_name=""):
 
 
 
-def update_user_management_profile(user_id, email, full_name, role, group_code, allowed_pages, landing_page, scope_type, scope_value):
+
+
+def set_user_management_profile_active(user_id, active):
+    normalized_user_id = str(user_id or "").strip()
+    if not normalized_user_id:
+        raise ValueError("מזהה משתמש חסר")
+    profile = get_user_profile_by_id(normalized_user_id)
+    if not profile:
+        raise ValueError("המשתמש לא נמצא")
+
+    _supabase_request(
+        "PATCH",
+        supabase_users_table_name(),
+        params={"id": f"eq.{normalized_user_id}"},
+        json_body={"active": bool(active)},
+        prefer="return=minimal",
+    )
+    return get_user_profile_by_id(normalized_user_id) or {**profile, "active": bool(active)}
+
+def update_user_management_profile(user_id, email, full_name, role, group_code, allowed_pages, landing_page, scope_type, scope_value, access_level):
     normalized_user_id = str(user_id or "").strip()
     if not normalized_user_id:
         raise ValueError("מזהה משתמש חסר")
@@ -1935,10 +2080,11 @@ def update_user_management_profile(user_id, email, full_name, role, group_code, 
         raise ValueError("אימייל הוא שדה חובה")
     if not email_address_is_valid(normalized_email):
         raise ValueError("כתובת האימייל לא תקינה")
-    if role not in {"admin", "admin_no_user_management", "user", "tickets_only", "hot_submitter", "assigned_technician"}:
+    if role not in {"admin", "admin_no_user_management", "user", "tickets_only", "hot_submitter", "assigned_technician", "external_technician"}:
         raise ValueError("תפקיד לא תקין")
 
     allowed_pages = normalize_allowed_pages(allowed_pages)
+    access_level = normalize_access_level(access_level)
     if role == "admin_no_user_management":
         allowed_pages = allowed_pages_for_role(role)
     if not allowed_pages:
@@ -1970,7 +2116,7 @@ def update_user_management_profile(user_id, email, full_name, role, group_code, 
             "full_name": full_name,
             "role": role,
             "group_code": group_code,
-            "allowed_pages": allowed_pages,
+            "allowed_pages": build_allowed_pages_payload(allowed_pages, access_level),
             "landing_page": landing_page,
             "scope_type": scope_type or None,
             "scope_value": scope_value or None,
@@ -1988,6 +2134,7 @@ def update_user_management_profile(user_id, email, full_name, role, group_code, 
         "role": role,
         "group_code": group_code,
         "allowed_pages": allowed_pages,
+        "access_level": access_level,
         "landing_page": landing_page,
         "scope_type": scope_type or "",
         "scope_value": scope_value or "",
@@ -1999,8 +2146,9 @@ def update_user_management_profile(user_id, email, full_name, role, group_code, 
         "updated_at": profile.get("updated_at") or "",
     })
 
-def create_or_refresh_user_invite(email, full_name, role, group_code, allowed_pages, landing_page, scope_type, scope_value):
+def create_or_refresh_user_invite(email, full_name, role, group_code, allowed_pages, landing_page, scope_type, scope_value, access_level):
     normalized_email = (email or "").strip().lower()
+    access_level = normalize_access_level(access_level)
     if not normalized_email:
         raise ValueError("Email is required")
     if not email_address_is_valid(normalized_email):
@@ -2022,7 +2170,7 @@ def create_or_refresh_user_invite(email, full_name, role, group_code, allowed_pa
                 "full_name": full_name,
                 "role": role,
                 "group_code": group_code,
-                "allowed_pages": allowed_pages,
+                "allowed_pages": build_allowed_pages_payload(allowed_pages, access_level),
                 "landing_page": landing_page,
                 "scope_type": scope_type or None,
                 "scope_value": scope_value or None,
@@ -2063,7 +2211,7 @@ def create_or_refresh_user_invite(email, full_name, role, group_code, allowed_pa
                 "full_name": full_name,
                 "role": role,
                 "group_code": group_code,
-                "allowed_pages": allowed_pages,
+                "allowed_pages": build_allowed_pages_payload(allowed_pages, access_level),
                 "landing_page": landing_page,
                 "scope_type": scope_type or None,
                 "scope_value": scope_value or None,
@@ -4485,13 +4633,32 @@ def send_nastia_waiting_alert_email(ticket):
 
 def send_nastia_cancellation_alert_email(previous_ticket, updated_ticket):
     subject, body, html_body = build_nastia_cancellation_alert_email(previous_ticket, updated_ticket)
+    recipient = configured_nastia_notification_email()
     send_plain_email(
-        configured_nastia_notification_email(),
+        recipient,
         subject,
         body,
         from_address=default_notification_from_address(),
         html_body=html_body,
     )
+    return recipient
+
+
+def send_worker_cancellation_alert_email(previous_ticket, updated_ticket):
+    previous_details = (previous_ticket or {}).get("details") or {}
+    worker_name = canonical_support_user_name(previous_details.get("coordinated_worker"))
+    to_address = technician_notification_email(worker_name)
+    if not to_address:
+        return ""
+    subject, body, html_body = build_nastia_cancellation_alert_email(previous_ticket, updated_ticket)
+    send_plain_email(
+        to_address,
+        subject,
+        body,
+        from_address=default_notification_from_address(),
+        html_body=html_body,
+    )
+    return to_address
 
 
 def process_nastia_ticket_notification(previous_ticket, updated_ticket, actor="", enabled=True, cancellation_requested=False):
@@ -4500,16 +4667,35 @@ def process_nastia_ticket_notification(previous_ticket, updated_ticket, actor=""
         "notification_sent": False,
         "notification_error": "",
         "notification_error_detail": "",
+        "notification_recipients": [],
+        "notification_message": "",
     }
     if cancellation_requested and should_send_nastia_cancellation_alert(previous_ticket, updated_ticket, enabled=enabled):
         result["notification_attempted"] = True
+        errors = []
+        recipients = []
         try:
-            send_nastia_cancellation_alert_email(previous_ticket, updated_ticket)
+            nastya_recipient = send_nastia_cancellation_alert_email(previous_ticket, updated_ticket)
+            if nastya_recipient:
+                recipients.append(nastya_recipient)
             result["notification_sent"] = True
         except Exception as exc:
             print(f"Nastia cancellation alert email warning for ticket {updated_ticket.get('id')}: {exc}")
-            result["notification_error"] = user_friendly_email_error(exc)
-            result["notification_error_detail"] = str(exc)
+            errors.append(exc)
+        try:
+            worker_recipient = send_worker_cancellation_alert_email(previous_ticket, updated_ticket)
+            if worker_recipient:
+                recipients.append(worker_recipient)
+                result["notification_sent"] = True
+        except Exception as exc:
+            print(f"Worker cancellation alert email warning for ticket {updated_ticket.get('id')}: {exc}")
+            errors.append(exc)
+        result["notification_recipients"] = recipients
+        if recipients:
+            result["notification_message"] = f"מייל ביטול נשלח אל: {', '.join(recipients)}"
+        if errors:
+            result["notification_error"] = user_friendly_email_error(errors[0])
+            result["notification_error_detail"] = " | ".join(str(exc) for exc in errors)
         return result
 
     if should_send_nastia_waiting_alert(previous_ticket, updated_ticket, actor):
@@ -4573,7 +4759,7 @@ def nastia_notification_enabled(previous_ticket, updated_ticket, actor, changes)
     if (
         (updated_ticket.get("board_slug") or "").strip().lower() == "pais"
         and coordination_ticket_status_changed(previous_ticket, updated_ticket)
-        and (actor or "").strip() in TECHNICIAN_SUPPORT_USERS
+        and canonical_support_user_name(actor) in TECHNICIAN_SUPPORT_USERS
     ):
         return True
     if not (coordination_ticket_has_complete_details(updated_ticket) and coordination_ticket_details_changed(
@@ -5130,6 +5316,7 @@ def authenticate_login(username, password):
             "username": profile["email"],
             "role": profile["role"],
             "allowed_pages": profile["allowed_pages"] or allowed_pages_for_role(profile["role"]),
+            "access_level": profile.get("access_level") or ACCESS_LEVEL_READ_WRITE,
             "landing_page": profile.get("landing_page") or "/home",
             "full_name": profile.get("full_name") or "",
         }
@@ -5141,6 +5328,7 @@ def authenticate_login(username, password):
                 "username": supabase_user["email"],
                 "role": supabase_user["role"],
                 "allowed_pages": supabase_user["allowed_pages"] or allowed_pages_for_role(supabase_user["role"]),
+                "access_level": access_level_from_allowed_pages(supabase_user.get("allowed_pages")),
             }
         return None
 
@@ -5150,6 +5338,7 @@ def authenticate_login(username, password):
                 "username": username,
                 "role": override["role"],
                 "allowed_pages": normalize_allowed_pages(override.get("allowed_pages")),
+                "access_level": access_level_from_allowed_pages(override.get("allowed_pages")),
             }
         return None
 
@@ -5159,6 +5348,7 @@ def authenticate_login(username, password):
             "username": username,
             "role": role,
             "allowed_pages": allowed_pages_for_role(role),
+            "access_level": ACCESS_LEVEL_READ_WRITE,
         }
     return None
 
@@ -6747,6 +6937,7 @@ def login():
             session["username"] = auth["username"]
             session["role"] = auth["role"]
             session["allowed_pages"] = auth["allowed_pages"]
+            session["access_level"] = auth.get("access_level") or ACCESS_LEVEL_READ_WRITE
             session["landing_page"] = auth.get("landing_page") or ""
             session["full_name"] = auth.get("full_name") or ""
             profile = get_user_profile_by_email(auth["username"])
@@ -6833,7 +7024,13 @@ def user_management_data():
         return redirect(url_for("login"))
     if not support_user_can_manage_users():
         return api_error("אין הרשאה לגשת לעמוד זה", 403, "access_denied")
-    return jsonify({"ok": True, "users": list_user_profiles(), "groups": list_user_groups()})
+    return jsonify({
+        "ok": True,
+        "users": list_user_profiles(),
+        "groups": list_user_groups(),
+        "can_write": current_user_can_write(),
+        "current_access_level": current_user_access_level(),
+    })
 
 
 @app.route("/user-management-invite", methods=["POST"])
@@ -6842,6 +7039,8 @@ def user_management_invite():
         return redirect(url_for("login"))
     if not support_user_can_manage_users():
         return api_error("אין הרשאה לגשת לעמוד זה", 403, "access_denied")
+    if not current_user_can_write():
+        return jsonify({"ok": False, "message": "למשתמש זה מוגדרת הרשאת קריאה בלבד"}), 403
 
     payload = request.get_json(silent=True) or {}
     email = (payload.get("email") or "").strip().lower()
@@ -6851,11 +7050,12 @@ def user_management_invite():
     landing_page = (payload.get("landing_page") or "/home").strip() or "/home"
     scope_type = (payload.get("scope_type") or "").strip()
     scope_value = (payload.get("scope_value") or "").strip()
+    access_level = normalize_access_level(payload.get("access_level"))
     allowed_pages = normalize_allowed_pages(payload.get("allowed_pages"))
     if role == "admin_no_user_management":
         allowed_pages = allowed_pages_for_role(role)
 
-    if role not in {"admin", "admin_no_user_management", "user", "tickets_only", "hot_submitter", "assigned_technician"}:
+    if role not in {"admin", "admin_no_user_management", "user", "tickets_only", "hot_submitter", "assigned_technician", "external_technician"}:
         return jsonify({"ok": False, "message": "תפקיד לא תקין"}), 400
     if not allowed_pages:
         return jsonify({"ok": False, "message": "יש לבחור לפחות עמוד מורשה אחד"}), 400
@@ -6870,6 +7070,7 @@ def user_management_invite():
             landing_page,
             scope_type,
             scope_value,
+            access_level,
         )
     except ValueError as exc:
         return jsonify({"ok": False, "message": str(exc)}), 400
@@ -6885,6 +7086,8 @@ def user_management_resend_invite(user_id):
         return redirect(url_for("login"))
     if not support_user_can_manage_users():
         return api_error("אין הרשאה לגשת לעמוד זה", 403, "access_denied")
+    if not current_user_can_write():
+        return jsonify({"ok": False, "message": "למשתמש זה מוגדרת הרשאת קריאה בלבד"}), 403
 
     profile = get_user_profile_by_id(user_id)
     if not profile:
@@ -6900,6 +7103,7 @@ def user_management_resend_invite(user_id):
             profile["landing_page"],
             profile["scope_type"],
             profile["scope_value"],
+            profile.get("access_level"),
         )
     except Exception as exc:
         return jsonify({"ok": False, "message": user_friendly_email_error(str(exc)) or str(exc)}), 500
@@ -6915,6 +7119,8 @@ def user_management_update(user_id):
         return redirect(url_for("login"))
     if not support_user_can_manage_users():
         return api_error("אין הרשאה לגשת לעמוד זה", 403, "access_denied")
+    if not current_user_can_write():
+        return jsonify({"ok": False, "message": "למשתמש זה מוגדרת הרשאת קריאה בלבד"}), 403
 
     payload = request.get_json(silent=True) or {}
     email = (payload.get("email") or "").strip().lower()
@@ -6924,6 +7130,7 @@ def user_management_update(user_id):
     landing_page = (payload.get("landing_page") or "/home").strip() or "/home"
     scope_type = (payload.get("scope_type") or "").strip()
     scope_value = (payload.get("scope_value") or "").strip()
+    access_level = normalize_access_level(payload.get("access_level"))
     allowed_pages = payload.get("allowed_pages")
 
     existing_profile = get_user_profile_by_id(user_id)
@@ -6939,6 +7146,7 @@ def user_management_update(user_id):
             landing_page,
             scope_type,
             scope_value,
+            access_level,
         )
     except ValueError as exc:
         return jsonify({"ok": False, "message": str(exc)}), 400
@@ -6951,6 +7159,7 @@ def user_management_update(user_id):
         session["username"] = updated_email
         session["role"] = updated_profile.get("role") or "user"
         session["allowed_pages"] = updated_profile.get("allowed_pages") or []
+        session["access_level"] = updated_profile.get("access_level") or ACCESS_LEVEL_READ_WRITE
         session["landing_page"] = updated_profile.get("landing_page") or ""
         session["full_name"] = updated_profile.get("full_name") or ""
 
@@ -6963,6 +7172,8 @@ def user_management_reset_password(user_id):
         return redirect(url_for("login"))
     if not support_user_can_manage_users():
         return api_error("אין הרשאה לגשת לעמוד זה", 403, "access_denied")
+    if not current_user_can_write():
+        return jsonify({"ok": False, "message": "למשתמש זה מוגדרת הרשאת קריאה בלבד"}), 403
 
     profile = get_user_profile_by_id(user_id)
     if not profile:
@@ -6978,11 +7189,46 @@ def user_management_reset_password(user_id):
             profile["landing_page"],
             profile["scope_type"],
             profile["scope_value"],
+            profile.get("access_level"),
         )
     except Exception as exc:
         return jsonify({"ok": False, "message": user_friendly_email_error(str(exc)) or str(exc)}), 500
 
     return jsonify({"ok": True, **result, "message": f"קישור לאיפוס סיסמה נשלח אל {result.get('email') or profile['email']}"})
+
+
+
+@app.route("/user-management/<user_id>/set-active", methods=["POST"])
+def user_management_set_active(user_id):
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+    if not support_user_can_manage_users():
+        return api_error("אין הרשאה לגשת לעמוד זה", 403, "access_denied")
+    if not current_user_can_write():
+        return jsonify({"ok": False, "message": "למשתמש זה מוגדרת הרשאת קריאה בלבד"}), 403
+
+    payload = request.get_json(silent=True) or {}
+    active = bool(payload.get("active", True))
+    profile = get_user_profile_by_id(user_id)
+    if not profile:
+        return jsonify({"ok": False, "message": "המשתמש לא נמצא"}), 404
+
+    session_username = (session.get("username") or "").strip().lower()
+    if not active and session_username and session_username == (profile.get("email") or "").strip().lower():
+        return jsonify({"ok": False, "message": "לא ניתן לחסום את המשתמש המחובר כעת"}), 400
+
+    try:
+        updated_profile = set_user_management_profile_active(user_id, active)
+    except ValueError as exc:
+        return jsonify({"ok": False, "message": str(exc)}), 400
+    except Exception as exc:
+        return jsonify({"ok": False, "message": user_friendly_email_error(str(exc)) or str(exc)}), 500
+
+    return jsonify({
+        "ok": True,
+        "user": updated_profile,
+        "message": "המשתמש הופעל מחדש" if active else "המשתמש נחסם",
+    })
 
 @app.route("/welcome", methods=["GET", "POST"])
 @app.route("/welcome/", methods=["GET", "POST"])
@@ -7435,6 +7681,8 @@ def render_ticket_board_page(board_slug):
     board = get_ticket_board(board_slug)
     register_service_activity(support_page_key(board_slug))
     allowed_pages = allowed_pages_for_current_user()
+    board_page_key = support_page_key(board["slug"])
+    can_write_board = current_user_can_write()
     assigned_technician_mode = support_user_is_assigned_technician()
     hot_submitter_mode = support_user_is_hot_submitter()
     return render_template(
@@ -7442,8 +7690,8 @@ def render_ticket_board_page(board_slug):
         current_user=session.get("username", ""),
         is_admin=support_user_is_admin(),
         support_user=support_user_name(),
-        support_users=TECHNICIAN_SUPPORT_USERS,
-        technician_users=TECHNICIAN_SUPPORT_USERS,
+        support_users=technician_support_user_choices(),
+        technician_users=technician_support_user_choices(),
         ticket_boards=load_ticket_boards(),
         ticket_board=board,
         page_mode="board",
@@ -7451,7 +7699,7 @@ def render_ticket_board_page(board_slug):
         page_subtitle=board["name"],
         page_icon_path=board.get("icon_path") or "",
         ticket_queue="",
-        show_create_button=not assigned_technician_mode,
+        show_create_button=not assigned_technician_mode and can_write_board,
         show_pais_report=board_has_coordination_report(board["slug"]) and not assigned_technician_mode and not hot_submitter_mode,
         service_types=SUPPORT_SERVICE_TYPES,
         ticket_types=SUPPORT_TICKET_TYPES,
@@ -7462,12 +7710,14 @@ def render_ticket_board_page(board_slug):
         pais_statuses=PAIS_STATUSES,
         nastia_notification_email=configured_nastia_notification_email(),
         ticket_operator_mode="assigned_technician" if assigned_technician_mode else "default",
-        can_upload_ticket_attachments=True,
-        can_manage_existing_ticket_attachments=not hot_submitter_mode,
-        can_delete_ticket_attachments=not assigned_technician_mode and not hot_submitter_mode,
-        can_edit_existing_tickets=not hot_submitter_mode,
+        can_upload_ticket_attachments=can_write_board,
+        can_manage_existing_ticket_attachments=can_write_board and not hot_submitter_mode,
+        can_delete_ticket_attachments=can_write_board and not assigned_technician_mode and not hot_submitter_mode,
+        can_edit_existing_tickets=can_write_board and not hot_submitter_mode,
         can_view_board_report=board_has_coordination_report(board["slug"]) and not assigned_technician_mode and not hot_submitter_mode,
         default_ticket_scope="my" if assigned_technician_mode else "all",
+        access_level=current_user_access_level(),
+        can_write_board=can_write_board,
         can_access_home="home" in allowed_pages,
         can_access_support="support_tickets" in allowed_pages,
         can_access_pais="pais_tickets" in allowed_pages,
@@ -7543,8 +7793,8 @@ def nastia_tickets_page():
         current_user=session.get("username", ""),
         is_admin=support_user_is_admin(),
         support_user=support_user_name(),
-        support_users=TECHNICIAN_SUPPORT_USERS,
-        technician_users=TECHNICIAN_SUPPORT_USERS,
+        support_users=technician_support_user_choices(),
+        technician_users=technician_support_user_choices(),
         ticket_boards=load_ticket_boards(),
         ticket_board=board,
         page_mode="nastia",
@@ -7667,7 +7917,7 @@ def support_tickets_data():
         "next_id": f"#{next_support_ticket_id():04d}",
         "current_user": current_support_user,
         "board": get_ticket_board(board_slug),
-        "users": TECHNICIAN_SUPPORT_USERS,
+        "users": technician_support_user_choices(filtered),
         "statuses": board_statuses(board_slug),
     })
 
@@ -7805,6 +8055,8 @@ def technician_reminders_cron():
 def support_tickets_create():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
+    if not current_user_can_write():
+        return jsonify({"ok": False, "message": "למשתמש זה מוגדרת הרשאת קריאה בלבד"}), 403
     if support_user_is_assigned_technician():
         return jsonify({"ok": False, "message": "Technician accounts cannot create tickets"}), 403
 
@@ -7982,6 +8234,8 @@ def support_tickets_create():
 def support_tickets_update():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
+    if not current_user_can_write():
+        return jsonify({"ok": False, "message": "למשתמש זה מוגדרת הרשאת קריאה בלבד"}), 403
     if support_user_is_hot_submitter():
         return jsonify({"ok": False, "message": "HOT accounts can only view tickets and create new ones"}), 403
 
@@ -8039,9 +8293,12 @@ def support_tickets_update():
         ):
             payload["status"] = COORDINATION_PENDING_STATUS
 
+    available_technicians = technician_support_user_set()
+
     if "assigned_to" in payload:
-        assigned_to = (payload.get("assigned_to") or "").strip()
-        if assigned_to and assigned_to not in TECHNICIAN_SUPPORT_USERS:
+        assigned_to = canonical_support_user_name((payload.get("assigned_to") or "").strip())
+        payload["assigned_to"] = assigned_to
+        if assigned_to and assigned_to not in available_technicians:
             return jsonify({"ok": False, "message": "Invalid assignee"}), 400
 
     if "status" in payload:
@@ -8050,6 +8307,21 @@ def support_tickets_update():
         payload["status"] = status
         if status not in ALL_TICKET_STATUSES:
             return jsonify({"ok": False, "message": "Invalid status"}), 400
+        if status == CANCELLED_TICKET_STATUS:
+            if not support_user_can_set_cancelled_status(actor):
+                return jsonify({"ok": False, "message": "Only Admin or Nastya can set status to בוטל"}), 403
+            current_status = normalize_ticket_status((target_ticket or {}).get("board_slug"), (target_ticket or {}).get("status"))
+            if current_status == "בוצע":
+                return jsonify({"ok": False, "message": "לא ניתן להעביר קריאה עם סטטוס בוצע לסטטוס בוטל"}), 400
+            details = payload.get("details") if isinstance(payload.get("details"), dict) else {}
+            details.update({
+                "coordinated_worker": "",
+                "visit_date": "",
+                "visit_hour_from": "",
+                "visit_hour_to": "",
+            })
+            payload["details"] = details
+            payload["send_nastia_cancellation_notification"] = True
     if "details" in payload and isinstance(payload.get("details"), dict):
         details = payload["details"]
         customer_type = (details.get("customer_type") or "").strip()
@@ -8064,11 +8336,12 @@ def support_tickets_update():
             (details.get("service_address") or "").strip(),
         ]):
             return jsonify({"ok": False, "message": "יש למלא שם העסק, איש קשר וכתובת עבור סוג הטיפול שנבחר"}), 400
-        coordinated_worker = (details.get("coordinated_worker") or "").strip()
+        coordinated_worker = canonical_support_user_name((details.get("coordinated_worker") or "").strip())
+        details["coordinated_worker"] = coordinated_worker
         visit_date = (details.get("visit_date") or "").strip()
         visit_hour_from = (details.get("visit_hour_from") or "").strip()
         visit_hour_to = (details.get("visit_hour_to") or "").strip()
-        if coordinated_worker and coordinated_worker not in TECHNICIAN_SUPPORT_USERS:
+        if coordinated_worker and coordinated_worker not in available_technicians:
             return jsonify({"ok": False, "message": "Invalid coordinated worker"}), 400
         if any([coordinated_worker, visit_date, visit_hour_from, visit_hour_to]) and not all([coordinated_worker, visit_date, visit_hour_from, visit_hour_to]):
             return jsonify({"ok": False, "message": "יש למלא עובד, תאריך ושעת ביקור מלאה"}), 400
@@ -8102,6 +8375,8 @@ def support_tickets_update():
 def support_tickets_send_email():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
+    if not current_user_can_write():
+        return jsonify({"ok": False, "message": "למשתמש זה מוגדרת הרשאת קריאה בלבד"}), 403
     if not support_user_is_admin():
         return jsonify({"ok": False, "message": "Admin access required"}), 403
 
@@ -8127,6 +8402,8 @@ def support_tickets_send_email():
 def support_tickets_attachments():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
+    if not current_user_can_write():
+        return jsonify({"ok": False, "message": "למשתמש זה מוגדרת הרשאת קריאה בלבד"}), 403
     if support_user_is_hot_submitter():
         return jsonify({"ok": False, "message": "HOT accounts cannot modify existing tickets"}), 403
 
@@ -8159,6 +8436,8 @@ def support_tickets_attachments():
 def support_tickets_field_report():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
+    if not current_user_can_write():
+        return jsonify({"ok": False, "message": "למשתמש זה מוגדרת הרשאת קריאה בלבד"}), 403
     if not support_user_is_assigned_technician():
         return jsonify({"ok": False, "message": "Technician access required"}), 403
 
@@ -8203,6 +8482,8 @@ def support_tickets_field_report():
 def support_tickets_attachment_delete():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
+    if not current_user_can_write():
+        return jsonify({"ok": False, "message": "למשתמש זה מוגדרת הרשאת קריאה בלבד"}), 403
     if support_user_is_hot_submitter():
         return jsonify({"ok": False, "message": "HOT accounts cannot modify existing tickets"}), 403
     if support_user_is_assigned_technician():
@@ -8234,6 +8515,8 @@ def support_tickets_attachment_delete():
 def support_tickets_delete():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
+    if not current_user_can_write():
+        return jsonify({"ok": False, "message": "למשתמש זה מוגדרת הרשאת קריאה בלבד"}), 403
     if not support_user_is_admin():
         return jsonify({"ok": False, "message": "Admin access required"}), 403
 
