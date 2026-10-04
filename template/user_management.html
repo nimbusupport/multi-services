@@ -22,24 +22,166 @@
         <i class="fa-solid fa-arrow-right"></i>
         <span>חזרה לדשבורד</span>
       </a>
-      <div>
-        <p class="hero-kicker">Admin</p>
+      <div class="hero-copy">
+        <p class="hero-kicker">ניהול והרשאות</p>
         <h1>ניהול משתמשים</h1>
-        <p class="hero-subtitle">יצירת משתמשים חדשים, הגדרת הרשאות עמודים ושליחת הזמנה ראשונית במייל.</p>
+        <p class="hero-subtitle">מסך אחד מסודר ליצירת משתמשים, עריכת הרשאות, שליחת הזמנות ומעקב אחרי סטטוס ההפעלה.</p>
       </div>
     </section>
 
-    <section class="user-management-grid">
-      <section class="panel create-user-panel">
-        <div class="panel-head">
-          <div>
-            <p id="user-form-kicker" class="panel-kicker">הזמנה חדשה</p>
-            <h2 id="user-form-title">הוספת משתמש ושליחת הזמנה</h2>
-          </div>
-        </div>
+    <section class="summary-grid" aria-label="סיכום משתמשים">
+      <article class="summary-card accent-cyan">
+        <span class="summary-label">סה&quot;כ משתמשים</span>
+        <strong id="summary-total-users" class="summary-value">0</strong>
+        <span class="summary-note">כל המשתמשים הרשומים במערכת</span>
+      </article>
+      <article class="summary-card accent-green">
+        <span class="summary-label">משתמשים פעילים</span>
+        <strong id="summary-active-users" class="summary-value">0</strong>
+        <span class="summary-note">משתמשים שסיימו הרשמה ויכולים לעבוד</span>
+      </article>
+      <article class="summary-card accent-gold">
+        <span class="summary-label">ממתינים להפעלה</span>
+        <strong id="summary-pending-users" class="summary-value">0</strong>
+        <span class="summary-note">נשלחה הזמנה אך עדיין לא הוגדרה סיסמה</span>
+      </article>
+      <article class="summary-card accent-rose">
+        <span class="summary-label">חסומים</span>
+        <strong id="summary-blocked-users" class="summary-value">0</strong>
+        <span class="summary-note">משתמשים חסומים שלא יכולים להיכנס</span>
+      </article>
+    </section>
 
-        <form id="user-invite-form" class="user-form">
-          <input id="edit-user-id" type="hidden">
+    <section class="workspace-grid">
+      <div class="manage-users-column">
+        <section class="panel overview-panel">
+          <div class="panel-head">
+            <div>
+              <p class="panel-kicker">סקירה מהירה</p>
+              <h2>קבוצות, סטטוסים והרשאות</h2>
+            </div>
+          </div>
+          <div class="overview-grid">
+            <article class="overview-card">
+              <h3>סטטוסים</h3>
+              <ul class="overview-list">
+                <li><span class="status-dot done"></span> פעיל — המשתמש סיים הרשמה ויכול להיכנס.</li>
+                <li><span class="status-dot pending"></span> ממתין — נשלחה הזמנה ועדיין לא הוגדרה סיסמה.</li>
+                <li><span class="status-dot inactive"></span> חסום — כניסה למערכת חסומה עד הפעלה מחדש.</li>
+              </ul>
+            </article>
+            <article class="overview-card">
+              <h3>קבוצות משתמשים</h3>
+              <div id="groups-overview" class="group-cards"></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="panel user-list-panel">
+          <div class="panel-head">
+            <div>
+              <p class="panel-kicker">משתמשים קיימים</p>
+              <h2>ניהול משתמשים, הזמנות והרשאות</h2>
+            </div>
+            <div class="panel-head-actions">
+              <button id="open-create-user-modal" class="action-btn add-user-top-btn" type="button">
+                <i class="fa-solid fa-user-plus"></i>
+                <span>הוספת משתמש</span>
+              </button>
+              <button id="refresh-users" class="ghost-btn refresh-btn" type="button">
+                <i class="fa-solid fa-rotate"></i>
+                <span>רענון</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="toolbar-card">
+            <div class="filters-grid">
+              <label>
+                <span>חיפוש</span>
+                <input id="users-search" type="search" placeholder="חיפוש לפי שם או אימייל">
+              </label>
+              <label>
+                <span>סטטוס</span>
+                <select id="users-status-filter">
+                  <option value="all">כל הסטטוסים</option>
+                  <option value="active">פעיל</option>
+                  <option value="pending">ממתין</option>
+                  <option value="inactive">חסום</option>
+                </select>
+              </label>
+              <label>
+                <span>תפקיד</span>
+                <select id="users-role-filter">
+                  <option value="all">כל התפקידים</option>
+                  <option value="admin">מנהל</option>
+                  <option value="admin_no_user_management">מנהל ללא ניהול משתמשים</option>
+                  <option value="user">משתמש</option>
+                  <option value="tickets_only">תקלות בלבד</option>
+                  <option value="hot_submitter">שולח HOT</option>
+                  <option value="assigned_technician">טכנאי שירות שטח</option>
+                  <option value="external_technician">טכנאי חיצוני</option>
+                </select>
+              </label>
+              <label>
+                <span>קבוצה</span>
+                <select id="users-group-filter">
+                  <option value="all">כל הקבוצות</option>
+                </select>
+              </label>
+            </div>
+            <div class="toolbar-meta">
+              <p id="users-results-count" class="results-count">0 משתמשים</p>
+              <p id="users-message" class="form-message users-message"></p>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table class="users-table">
+              <thead>
+                <tr>
+                  <th>שם</th>
+                  <th>אימייל</th>
+                  <th>תפקיד</th>
+                  <th>קבוצה</th>
+                  <th>רמת הרשאה</th>
+                  <th>עמודים</th>
+                  <th>עמוד נחיתה</th>
+                  <th>סטטוס</th>
+                  <th>פעולות</th>
+                </tr>
+              </thead>
+              <tbody id="users-table-body">
+                <tr>
+                  <td colspan="9">טוען משתמשים...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <div id="user-form-modal" class="user-form-modal" hidden>
+    <div class="user-form-dialog panel" role="dialog" aria-modal="true" aria-labelledby="user-form-title">
+      <div class="panel-head user-form-dialog-head">
+        <div>
+          <p id="user-form-kicker" class="panel-kicker">משתמש חדש</p>
+          <h2 id="user-form-title">הוספת משתמש ושליחת הזמנה</h2>
+        </div>
+        <div class="user-form-dialog-actions">
+          <span id="form-mode-badge" class="panel-badge">יצירה</span>
+          <button id="close-user-form-modal" class="ghost-btn user-form-close" type="button" aria-label="סגור">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+      </div>
+
+      <form id="user-invite-form" class="user-form">
+        <input id="edit-user-id" type="hidden">
+
+        <div class="form-grid">
           <label>
             <span>אימייל</span>
             <input id="invite-email" type="email" required placeholder="name@nimbusip.com">
@@ -57,12 +199,20 @@
               <option value="tickets_only">תקלות בלבד</option>
               <option value="hot_submitter">שולח HOT</option>
               <option value="assigned_technician">טכנאי שירות שטח</option>
+              <option value="external_technician">טכנאי חיצוני</option>
             </select>
           </label>
           <label>
             <span>קבוצת משתמש</span>
             <select id="invite-group-code">
               <option value="">ללא</option>
+            </select>
+          </label>
+          <label>
+            <span>רמת הרשאה</span>
+            <select id="invite-access-level">
+              <option value="read_write">קריאה ועריכה</option>
+              <option value="read_only">קריאה בלבד</option>
             </select>
           </label>
           <label>
@@ -75,75 +225,64 @@
               <option value="">ללא</option>
               <option value="project_manager">מנהל פרויקט</option>
               <option value="group">קבוצה</option>
-              <option value="none">ללא</option>
             </select>
           </label>
-          <label>
+          <label class="field-span-2">
             <span>ערך סינון</span>
-            <input id="invite-scope-value" type="text">
+            <input id="invite-scope-value" type="text" placeholder="לדוגמה: דור זוהר / support">
           </label>
+        </div>
 
-          <fieldset class="pages-fieldset">
-            <legend>עמודים מורשים</legend>
+        <fieldset id="pages-fieldset" class="pages-fieldset pages-fieldset-collapsible">
+          <legend class="sr-only">עמודים מורשים</legend>
+          <button id="pages-toggle-btn" class="pages-toggle-btn" type="button" aria-expanded="false" aria-controls="pages-panel">
+            <span class="pages-toggle-copy">
+              <strong>עמודים מורשים</strong>
+              <small id="pages-toggle-summary">לחצו להצגת ההרשאות</small>
+            </span>
+            <i class="fa-solid fa-chevron-down"></i>
+          </button>
+          <div id="pages-panel" class="pages-panel" hidden>
+            <div class="fieldset-head">
+              <p>בחרו אילו מסכים המשתמש יראה במערכת.</p>
+            </div>
             <div id="invite-pages" class="pages-grid"></div>
-          </fieldset>
-
-          <p id="invite-message" class="form-message"></p>
-          <div class="form-actions">
-            <button id="user-form-submit" class="submit-btn" type="submit">
-              <i class="fa-solid fa-paper-plane"></i>
-              <span id="user-form-submit-label">הוספת משתמש ושליחת הזמנה</span>
-          </button>
-            <button id="reset-password-btn" class="ghost-btn" type="button" hidden>
-              <i class="fa-solid fa-key"></i>
-              <span>איפוס סיסמה</span>
-            </button>
-            <button id="cancel-edit-btn" class="ghost-btn" type="button" hidden>
-              <i class="fa-solid fa-xmark"></i>
-              <span>בטל עריכה</span>
-            </button>
           </div>
-        </form>
-      </section>
+        </fieldset>
 
-      <section class="panel user-list-panel">
-        <div class="panel-head">
-          <div>
-            <p class="panel-kicker">רשימת משתמשים</p>
-            <h2>משתמשים קיימים</h2>
-          </div>
-          <button id="refresh-users" class="ghost-btn" type="button">
-            <i class="fa-solid fa-rotate"></i>
-            <span>רענון</span>
+        <p id="invite-message" class="form-message"></p>
+
+        <div class="primary-actions">
+          <button id="user-form-submit" class="submit-btn" type="submit">
+            <i class="fa-solid fa-paper-plane"></i>
+            <span id="user-form-submit-label">הוספת משתמש ושליחת הזמנה</span>
           </button>
         </div>
-        <p id="users-message" class="form-message panel-message"></p>
-        <div class="table-wrap">
-          <table class="users-table">
-            <thead>
-              <tr>
-                <th>שם</th>
-                <th>אימייל</th>
-                <th>תפקיד</th>
-                <th>עמודים</th>
-                <th>עמוד נחיתה</th>
-                <th>סטטוס</th>
-                <th>פעולות</th>
-              </tr>
-            </thead>
-            <tbody id="users-table-body"></tbody>
-          </table>
+
+        <div id="edit-only-actions" class="edit-actions" hidden>
+          <button id="reset-password-btn" class="ghost-btn ghost-btn-strong" type="button">
+            <i class="fa-solid fa-key"></i>
+            <span>איפוס סיסמה</span>
+          </button>
+          <button id="block-user-btn" class="ghost-btn ghost-btn-warn" type="button">
+            <i class="fa-solid fa-user-lock"></i>
+            <span id="block-user-btn-label">חסום משתמש</span>
+          </button>
+          <button id="cancel-edit-btn" class="ghost-btn" type="button">
+            <i class="fa-solid fa-xmark"></i>
+            <span>בטל עריכה</span>
+          </button>
         </div>
-      </section>
-    </section>
-  </main>
+      </form>
+    </div>
+  </div>
 
   <div id="user-log-modal" class="user-log-modal" hidden>
     <div class="user-log-dialog" role="dialog" aria-modal="true" aria-labelledby="user-log-title">
       <div class="user-log-head">
         <div>
           <p class="panel-kicker">יומן משתמש</p>
-          <h3 id="user-log-title">יומן משתמש</h3>
+          <h3 id="user-log-title">פרטי פעילות אחרונים</h3>
         </div>
         <button id="user-log-close" class="ghost-btn user-log-close" type="button" aria-label="סגור">
           <i class="fa-solid fa-xmark"></i>
@@ -153,7 +292,6 @@
     </div>
   </div>
 
-  <script src="/nav.js"></script>
   <script src="/user_management.js"></script>
 </body>
 </html>
