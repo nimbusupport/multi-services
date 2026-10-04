@@ -422,7 +422,7 @@ SUPABASE_AUTH_KEY = (
     or os.environ.get("SUPABASE_KEY")
     or ""
 ).strip()
-USER_INVITE_FROM = (os.environ.get("USER_INVITE_FROM") or "noreply@nimbus.com").strip()
+USER_INVITE_FROM = (os.environ.get("USER_INVITE_FROM") or "noreply@nimbusip.com").strip()
 USER_INVITE_LINK_TTL_HOURS = max(1, int((os.environ.get("USER_INVITE_LINK_TTL_HOURS") or "72").strip() or "72"))
 USER_PASSWORD_MIN_LENGTH = 12
 
@@ -3734,16 +3734,34 @@ def _resend_attachment_payload(attachment):
     return payload
 
 
+def _resend_error_message(response):
+    try:
+        error_payload = response.json()
+    except ValueError:
+        error_payload = {}
+    return (
+        error_payload.get("message")
+        or error_payload.get("error")
+        or response.text.strip()
+        or f"Resend API request failed with status {response.status_code}"
+    )
+
+
+def _resend_sender_not_authorized(message):
+    normalized = str(message or "").strip().lower()
+    return "not authorized to send emails from" in normalized or "verify a domain" in normalized
+
+
 def send_plain_email_via_resend(to_address, subject, body, from_address=None, html_body=None, attachments=None):
-    # Resend must use the verified sender configured for the account.
     resend_api_key = configured_resend_api_key()
     resend_api_url = configured_resend_api_url()
-    sender = str(from_address or configured_resend_from() or "").strip()
+    preferred_sender = str(from_address or "").strip()
+    fallback_sender = str(configured_resend_from() or "").strip()
+    sender = preferred_sender or fallback_sender
     if not (resend_api_key and sender):
         raise RuntimeError("Resend is not configured")
 
     payload = {
-        "from": sender,
         "to": [to_address],
         "subject": subject,
         "text": body,
@@ -3758,29 +3776,38 @@ def send_plain_email_via_resend(to_address, subject, body, from_address=None, ht
     if prepared_attachments:
         payload["attachments"] = prepared_attachments
 
-    response = requests.post(
-        resend_api_url,
-        headers={
-            "Authorization": f"Bearer {resend_api_key}",
-            "Content-Type": "application/json",
-        },
-        json=payload,
-        timeout=30,
-    )
-    if response.ok:
-        return
+    def _send_with_sender(active_sender):
+        response = requests.post(
+            resend_api_url,
+            headers={
+                "Authorization": f"Bearer {resend_api_key}",
+                "Content-Type": "application/json",
+            },
+            json={**payload, "from": active_sender},
+            timeout=30,
+        )
+        if response.ok:
+            return
+        raise RuntimeError(_resend_error_message(response))
 
     try:
-        error_payload = response.json()
-    except ValueError:
-        error_payload = {}
-    error_message = (
-        error_payload.get("message")
-        or error_payload.get("error")
-        or response.text.strip()
-        or f"Resend API request failed with status {response.status_code}"
-    )
-    raise RuntimeError(error_message)
+        _send_with_sender(sender)
+        return
+    except RuntimeError as exc:
+        if (
+            preferred_sender
+            and fallback_sender
+            and preferred_sender.strip().lower() != fallback_sender.strip().lower()
+            and _resend_sender_not_authorized(str(exc))
+        ):
+            app.logger.warning(
+                "Resend sender %s is not authorized for this API key. Falling back to %s.",
+                preferred_sender,
+                fallback_sender,
+            )
+            _send_with_sender(fallback_sender)
+            return
+        raise
 
 
 def send_plain_email(to_address, subject, body, from_address=None, html_body=None, attachments=None):
