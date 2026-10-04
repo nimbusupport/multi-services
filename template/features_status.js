@@ -28,6 +28,41 @@ const exportButtons = Array.from(document.querySelectorAll("[data-export-format]
 
 let currentPayload = null;
 
+function looksLikeBrokenHebrew(value) {
+  const text = String(value || "");
+  return /[-]/.test(text) || (text.match(/׳/g) || []).length >= 2;
+}
+
+function repairBrokenHebrew(value) {
+  const text = String(value || "");
+  if (!looksLikeBrokenHebrew(text)) {
+    return text;
+  }
+  const chars = [];
+  for (const ch of text) {
+    const code = ch.charCodeAt(0);
+    chars.push(code <= 0xFF ? String.fromCharCode(code) : ch);
+  }
+  try {
+    return decodeURIComponent(escape(chars.join("")));
+  } catch {
+    return text;
+  }
+}
+
+function normalizeLegacyHebrewData(value) {
+  if (Array.isArray(value)) {
+    return value.map(normalizeLegacyHebrewData);
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, normalizeLegacyHebrewData(item)]));
+  }
+  if (typeof value === "string") {
+    return repairBrokenHebrew(value);
+  }
+  return value;
+}
+
 function currentMonthValue() {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -136,7 +171,7 @@ function syncStatusFilterOptions(statuses, selectedValue) {
   if (selectedValue === "סטטוס אחר" && !normalizedStatuses.includes("סטטוס אחר")) {
     normalizedStatuses.push("סטטוס אחר");
   }
-  const options = ['<option value="">הכול</option>']
+  const options = ['<option value="">הכל</option>']
     .concat(normalizedStatuses.map((status) => `
       <option value="${escapeHtml(status)}" ${selectedValue === status ? "selected" : ""}>${escapeHtml(status)}</option>
     `));
@@ -144,7 +179,7 @@ function syncStatusFilterOptions(statuses, selectedValue) {
 }
 
 function syncProjectManagerFilterOptions(managers, selectedValue) {
-  const options = ['<option value="">הכול</option>']
+  const options = ['<option value="">הכל</option>']
     .concat((managers || []).map((manager) => `
       <option value="${escapeHtml(manager)}" ${selectedValue === manager ? "selected" : ""}>${escapeHtml(manager)}</option>
     `));
@@ -203,7 +238,7 @@ function renderSummary(payload) {
     </article>
     <article class="summary-tile">
       <span>מנהל פרויקט</span>
-      <strong>${escapeHtml(payload.project_manager_filter || (payload.query_type === "project_manager" ? payload.query || "הכול" : "הכול"))}</strong>
+      <strong>${escapeHtml(payload.project_manager_filter || (payload.query_type === "project_manager" ? payload.query || "הכל" : "הכל"))}</strong>
     </article>
   `;
 }
@@ -211,9 +246,9 @@ function renderSummary(payload) {
 function renderServiceEntry(entry) {
   return `
     <div class="service-entry">
-      <div class="entry-name">${escapeHtml(entry.business_name || "ללא שם עסק")}</div>
+      <div class="entry-name">${escapeHtml(entry.business_name || "לא צוין")}</div>
       <div class="entry-meta">
-        <span>פיצ'ר: ${escapeHtml(entry.service_label || "-")}</span>
+        <span>שירות: ${escapeHtml(entry.service_label || "-")}</span>
         <span>סטטוס: <strong>${escapeHtml(entry.status || "לא הוגדר")}</strong></span>
         <span>מס' הזמנה: ${escapeHtml(entry.order_id || "-")}</span>
         <span>ח.פ: ${escapeHtml(entry.customer_id || "-")}</span>
@@ -229,7 +264,7 @@ function renderResults(services) {
     results.innerHTML = `
       <article class="service-status-card missing empty-state-card">
         <h3>לא נמצאו פיצ'רים</h3>
-        <p class="service-empty">לא נמצאו פיצ'רים תואמים לחודש ולפילטרים שבחרת.</p>
+        <p class="service-empty">לא נמצאו פיצ'רים התואמים לחיפוש שנבחר.</p>
       </article>
     `;
     return;
@@ -249,14 +284,14 @@ function renderResults(services) {
           <div class="status-chip-row">
             <span class="status-chip ${normalizeStatusClass(statusValue)}">${escapeHtml(statusValue)}</span>
             <span class="status-chip other">סה"כ ${escapeHtml(service.entry_count ?? 0)}</span>
-            <span class="status-chip done">בוצעו ${escapeHtml(service.done_count ?? 0)}</span>
-            <span class="status-chip waiting">ממתינים ${escapeHtml(service.waiting_count ?? 0)}</span>
+            <span class="status-chip done">בוצע ${escapeHtml(service.done_count ?? 0)}</span>
+            <span class="status-chip waiting">ממתין ${escapeHtml(service.waiting_count ?? 0)}</span>
           </div>
           <div class="service-entry-list">
             ${entries.map(renderServiceEntry).join("")}
           </div>
         ` : `
-          <p class="service-empty">לא נמצאו פיצ'רים תואמים בשירות הזה לחודש ולפילטרים שבחרת.</p>
+          <p class="service-empty">לא נמצאו פיצ'רים תחת שירות זה בחודש הנבחר.</p>
         `}
       </article>
     `;
@@ -275,10 +310,10 @@ async function loadFeatureStatuses() {
   try {
     const params = buildRequestParams();
     const res = await fetch(`/features-status-data?${params.toString()}`);
-    const data = await res.json().catch(() => ({}));
+    const data = normalizeLegacyHebrewData(await res.json().catch(() => ({})));
 
     if (!res.ok || !data.ok) {
-      throw new Error(data.message || "אירעה שגיאה בזמן שליפת הנתונים");
+      throw new Error(data.message || "אירעה שגיאה בטעינת נתוני הפיצ'רים");
     }
 
     syncStatusFilterOptions(data.available_statuses || [], data.status_filter || "");
@@ -291,13 +326,13 @@ async function loadFeatureStatuses() {
     renderSummary(data);
     renderResults(Array.isArray(data.services) ? data.services : []);
     syncExportState(data);
-    setMessage("הנתונים עודכנו בהצלחה.");
+    setMessage("הנתונים נטענו בהצלחה.");
   } catch (err) {
     statusCounterGrid.innerHTML = "";
     summaryGrid.innerHTML = "";
     results.innerHTML = "";
     syncExportState(null);
-    setMessage(err.message || "אירעה שגיאה בזמן שליפת הנתונים", true);
+    setMessage(err.message || "אירעה שגיאה בטעינת נתוני הפיצ'רים", true);
   } finally {
     setLoadingState(false);
     button.innerHTML = originalButtonText;
@@ -311,9 +346,10 @@ function resetFeatureStatusFilters() {
   statusFilterSelect.value = "";
   projectManagerFilterSelect.value = "";
   syncQueryMode();
-  setMessage("המסננים אופסו לברירת המחדל.");
+  setMessage("המסננים אופסו ונטענו מחדש.");
   loadFeatureStatuses();
 }
+
 
 monthInput.value = currentMonthValue();
 syncQueryMode();

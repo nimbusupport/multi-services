@@ -782,3 +782,6 @@ body.dashboard-page .guide-panel {
     height: 130px;
   }
 }
+
+.theme-user-management .card-hero { background: linear-gradient(135deg, #51308c 0%, #7648c5 56%, #9b71ed 100%); }
+.theme-user-management .card-icon { color: #6a3fba; }

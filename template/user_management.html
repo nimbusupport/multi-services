@@ -50,11 +50,12 @@
           <label>
             <span>תפקיד</span>
             <select id="invite-role">
-              <option value="user">User</option>
-              <option value="admin">Admin</option>
-              <option value="tickets_only">Tickets only</option>
-              <option value="hot_submitter">HOT submitter</option>
-              <option value="assigned_technician">Assigned technician</option>
+              <option value="user">משתמש</option>
+              <option value="admin">מנהל</option>
+              <option value="admin_no_user_management">מנהל ללא ניהול משתמשים</option>
+              <option value="tickets_only">תקלות בלבד</option>
+              <option value="hot_submitter">שולח HOT</option>
+              <option value="assigned_technician">טכנאי שירות שטח</option>
             </select>
           </label>
           <label>
@@ -71,9 +72,9 @@
             <span>סוג סינון</span>
             <select id="invite-scope-type">
               <option value="">ללא</option>
-              <option value="project_manager">Project manager</option>
-              <option value="group">Group</option>
-              <option value="none">None</option>
+              <option value="project_manager">מנהל פרויקט</option>
+              <option value="group">קבוצה</option>
+              <option value="none">ללא</option>
             </select>
           </label>
           <label>
@@ -125,6 +126,21 @@
       </section>
     </section>
   </main>
+
+  <div id="user-log-modal" class="user-log-modal" hidden>
+    <div class="user-log-dialog" role="dialog" aria-modal="true" aria-labelledby="user-log-title">
+      <div class="user-log-head">
+        <div>
+          <p class="panel-kicker">יומן משתמש</p>
+          <h3 id="user-log-title">יומן משתמש</h3>
+        </div>
+        <button id="user-log-close" class="ghost-btn user-log-close" type="button" aria-label="סגור">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div id="user-log-content" class="user-log-content"></div>
+    </div>
+  </div>
 
   <script src="/nav.js"></script>
   <script src="/user_management.js"></script>

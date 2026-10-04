@@ -30,6 +30,41 @@ function isQuotaExceededMessage(message) {
   return text.includes("quota exceeded") || (text.includes("429") && text.includes("sheets.googleapis.com"));
 }
 
+function looksLikeBrokenHebrew(value) {
+  const text = String(value || "");
+  return /[-]/.test(text) || (text.match(/׳/g) || []).length >= 2;
+}
+
+function repairBrokenHebrew(value) {
+  const text = String(value || "");
+  if (!looksLikeBrokenHebrew(text)) {
+    return text;
+  }
+  const chars = [];
+  for (const ch of text) {
+    const code = ch.charCodeAt(0);
+    chars.push(code <= 0xFF ? String.fromCharCode(code) : ch);
+  }
+  try {
+    return decodeURIComponent(escape(chars.join("")));
+  } catch {
+    return text;
+  }
+}
+
+function normalizeLegacyHebrewData(value) {
+  if (Array.isArray(value)) {
+    return value.map(normalizeLegacyHebrewData);
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, normalizeLegacyHebrewData(item)]));
+  }
+  if (typeof value === "string") {
+    return repairBrokenHebrew(value);
+  }
+  return value;
+}
+
 function currentMonthValue() {
   const now = new Date();
   const month = String(now.getMonth() + 1).padStart(2, "0");
@@ -46,7 +81,7 @@ function setTrendMessage(text, isError = false) {
   trendMessage.classList.toggle("error", isError);
 }
 
-function setReportLoading(isLoading, text = "Loading report...") {
+function setReportLoading(isLoading, text = "טוען דוח...") {
   reportLoading.hidden = !isLoading;
   reportLoadingText.textContent = text;
   printArea.classList.toggle("is-loading", isLoading);
@@ -124,7 +159,7 @@ function renderTrendChart(months, startMonth, endMonth) {
     trendChart.innerHTML = "";
     trendRange.textContent = "--/---- - --/----";
     trendPeak.textContent = "-";
-    setTrendMessage("No monthly data available.", true);
+    setTrendMessage("אין נתונים חודשיים להצגה.", true);
     return;
   }
 
@@ -141,7 +176,7 @@ function renderTrendChart(months, startMonth, endMonth) {
           type="button"
           class="trend-bar-card${isActive ? " active" : ""}"
           data-month="${item.month}"
-          aria-label="Load report for ${item.month_display}"
+          aria-label="טען דוח עבור ${item.month_display}"
         >
           <strong class="trend-value">${item.total}</strong>
           <div class="trend-bar-track">
@@ -155,7 +190,7 @@ function renderTrendChart(months, startMonth, endMonth) {
   setTrendMessage("");
 }
 
-async function loadReport(loadingText = "Loading report...") {
+async function loadReport(loadingText = "טוען דוח...") {
   const month = monthFilter.value || currentMonthValue();
   monthFilter.value = month;
   setMessage("\u05d8\u05d5\u05e2\u05df \u05e0\u05ea\u05d5\u05e0\u05d9\u05dd...");
@@ -166,9 +201,9 @@ async function loadReport(loadingText = "Loading report...") {
       try {
         const params = new URLSearchParams({ month });
         const res = await fetch(`/features-report-data?${params.toString()}`);
-        const data = await res.json();
+        const data = normalizeLegacyHebrewData(await res.json());
         if (!res.ok || !data.ok) {
-          throw new Error(data.error || "Failed to load report");
+          throw new Error(data.error || "שגיאה בטעינת הדוח");
         }
         renderReport(data.report);
         renderTrendChartFromDomSelection(month);
@@ -201,15 +236,15 @@ async function loadReport(loadingText = "Loading report...") {
 }
 
 async function loadMonthlyTotals() {
-  setTrendMessage("Loading monthly totals...");
+  setTrendMessage("טוען סיכום חודשי...");
 
   try {
     for (let attempt = 0; attempt < 2; attempt += 1) {
       try {
         const res = await fetch("/features-report-monthly-totals");
-        const data = await res.json();
+        const data = normalizeLegacyHebrewData(await res.json());
         if (!res.ok || !data.ok) {
-          throw new Error(data.error || "Failed to load monthly totals");
+          throw new Error(data.error || "שגיאה בטעינת הסיכום החודשי");
         }
         renderTrendChart(data.months || [], data.start_month, data.end_month);
         return;
@@ -225,13 +260,13 @@ async function loadMonthlyTotals() {
     trendChart.innerHTML = "";
     trendRange.textContent = "--/---- - --/----";
     trendPeak.textContent = "-";
-    setTrendMessage(`Failed to load monthly totals: ${error.message}`, true);
+    setTrendMessage(`שגיאה בטעינת הסיכום החודשי: ${error.message}`, true);
   }
 }
 
 async function loadReportForMonth(month) {
   monthFilter.value = month;
-  await loadReport(`Loading ${month}...`);
+  await loadReport(`טוען את ${month}...`);
   renderTrendChartFromDomSelection(month);
   printArea.scrollIntoView({ behavior: "smooth", block: "start" });
 }
@@ -248,14 +283,14 @@ function downloadCsv() {
     return;
   }
 
-  const rows = [["Service", "Month", "Completed Count"]];
+  const rows = [["שירות", "חודש", "כמות שבוצעה"]];
   currentReport.services.forEach((service) => {
     rows.push([service.label, currentReport.month_display, service.count]);
     (service.children || []).forEach((child) => {
       rows.push([`${service.label} - ${child.label}`, currentReport.month_display, child.count]);
     });
   });
-  rows.push(["Total", currentReport.month_display, currentReport.total]);
+  rows.push(["סה\"כ", currentReport.month_display, currentReport.total]);
 
   const csv = rows
     .map((row) => row.map((value) => `"${String(value).replace(/"/g, "\"\"")}"`).join(","))
@@ -284,6 +319,40 @@ function downloadPdf() {
   window.location.href = `/features-report-export?${params.toString()}`;
 }
 
+async function downloadFileFromEndpoint(url, fallbackErrorMessage) {
+  try {
+    const res = await fetch(url, { credentials: "same-origin" });
+    if (!res.ok) {
+      let errorMessage = fallbackErrorMessage;
+      const contentType = res.headers.get("content-type") || "";
+      if (contentType.includes("application/json")) {
+        const data = normalizeLegacyHebrewData(await res.json());
+        errorMessage = data.error || data.message || fallbackErrorMessage;
+      } else {
+        const text = await res.text();
+        errorMessage = text || fallbackErrorMessage;
+      }
+      throw new Error(errorMessage);
+    }
+
+    const blob = await res.blob();
+    const downloadUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const disposition = res.headers.get("content-disposition") || "";
+    const fileNameMatch = disposition.match(/filename\*?=(?:UTF-8''|"?)([^";]+)/i);
+
+    link.href = downloadUrl;
+    link.download = fileNameMatch ? decodeURIComponent(fileNameMatch[1].replace(/"/g, "")) : "download.csv";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(downloadUrl);
+    setMessage("");
+  } catch (error) {
+    setMessage(`\u05e9\u05d2\u05d9\u05d0\u05d4 \u05d1\u05d4\u05d5\u05e8\u05d3\u05ea \u05d4\u05d3\u05d5\"\u05d7: ${error.message}`, true);
+  }
+}
+
 function exportReport() {
   if (exportFormat.value === "csv") {
     downloadCsv();
@@ -301,7 +370,11 @@ function exportReport() {
 function exportRecordingsDetail() {
   const month = monthFilter.value || currentMonthValue();
   monthFilter.value = month;
-  window.location.href = `/features-report-recordings-detail?${new URLSearchParams({ month }).toString()}`;
+  const params = new URLSearchParams({ month });
+  downloadFileFromEndpoint(
+    `/features-report-recordings-detail?${params.toString()}`,
+    "שגיאה בהורדת דוח פירוט ההקלטות"
+  );
 }
 
 monthFilter.value = currentMonthValue();
@@ -318,3 +391,4 @@ trendChart.addEventListener("click", async (event) => {
 });
 loadReport();
 loadMonthlyTotals();
+

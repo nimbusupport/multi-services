@@ -158,43 +158,43 @@ FEATURE_STATUS_SERVICES = [
         "order_col": 5,
         "project_manager_col": 6,
         "status_col": 8,  # H
-        "date_col": 7,  # G - ׳×׳׳¨׳™׳ ׳”׳–׳׳ ׳”
+        "date_col": 7,  # G - תאריך הזמנה
         "date_order": "dmy",
     },
     {
         "key": "recording_opening",
-        "label": "׳”׳§׳׳˜׳× ׳₪׳×׳™׳—",
+        "label": "הקלטת פתיח",
         "sheet": RECORDING_OPENING_SHEET_NAME,
         "business_col": 1,
         "customer_col": 2,
         "order_col": 5,
         "project_manager_col": 6,
         "status_col": 9,  # I
-        "date_col": 7,  # G - ׳×׳׳¨׳™׳ ׳”׳–׳׳ ׳”
+        "date_col": 7,  # G - תאריך הזמנה
         "date_order": "dmy",
     },
     {
         "key": "bot",
-        "label": "׳©׳™׳¨׳•׳× ׳׳¢׳ ׳” - ׳‘׳•׳˜",
+        "label": "שירות מענה - בוט",
         "sheet": BOT_SHEET_NAME,
         "business_col": 1,
         "customer_col": 2,
         "order_col": 5,
         "project_manager_col": 6,
         "status_col": 8,  # H
-        "date_col": 7,  # G - ׳×׳׳¨׳™׳ ׳”׳–׳׳ ׳”
+        "date_col": 7,  # G - תאריך הזמנה
         "date_order": "dmy",
     },
     {
         "key": "human_service",
-        "label": "׳©׳™׳¨׳•׳× ׳׳¢׳ ׳” - ׳׳ ׳•׳©׳™",
+        "label": "שירות מענה - אנושי",
         "sheet": HUMAN_SERVICE_SHEET_NAME,
         "business_col": 1,
         "customer_col": 2,
         "order_col": 5,
         "project_manager_col": 6,
         "status_col": 8,  # H
-        "date_col": 15,  # O - ׳×׳׳¨׳™׳ ׳©׳™׳ ׳•׳™ ׳¡׳˜׳˜׳•׳¡
+        "date_col": 15,  # O - תאריך שינוי סטטוס
         "date_order": "mdy",
     },
     {
@@ -206,51 +206,51 @@ FEATURE_STATUS_SERVICES = [
         "order_col": 5,
         "project_manager_col": 6,
         "status_col": 8,  # H
-        "date_col": 7,  # G - ׳×׳׳¨׳™׳ ׳”׳–׳׳ ׳”
+        "date_col": 7,  # G - תאריך הזמנה
         "date_order": "dmy",
-        "completed_date_col": 9,  # I - ׳×׳׳¨׳™׳ ׳‘׳™׳¦׳•׳¢
+        "completed_date_col": 9,  # I - תאריך ביצוע
     },
     {
         "key": "recording_storage",
-        "label": "׳׳™׳—׳¡׳•׳ ׳”׳§׳׳˜׳•׳×",
+        "label": "איחסון הקלטות",
         "sheet": RECORDING_STORAGE_SHEET_NAME,
         "business_col": 1,
         "customer_col": 2,
         "order_col": 5,
         "project_manager_col": 6,
         "status_col": 8,  # H
-        "date_col": 7,  # G - ׳×׳׳¨׳™׳ ׳”׳–׳׳ ׳”
+        "date_col": 7,  # G - תאריך הזמנה
         "date_order": "dmy",
     },
 ]
 
 FEATURE_STATUS_PROJECT_MANAGERS_ORDER = [
-    "׳‘׳× ׳׳ ׳›׳—׳׳•׳",
-    "׳׳¢׳™׳ ׳›׳”׳",
-    "׳ ׳•׳™׳” ׳ ׳¨׳™׳”",
-    "׳¡׳™׳•׳ ׳–׳’׳•׳¨׳™",
-    "׳™׳–׳“׳™,׳׳׳™׳”׳•",
-    "׳׳׳™ ׳‘׳§׳©׳™",
-    "׳׳•׳¨׳ ׳¨׳•׳–׳ ׳‘׳׳•׳",
+    "בת אל כחלון",
+    "מעין כהן",
+    "נויה נריה",
+    "סיון זגורי",
+    "יזדי,אליהו",
+    "אלי בקשי",
+    "אורן רוזנבלום",
 ]
 FEATURE_STATUS_COUNTER_ORDER = [
-    "׳‘׳•׳¦׳¢",
-    "׳˜׳¢׳•׳× ׳‘׳׳¡׳₪׳¨",
-    "׳›׳₪׳™׳׳•׳×",
-    "׳׳ ׳”׳•׳’׳“׳¨",
-    "׳׳ ׳”׳•׳¢׳‘׳¨ ׳ ׳•׳¡׳—",
-    "׳׳‘׳•׳˜׳",
-    "׳׳׳×׳™׳",
-    "׳ ׳©׳׳—׳” ׳”׳•׳“׳¢׳”",
+    "בוצע",
+    "טעות במספר",
+    "כפילות",
+    "לא הוגדר",
+    "לא הועבר נוסח",
+    "מבוטל",
+    "ממתין",
+    "נשלחה הודעה",
 ]
 FEATURE_STATUS_PROJECT_MANAGER_ALIASES = {
-    "׳‘׳× ׳׳ ׳›׳—׳׳•׳": ["׳‘׳× ׳׳ ׳›׳—׳׳•׳", "׳‘׳×׳׳ ׳›׳—׳׳•׳", "׳‘׳× ׳׳", "׳›׳—׳׳•׳"],
-    "׳׳¢׳™׳ ׳›׳”׳": ["׳׳¢׳™׳ ׳›׳”׳", "׳׳¢׳™׳", "׳›׳”׳"],
-    "׳ ׳•׳™׳” ׳ ׳¨׳™׳”": ["׳ ׳•׳™׳” ׳ ׳¨׳™׳”", "׳ ׳•׳™׳”", "׳ ׳¨׳™׳”"],
-    "׳¡׳™׳•׳ ׳–׳’׳•׳¨׳™": ["׳¡׳™׳•׳ ׳–׳’׳•׳¨׳™", "׳¡׳™׳•׳•׳ ׳–׳’׳•׳¨׳™", "׳¡׳™׳•׳", "׳¡׳™׳•׳•׳", "׳–׳’׳•׳¨׳™"],
-    "׳™׳–׳“׳™,׳׳׳™׳”׳•": ["׳™׳–׳“׳™,׳׳׳™׳”׳•", "׳™׳–׳“׳™ ׳׳׳™׳”׳•", "׳׳׳™׳”׳• ׳™׳–׳“׳™", "׳™׳–׳“׳™", "׳׳׳™׳”׳•"],
-    "׳׳׳™ ׳‘׳§׳©׳™": ["׳׳׳™ ׳‘׳§׳©׳™", "׳׳׳™", "׳‘׳§׳©׳™"],
-    "׳׳•׳¨׳ ׳¨׳•׳–׳ ׳‘׳׳•׳": ["׳׳•׳¨׳ ׳¨׳•׳–׳ ׳‘׳׳•׳", "׳׳•׳¨׳", "׳¨׳•׳–׳ ׳‘׳׳•׳"],
+    "בת אל כחלון": ["בת אל כחלון", "בתאל כחלון", "בת אל", "כחלון"],
+    "מעין כהן": ["מעין כהן", "מעין", "כהן"],
+    "נויה נריה": ["נויה נריה", "נויה", "נריה"],
+    "סיון זגורי": ["סיון זגורי", "סיוון זגורי", "סיון", "סיוון", "זגורי"],
+    "יזדי,אליהו": ["יזדי,אליהו", "יזדי אליהו", "אליהו יזדי", "יזדי", "אליהו"],
+    "אלי בקשי": ["אלי בקשי", "אלי", "בקשי"],
+    "אורן רוזנבלום": ["אורן רוזנבלום", "אורן", "רוזנבלום"],
 }
 
 PDF_FONT_CANDIDATES = {
@@ -280,7 +280,7 @@ EMAIL_ADDRESS_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 # Column mapping (1-based for gspread)
 COL_NAME = 1       # A
-COL_IDNUMBER = 2   # B (׳³ג€”.׳³ג‚×) hidden in UI
+COL_IDNUMBER = 2   # B (׳—.׳₪) hidden in UI
 COL_STATUS = 8     # H
 COL_SMS_TEXT = 10  # J
 COL_K = 11         # K
@@ -339,16 +339,16 @@ SUPABASE_KEY = (
     or os.environ.get("SUPABASE_ANON_KEY")
     or ""
 ).strip()
-SUPPORT_USERS = ["׳ ׳™׳¨", "׳™׳‘׳’׳ ׳™", "׳’׳•׳׳", "׳׳™׳¦׳™׳§", "׳–׳•׳¨׳”", "׳׳¡׳£", "׳׳•׳¡׳˜׳₪׳”.׳", "׳׳•׳¡׳˜׳₪׳”.׳—", "׳ ׳¡׳˜׳™׳”"]
-COORDINATION_USERS = ["׳ ׳¡׳˜׳™׳”"]
+SUPPORT_USERS = ["ניר", "יבגני", "גולן", "איציק", "זוהרה", "אסף", "מוסטפא.א", "מוסטפא.ח", "נסטיה"]
+COORDINATION_USERS = ["נסטיה"]
 TECHNICIAN_SUPPORT_USERS = [user for user in SUPPORT_USERS if user not in COORDINATION_USERS]
-COORDINATION_PENDING_STATUS = "׳׳׳×׳™׳ ׳׳×׳™׳׳•׳"
-COORDINATION_PENDING_ALIASES = {COORDINATION_PENDING_STATUS, "׳׳׳×׳™׳ ׳׳×׳׳•׳"}
+COORDINATION_PENDING_STATUS = "ממתין לתיאום"
+COORDINATION_PENDING_ALIASES = {COORDINATION_PENDING_STATUS, "ממתין לתאום"}
 SUPPORT_STATUSES = ["Waiting", "Done"]
-PAIS_STATUSES = ["׳׳׳×׳™׳", COORDINATION_PENDING_STATUS, "׳×׳•׳׳", "׳׳™׳ ׳׳¢׳ ׳”", "׳‘׳•׳¦׳¢", "׳ ׳›׳©׳"]
+PAIS_STATUSES = ["ממתין", COORDINATION_PENDING_STATUS, "תואם", "אין מענה", "בוצע", "נכשל"]
 ALL_TICKET_STATUSES = SUPPORT_STATUSES + [status for status in PAIS_STATUSES if status not in SUPPORT_STATUSES]
-SUPPORT_DELIVERY_OPTIONS = ["׳‘׳™׳§׳•׳¨ ׳˜׳›׳ ׳׳™ ׳‘׳×׳©׳׳•׳", "׳‘׳™׳§׳•׳¨ ׳׳׳ ׳×׳©׳׳•׳", "׳׳©׳׳•׳—"]
-SUPPORT_CUSTOMER_TYPES = ["׳׳§׳•׳— ׳ ׳™׳׳‘׳•׳¡", "׳׳§׳•׳— ׳”׳•׳˜"]
+SUPPORT_DELIVERY_OPTIONS = ["ביקור טכנאי בתשלום", "ביקור ללא תשלום", "משלוח"]
+SUPPORT_CUSTOMER_TYPES = ["לקוח נימבוס", "לקוח הוט"]
 VISIT_SLOT_START_HOUR = 9
 VISIT_SLOT_END_HOUR = 18
 FULL_ACCESS_PAGES = {
@@ -399,15 +399,15 @@ LOGIN_USER_OVERRIDES = {
     },
 }
 SUPPORT_PRIORITIES = ["High", "Medium", "Low"]
-SUPPORT_TICKET_TYPES = ["׳×׳§׳׳”", "׳©׳׳׳”", "׳©׳™׳¨׳•׳×", "׳ ׳•׳¡׳£"]
+SUPPORT_TICKET_TYPES = ["תקלה", "שאלה", "שירות", "נוסף"]
 SUPPORT_SERVICE_TYPES = [
-    "׳׳¨׳›׳–׳™׳™׳”",
-    "׳׳¦׳׳׳•׳×",
-    "׳©׳¨׳×׳™׳",
-    "׳׳¨׳›׳–׳™׳™׳” ׳׳ ׳׳•׳’׳™׳×",
+    "מרכזייה",
+    "מצלמות",
+    "שרתים",
+    "מרכזייה אנלוגית",
     "GDMS",
     "Provision ymcs",
-    "׳׳₪׳׳™׳§׳¦׳™׳” Cloud Softphone",
+    "אפליקציית Cloud Softphone",
 ]
 SUPPORT_ATTACHMENT_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 SUPABASE_STORAGE_BUCKET = (os.environ.get("SUPABASE_STORAGE_BUCKET") or "").strip()
@@ -425,6 +425,92 @@ SUPABASE_AUTH_KEY = (
 USER_INVITE_FROM = (os.environ.get("USER_INVITE_FROM") or "noreplay@nimbusip.com").strip()
 USER_INVITE_LINK_TTL_HOURS = max(1, int((os.environ.get("USER_INVITE_LINK_TTL_HOURS") or "72").strip() or "72"))
 USER_PASSWORD_MIN_LENGTH = 12
+
+CP1255_REVERSE_MAP = {}
+for _byte in range(256):
+    _decoded = bytes([_byte]).decode("cp1255", errors="ignore")
+    if _decoded and _decoded not in CP1255_REVERSE_MAP:
+        CP1255_REVERSE_MAP[_decoded] = _byte
+
+
+def _looks_like_broken_hebrew(value):
+    text = str(value or "")
+    return any(0x80 <= ord(ch) <= 0x9F for ch in text) or text.count("׳") >= 2
+
+
+def _repair_broken_hebrew_text(value):
+    text = str(value or "")
+    if not text or not _looks_like_broken_hebrew(text):
+        return text
+    payload = bytearray()
+    for ch in text:
+        if ch in CP1255_REVERSE_MAP:
+            payload.append(CP1255_REVERSE_MAP[ch])
+        elif ord(ch) < 256:
+            payload.append(ord(ch))
+        else:
+            return text
+    try:
+        repaired = payload.decode("utf-8")
+    except UnicodeDecodeError:
+        return text
+    return repaired or text
+
+
+LEGACY_HEBREW_TEXT_MAP = {
+    "׳™׳‘׳’׳ ׳™": "יבגני",
+    "׳ ׳™׳¨": "ניר",
+    "׳’׳•׳׳": "גולן",
+    "׳׳™׳¦׳™׳§": "איציק",
+    "׳–׳•׳¨׳”": "זוהרה",
+    "׳׳¡׳£": "אסף",
+    "׳׳•׳¡׳˜׳₪׳”.׳": "מוסטפא.א",
+    "׳׳•׳¡׳˜׳₪׳”.׳—": "מוסטפא.ח",
+    "׳ ׳¡׳˜׳™׳”": "נסטיה",
+    "׳׳׳×׳™׳": "ממתין",
+    "׳׳׳×׳™׳ ׳׳×׳™׳׳•׳": "ממתין לתיאום",
+    "׳׳׳×׳™׳ ׳׳×׳׳•׳": "ממתין לתאום",
+    "׳×׳•׳׳": "תואם",
+    "׳׳™׳ ׳׳¢׳ ׳”": "אין מענה",
+    "׳‘׳•׳¦׳¢": "בוצע",
+    "׳ ׳›׳©׳": "נכשל",
+    "׳×׳§׳׳”": "תקלה",
+    "׳©׳׳׳”": "שאלה",
+    "׳©׳™׳¨׳•׳×": "שירות",
+    "׳ ׳•׳¡׳£": "נוסף",
+    "׳׳¨׳›׳–׳™׳™׳”": "מרכזייה",
+    "׳׳¦׳׳׳•׳×": "מצלמות",
+    "׳©׳¨׳×׳™׳": "שרתים",
+    "׳׳¨׳›׳–׳™׳™׳” ׳׳ ׳׳•׳’׳™׳×": "מרכזייה אנלוגית",
+    "׳׳₪׳׳™׳§׳¦׳™׳” Cloud Softphone": "אפליקציית Cloud Softphone",
+    "׳‘׳™׳§׳•׳¨ ׳˜׳›׳ ׳׳™ ׳‘׳×׳©׳׳•׳": "ביקור טכנאי בתשלום",
+    "׳‘׳™׳§׳•׳¨ ׳׳׳ ׳×׳©׳׳•׳": "ביקור ללא תשלום",
+    "׳׳©׳׳•׳—": "משלוח",
+    "׳׳§׳•׳— ׳ ׳™׳׳‘׳•׳¡": "לקוח נימבוס",
+    "׳׳§׳•׳— ׳”׳•׳˜": "לקוח הוט",
+}
+
+def normalize_legacy_hebrew_text(value):
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    mapped = LEGACY_HEBREW_TEXT_MAP.get(text)
+    if mapped is not None:
+        return mapped
+    repaired = _repair_broken_hebrew_text(text)
+    return LEGACY_HEBREW_TEXT_MAP.get(repaired, repaired)
+
+
+def normalize_legacy_hebrew_data(value):
+    if isinstance(value, dict):
+        return {key: normalize_legacy_hebrew_data(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [normalize_legacy_hebrew_data(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(normalize_legacy_hebrew_data(item) for item in value)
+    if isinstance(value, str):
+        return normalize_legacy_hebrew_text(value)
+    return value
 SUPABASE_BUCKET_URL = (os.environ.get("SUPABASE_BUCKET_URL") or "").strip()
 SUPABASE_BUCKET_REGION = (os.environ.get("SUPABASE_BUCKET_REGION") or "").strip()
 SUPABASE_BUCKET_ACCESS_KEY = (os.environ.get("SUPABASE_BUCKET_ACCESS_KEY") or "").strip()
@@ -447,14 +533,14 @@ PAIS_NOTIFICATION_FROM = (
     or ""
 ).strip()
 TECHNICIAN_NOTIFICATION_EMAILS = {
-    "׳’׳•׳׳": "golan@nimbusip.com",
-    "׳׳¡׳£": "assafh@nimbusip.com",
-    "׳׳•׳¡׳˜׳₪׳”.׳—": "pelecom2016@gmail.com",
-    "׳׳•׳¡׳˜׳₪׳”.׳": "mostpc55@gmail.com",
-    "׳׳™׳¦׳™׳§": "isaace@nimbusip.com",
-    "׳–׳•׳¨׳”": "zura@nimbusip.com",
-    "׳ ׳™׳¨": "support@nimbusip.com",
-    "׳™׳‘׳’׳ ׳™": "support@nimbusip.com",
+    "גולן": "golan@nimbusip.com",
+    "אסף": "assafh@nimbusip.com",
+    "מוסטפה.ח": "pelecom2016@gmail.com",
+    "מוסטפה.א": "mostpc55@gmail.com",
+    "איציק": "isaace@nimbusip.com",
+    "זורה": "zura@nimbusip.com",
+    "ניר": "support@nimbusip.com",
+    "יבגני": "support@nimbusip.com",
 }
 PAIS_CALENDAR_GUEST_EMAILS = dict(TECHNICIAN_NOTIFICATION_EMAILS)
 SUPPORT_APP_BASE_URL = (
@@ -582,7 +668,7 @@ def configured_smtp_use_ssl():
 TICKET_BOARD_DEFAULTS = {
     "support": {
         "slug": "support",
-        "name": "׳ ׳™׳׳‘׳•׳¡",
+        "name": "נימבוס",
         "icon_path": "https://tel1.nimbusip.com/themes/default/images/logo.png",
         "route_path": "/support-tickets",
         "workflow": "coordination",
@@ -592,7 +678,7 @@ TICKET_BOARD_DEFAULTS = {
     },
     "pais": {
         "slug": "pais",
-        "name": "׳׳₪׳¢׳ ׳”׳₪׳™׳¡",
+        "name": "מפעל הפיס",
         "icon_path": "/picture/pais.png",
         "route_path": "/pais-tickets",
         "workflow": "coordination",
@@ -602,7 +688,7 @@ TICKET_BOARD_DEFAULTS = {
     },
     "hot-kiryot": {
         "slug": "hot-kiryot",
-        "name": "׳”׳•׳˜ ׳§׳¨׳™׳׳•׳×",
+        "name": "הוט קריאות",
         "icon_path": "https://hot.nimbusip.com/themes/default/images/logo.png",
         "route_path": "/hot-kiryot-tickets",
         "workflow": "coordination",
@@ -721,7 +807,7 @@ def append_log(customers):
     log_path = app_log_path(os.path.basename(LOG_FILE))
     with open(log_path, "a", encoding="utf-8") as f:
         f.write(f"=== {ts} | Status -> {STATUS_DONE} | Count: {len(customers)} ===\n")
-        f.write("׳³ֲ©׳³ֲ ׳³ֲ׳³ֲ§׳³ג€¢׳³ג€”\tDomain\tDID\n")
+        f.write("שם לקוח\tDomain\tDID\n")
         for c in customers:
             name = (c.get("name") or "").strip()
             domain = (c.get("domain") or "").strip()
@@ -750,19 +836,28 @@ def support_user_name():
     if local in {"admin", "isaac"}:
         return "Admin"
     if local in {"eugeni", "yevgeni", "evgeni"}:
-        return "׳™׳‘׳’׳ ׳™"
+        return "יבגני"
     if local == "nir":
-        return "׳ ׳™׳¨"
+        return "ניר"
     if local == "golan":
-        return "׳’׳•׳׳"
+        return "גולן"
     if local in {"asaf", "assafh"}:
-        return "׳׳¡׳£"
+        return "אסף"
     if local in {"nastia", "nastya", "nastiya"}:
-        return "׳ ׳¡׳˜׳™׳”"
-    return raw.split("@")[0] or "Admin"
+        return "נסטיה"
+    return normalize_legacy_hebrew_text(raw.split("@")[0]) or "Admin"
 
 
 def support_user_is_admin():
+    role = (session.get("role") or "").strip().lower()
+    if role in {"admin", "admin_no_user_management"}:
+        return True
+    raw = (session.get("username") or session.get("email") or "").strip()
+    local = raw.split("@")[0].lower()
+    return local in {"admin", "isaac"}
+
+
+def support_user_can_manage_users():
     role = (session.get("role") or "").strip().lower()
     if role == "admin":
         return True
@@ -780,21 +875,21 @@ def support_user_is_hot_submitter():
 
 
 def assigned_technician_allowed_statuses():
-    return {"׳‘׳•׳¦׳¢", "׳ ׳›׳©׳"}
+    return {"בוצע", "נכשל"}
 
 
 def normalize_ticket_status(board_slug, status):
     normalized_board = (board_slug or "").strip().lower()
-    raw_status = str(status or "").strip()
+    raw_status = normalize_legacy_hebrew_text(status)
     if not raw_status:
-        return "׳׳׳×׳™׳" if board_supports_coordination(normalized_board) else "Waiting"
+        return "ממתין" if board_supports_coordination(normalized_board) else "Waiting"
     if raw_status in COORDINATION_PENDING_ALIASES:
         return COORDINATION_PENDING_STATUS
     if normalized_board == "support":
         if raw_status == "Waiting":
-            return "׳׳׳×׳™׳"
+            return "ממתין"
         if raw_status == "Done":
-            return "׳‘׳•׳¦׳¢"
+            return "בוצע"
     return raw_status
 
 
@@ -806,12 +901,12 @@ def ticket_owner_name(ticket):
     ticket = ticket or {}
     details = ticket.get("details") or {}
     if board_supports_coordination(ticket.get("board_slug")):
-        return (details.get("coordinated_worker") or "").strip()
-    return (ticket.get("assigned_to") or "").strip()
+        return normalize_legacy_hebrew_text(details.get("coordinated_worker"))
+    return normalize_legacy_hebrew_text(ticket.get("assigned_to"))
 
 
 def assigned_technician_can_access_ticket(ticket, actor_name=None):
-    actor_name = (actor_name or support_user_name()).strip()
+    actor_name = normalize_legacy_hebrew_text(actor_name or support_user_name())
     return (
         support_user_is_assigned_technician()
         and ticket_owner_name(ticket) == actor_name
@@ -819,15 +914,18 @@ def assigned_technician_can_access_ticket(ticket, actor_name=None):
 
 
 def normalize_support_ticket(ticket):
-    ticket = dict(ticket or {})
+    ticket = normalize_legacy_hebrew_data(dict(ticket or {}))
     ticket["id"] = int(ticket.get("id") or 0)
     ticket["ticket_id"] = f"#{ticket['id']:04d}"
     ticket.setdefault("board_slug", "support")
     ticket["status"] = normalize_ticket_status(ticket.get("board_slug"), ticket.get("status"))
     ticket.setdefault("assigned_to", "")
+    ticket["assigned_to"] = normalize_legacy_hebrew_text(ticket.get("assigned_to"))
     ticket.setdefault("solution", "")
     ticket.setdefault("priority", "Medium")
     ticket.setdefault("details", {})
+    if isinstance(ticket["details"], dict) and ticket["details"].get("coordinated_worker"):
+        ticket["details"]["coordinated_worker"] = normalize_legacy_hebrew_text(ticket["details"].get("coordinated_worker"))
     ticket.setdefault("attachments", [])
     ticket.setdefault("updates", [])
     ticket["created_at_display"] = (ticket.get("created_at_display") or "").strip() or format_support_ticket_datetime(ticket.get("created_at"))
@@ -843,7 +941,7 @@ def normalize_support_ticket(ticket):
 
 
 def support_ticket_is_done(ticket):
-    return normalize_ticket_status(ticket.get("board_slug"), ticket.get("status")) in {"Done", "׳‘׳•׳¦׳¢", "׳ ׳›׳©׳"}
+    return normalize_ticket_status(ticket.get("board_slug"), ticket.get("status")) in {"Done", "בוצע", "נכשל"}
 
 
 def support_ticket_is_open(ticket):
@@ -873,6 +971,8 @@ def normalize_allowed_pages(values):
 
 def allowed_pages_for_role(role):
     normalized_role = (role or "").strip().lower()
+    if normalized_role == "admin_no_user_management":
+        return sorted(page for page in FULL_ACCESS_PAGES if page != "user_management")
     if normalized_role == "tickets_only":
         return sorted(TICKETS_ONLY_ALLOWED_PAGES)
     if normalized_role == "hot_submitter":
@@ -1013,6 +1113,16 @@ def route_page_key(path):
     return None
 
 
+@app.after_request
+def ensure_utf8_charset(response):
+    content_type = (response.headers.get("Content-Type") or "").lower()
+    if "charset=" in content_type:
+        return response
+    if response.mimetype in {"text/html", "text/css", "application/javascript", "text/javascript", "application/json"}:
+        response.headers["Content-Type"] = f"{response.mimetype}; charset=utf-8"
+    return response
+
+
 @app.before_request
 def enforce_page_access():
     if not session.get("logged_in"):
@@ -1023,7 +1133,7 @@ def enforce_page_access():
     if not page_key or user_can_access_page(page_key):
         return None
     if request.path.endswith("-data") or request.method != "GET" or request.path.startswith("/support-ticket-attachment"):
-        return api_error("Access denied", 403, "access_denied")
+        return api_error("אין הרשאה לגשת לעמוד זה", 403, "access_denied")
     return redirect(first_allowed_route())
 
 
@@ -1055,17 +1165,17 @@ SUPABASE_URL = normalize_supabase_url(_RAW_SUPABASE_URL)
 
 
 def default_ticket_boards():
-    return [
+    return normalize_legacy_hebrew_data([
         dict(board)
         for board in sorted(TICKET_BOARD_DEFAULTS.values(), key=lambda item: item["sort_order"])
-    ]
+    ])
 
 
 def get_ticket_board(board_slug):
     board = TICKET_BOARD_DEFAULTS.get((board_slug or "").strip().lower())
     if board:
-        return dict(board)
-    return dict(TICKET_BOARD_DEFAULTS["support"])
+        return normalize_legacy_hebrew_data(dict(board))
+    return normalize_legacy_hebrew_data(dict(TICKET_BOARD_DEFAULTS["support"]))
 
 
 def board_supports_coordination(board_slug):
@@ -1172,7 +1282,7 @@ def technician_reminder_ticket_context(ticket):
     board = get_ticket_board(board_slug)
     details = ticket.get("details") or {}
     return {
-        "board_name": (ticket.get("service_type") or board.get("name") or "").strip() or board.get("name") or "׳§׳¨׳™׳׳× ׳©׳™׳¨׳•׳×",
+        "board_name": (ticket.get("service_type") or board.get("name") or "").strip() or board.get("name") or "קריאת שירות",
         "ticket_label": str(ticket.get("ticket_id") or f"#{int(ticket.get('id') or 0):04d}").strip(),
         "reference_number": support_ticket_reference_number(ticket),
         "address": coordination_ticket_calendar_address(ticket),
@@ -1257,24 +1367,24 @@ def build_technician_daily_reminder_email(worker_name, tickets, reminder_date):
     subject_numbers = [context["reference_number"] for context in contexts if context.get("reference_number")]
     subject_preview = ", ".join(subject_numbers[:3]) if subject_numbers else reminder_date_display
     if len(subject_numbers) > 3:
-        subject_preview = f"{subject_preview} ׳•׳¢׳•׳“ {len(subject_numbers) - 3}"
-    subject = f"׳×׳–׳›׳•׳¨׳× ׳׳¡' ׳§׳¨׳™׳׳” : {subject_preview}"
+        subject_preview = f"{subject_preview} ועוד {len(subject_numbers) - 3}"
+    subject = f"תזכורת מס' קריאה : {subject_preview}"
 
     body_lines = [
-        f"׳©׳׳•׳ {worker_name},",
-        f"׳–׳•׳”׳™ ׳×׳–׳›׳•׳¨׳× ׳׳§׳¨׳™׳׳•׳× ׳”׳©׳™׳¨׳•׳× ׳©׳׳ ׳׳×׳׳¨׳™׳ {reminder_date_display}.",
+        f"שלום {worker_name},",
+        f"זוהי תזכורת לקריאות השירות שלך לתאריך {reminder_date_display}.",
         "",
     ]
     for index, context in enumerate(contexts, start=1):
         visit_window = " - ".join([value for value in [context["visit_hour_from"], context["visit_hour_to"]] if value]) or "-"
         body_lines.extend([
-            f"{index}. [{context['board_name']}] ׳׳¡' ׳§׳¨׳™׳׳”: {context['reference_number']}",
-            f"׳׳¡׳₪׳¨ ׳₪׳ ׳™׳׳™: {context['ticket_label']}",
-            f"׳©׳¢׳× ׳‘׳™׳§׳•׳¨: {visit_window}",
-            f"׳›׳×׳•׳‘׳×: {context['address'] or '-'}",
-            f"׳ ׳™׳™׳“ / ׳׳™׳© ׳§׳©׳¨: {context['contact_value'] or '-'}",
-            f"׳×׳§׳¦׳™׳¨: {context['summary'] or '-'}",
-            f"׳§׳™׳©׳•׳¨ ׳׳׳₪׳׳™׳§׳¦׳™׳”: {context['app_link'] or NASTIA_APP_LOGIN_URL or '-'}",
+            f"{index}. [{context['board_name']}] מס' קריאה: {context['reference_number']}",
+            f"מספר פנימי: {context['ticket_label']}",
+            f"שעת ביקור: {visit_window}",
+            f"כתובת: {context['address'] or '-'}",
+            f"נייד / איש קשר: {context['contact_value'] or '-'}",
+            f"תקציר: {context['summary'] or '-'}",
+            f"קישור לאפליקציה: {context['app_link'] or NASTIA_APP_LOGIN_URL or '-'}",
             "",
         ])
 
@@ -1282,29 +1392,29 @@ def build_technician_daily_reminder_email(worker_name, tickets, reminder_date):
         f"""
         <div style="border:1px solid #e7dfd2;border-radius:12px;background:#fff;padding:16px 18px;margin:0 0 14px;">
           <div style="font-size:12px;color:#7b7267;font-weight:700;">{xml_escape(context['board_name'])}</div>
-          <div style="font-size:22px;font-weight:800;margin-top:4px;">׳׳¡' ׳§׳¨׳™׳׳”: {xml_escape(context['reference_number'])}</div>
-          <div style="font-size:13px;color:#7b7267;margin-top:4px;">׳׳¡׳₪׳¨ ׳₪׳ ׳™׳׳™: {xml_escape(context['ticket_label'])}</div>
+          <div style="font-size:22px;font-weight:800;margin-top:4px;">מס' קריאה: {xml_escape(context['reference_number'])}</div>
+          <div style="font-size:13px;color:#7b7267;margin-top:4px;">מספר פנימי: {xml_escape(context['ticket_label'])}</div>
           <table role="presentation" style="width:100%;border-collapse:collapse;margin-top:14px;">
             <tr>
-              <td style="padding:6px 0;color:#6a6258;font-weight:700;width:34%;">׳©׳¢׳× ׳‘׳™׳§׳•׳¨</td>
+              <td style="padding:6px 0;color:#6a6258;font-weight:700;width:34%;">שעת ביקור</td>
               <td style="padding:6px 0;color:#1f2f46;">{xml_escape(" - ".join([value for value in [context['visit_hour_from'], context['visit_hour_to']] if value]) or "-")}</td>
             </tr>
             <tr>
-              <td style="padding:6px 0;color:#6a6258;font-weight:700;">׳›׳×׳•׳‘׳×</td>
+              <td style="padding:6px 0;color:#6a6258;font-weight:700;">כתובת</td>
               <td style="padding:6px 0;color:#1f2f46;">{_pais_email_multiline_html(context['address'])}</td>
             </tr>
             <tr>
-              <td style="padding:6px 0;color:#6a6258;font-weight:700;">׳ ׳™׳™׳“ / ׳׳™׳© ׳§׳©׳¨</td>
+              <td style="padding:6px 0;color:#6a6258;font-weight:700;">נייד / איש קשר</td>
               <td style="padding:6px 0;color:#1f2f46;">{_pais_email_multiline_html(context['contact_value'])}</td>
             </tr>
             <tr>
-              <td style="padding:6px 0;color:#6a6258;font-weight:700;">׳×׳§׳¦׳™׳¨</td>
+              <td style="padding:6px 0;color:#6a6258;font-weight:700;">תקציר</td>
               <td style="padding:6px 0;color:#1f2f46;">{_pais_email_multiline_html(context['summary'])}</td>
             </tr>
           </table>
           <div style="margin-top:16px;text-align:center;">
             <a href="{xml_escape(context['app_link'] or NASTIA_APP_LOGIN_URL or '#')}" style="display:inline-block;background:#1f4f8f;color:#ffffff;text-decoration:none;padding:11px 18px;border-radius:8px;font-weight:700;">
-              ׳׳¢׳‘׳¨ ׳׳§׳¨׳™׳׳” ׳‘׳׳₪׳׳™׳§׳¦׳™׳”
+              מעבר לקריאה באפליקציה
             </a>
           </div>
         </div>
@@ -1317,12 +1427,12 @@ def build_technician_daily_reminder_email(worker_name, tickets, reminder_date):
   <body style="margin:0;padding:24px;background:#f5f1ea;font-family:Arial,'Noto Sans Hebrew',sans-serif;color:#1f2f46;">
     <div style="max-width:760px;margin:0 auto;background:#fbfaf7;border:1px solid #ded5c9;border-radius:14px;overflow:hidden;">
       <div style="padding:20px 24px;background:linear-gradient(135deg,#eef4ff 0%,#f9f3e8 100%);border-bottom:1px solid #ded5c9;">
-        <div style="font-size:13px;color:#7b7267;font-weight:700;">׳×׳–׳›׳•׳¨׳× ׳™׳•׳׳™׳× ׳׳˜׳›׳ ׳׳™</div>
+        <div style="font-size:13px;color:#7b7267;font-weight:700;">תזכורת יומית לטכנאי</div>
         <div style="font-size:28px;font-weight:800;margin-top:6px;">{xml_escape(worker_name)}</div>
-        <div style="font-size:15px;color:#4d647e;margin-top:8px;">{xml_escape(reminder_date_display)} | {len(contexts)} ׳§׳¨׳™׳׳•׳× ׳׳×׳•׳׳׳•׳×</div>
+        <div style="font-size:15px;color:#4d647e;margin-top:8px;">{xml_escape(reminder_date_display)} | {len(contexts)} קריאות מתואמות</div>
       </div>
       <div style="padding:24px;">
-        <p style="margin:0 0 18px;font-size:15px;">׳׳׳• ׳§׳¨׳™׳׳•׳× ׳”׳©׳™׳¨׳•׳× ׳”׳׳×׳•׳׳׳•׳× ׳©׳׳ ׳׳”׳™׳•׳.</p>
+        <p style="margin:0 0 18px;font-size:15px;">אלו קריאות השירות המתואמות שלך להיום.</p>
         {cards_html}
       </div>
     </div>
@@ -1660,6 +1770,41 @@ def update_supabase_auth_user(user_id, payload):
     return response.json()
 
 
+def list_supabase_auth_users(page=1, per_page=1000):
+    response = _supabase_auth_request(
+        "GET",
+        "admin/users",
+        params={"page": page, "per_page": per_page},
+    )
+    payload = response.json() or {}
+    if isinstance(payload, dict):
+        users = payload.get("users") or []
+    elif isinstance(payload, list):
+        users = payload
+    else:
+        users = []
+    return [dict(user or {}) for user in users]
+
+
+def find_supabase_auth_user_by_email(email):
+    normalized_email = (email or "").strip().lower()
+    if not (supabase_auth_enabled() and normalized_email):
+        return None
+
+    page = 1
+    per_page = 1000
+    while True:
+        users = list_supabase_auth_users(page=page, per_page=per_page)
+        if not users:
+            return None
+        for user in users:
+            if (user.get("email") or "").strip().lower() == normalized_email:
+                return user
+        if len(users) < per_page:
+            return None
+        page += 1
+
+
 def sign_in_supabase_auth_user(email, password):
     response = requests.post(
         f"{SUPABASE_URL}/auth/v1/token?grant_type=password",
@@ -1788,8 +1933,11 @@ def create_or_refresh_user_invite(email, full_name, role, group_code, allowed_pa
     if not supabase_auth_enabled():
         raise RuntimeError("Supabase Auth is not configured")
 
+    invited_at = datetime.now(timezone.utc).isoformat()
+    existing_account = False
     profile = get_user_profile_by_email(normalized_email)
     if profile:
+        existing_account = True
         user_id = profile["id"]
         _supabase_request(
             "PATCH",
@@ -1804,7 +1952,7 @@ def create_or_refresh_user_invite(email, full_name, role, group_code, allowed_pa
                 "scope_type": scope_type or None,
                 "scope_value": scope_value or None,
                 "active": True,
-                "invited_at": datetime.now(timezone.utc).isoformat(),
+                "invited_at": invited_at,
             },
             prefer="return=minimal",
         )
@@ -1813,10 +1961,24 @@ def create_or_refresh_user_invite(email, full_name, role, group_code, allowed_pa
         except Exception:
             pass
     else:
-        auth_user = create_supabase_auth_user(normalized_email, full_name=full_name)
+        auth_user = None
+        try:
+            auth_user = create_supabase_auth_user(normalized_email, full_name=full_name)
+        except Exception:
+            auth_user = find_supabase_auth_user_by_email(normalized_email)
+            if not auth_user:
+                raise
+            existing_account = True
+
         user_id = (auth_user.get("id") or "").strip()
         if not user_id:
             raise RuntimeError("Failed to create Supabase auth user")
+
+        try:
+            update_supabase_auth_user(user_id, {"email": normalized_email, "email_confirm": True, "user_metadata": {"full_name": full_name or ""}})
+        except Exception:
+            pass
+
         _supabase_request(
             "POST",
             supabase_users_table_name(),
@@ -1831,7 +1993,7 @@ def create_or_refresh_user_invite(email, full_name, role, group_code, allowed_pa
                 "scope_type": scope_type or None,
                 "scope_value": scope_value or None,
                 "active": True,
-                "invited_at": datetime.now(timezone.utc).isoformat(),
+                "invited_at": invited_at,
             },
             prefer="return=representation",
         )
@@ -1845,6 +2007,7 @@ def create_or_refresh_user_invite(email, full_name, role, group_code, allowed_pa
         "email": normalized_email,
         "invite_link": invite_link,
         "expires_at": invite["expires_at"],
+        "existing_account": existing_account,
     }
 
 
@@ -1949,7 +2112,7 @@ def read_local_inforu_log_text():
     except UnicodeDecodeError:
         content = raw.decode("cp1255", errors="replace")
 
-    if "׳³" in content:
+    if "׳" in content:
         try:
             repaired = content.encode("latin1", errors="ignore").decode("utf-8", errors="ignore")
             if repaired.strip():
@@ -2241,7 +2404,7 @@ def download_supabase_storage_object(object_path):
 
 def load_ticket_boards():
     if not supabase_ticketing_enabled():
-        return default_ticket_boards()
+        return normalize_legacy_hebrew_data(default_ticket_boards())
 
     try:
         response = _supabase_request(
@@ -2266,9 +2429,9 @@ def load_ticket_boards():
         for board_slug, default_board in TICKET_BOARD_DEFAULTS.items():
             if board_slug not in seen_slugs:
                 merged_rows.append(dict(default_board))
-        return sorted(merged_rows, key=lambda item: item.get("sort_order", 999))
+        return normalize_legacy_hebrew_data(sorted(merged_rows, key=lambda item: item.get("sort_order", 999)))
     except Exception:
-        return default_ticket_boards()
+        return normalize_legacy_hebrew_data(default_ticket_boards())
 
 
 def _merge_supabase_ticket_rows(ticket_rows, attachments, updates):
@@ -2579,8 +2742,8 @@ def build_ticket_board_report(tickets, status_filter="", period="daily", date_fr
             "done": len([ticket for ticket in filtered if support_ticket_is_done(ticket)]),
             "waiting": len([ticket for ticket in filtered if support_ticket_is_open(ticket)]),
             "coordination": len([ticket for ticket in filtered if status_is_coordination_pending(ticket.get("status"))]),
-            "failed": len([ticket for ticket in filtered if ticket.get("status") == "׳ ׳›׳©׳"]),
-            "coordinated": len([ticket for ticket in filtered if ticket.get("status") == "׳×׳•׳׳"]),
+            "failed": len([ticket for ticket in filtered if ticket.get("status") == "נכשל"]),
+            "coordinated": len([ticket for ticket in filtered if ticket.get("status") == "תואם"]),
         },
         "leaderboard": leaderboard,
     }
@@ -2672,7 +2835,7 @@ def ticket_report_business_name(ticket):
     return (
         (details.get("contact_name") or "").strip()
         or (details.get("address") or "").strip()
-        or (f"׳׳¡׳•׳£ {terminal_number}" if terminal_number else "")
+        or (f"מסוף {terminal_number}" if terminal_number else "")
         or get_ticket_board(board_slug).get("name")
         or ""
     )
@@ -2717,7 +2880,7 @@ def summarize_ticket_report_tickets(tickets):
     coordinated = len([
         ticket
         for ticket in tickets
-        if normalize_ticket_status(ticket.get("board_slug"), ticket.get("status")) == "׳×׳•׳׳"
+        if normalize_ticket_status(ticket.get("board_slug"), ticket.get("status")) == "תואם"
     ])
     done = len([ticket for ticket in tickets if support_ticket_is_done(ticket)])
     open_count = len([ticket for ticket in tickets if support_ticket_is_open(ticket)])
@@ -2753,7 +2916,7 @@ def build_ticket_monthly_report(month_value=""):
     coordinated_rows = [
         ticket_report_row(ticket)
         for ticket in month_tickets
-        if normalize_ticket_status(ticket.get("board_slug"), ticket.get("status")) == "׳×׳•׳׳"
+        if normalize_ticket_status(ticket.get("board_slug"), ticket.get("status")) == "תואם"
     ]
     coordinated_rows.sort(
         key=lambda item: (
@@ -2802,7 +2965,7 @@ def build_ticket_monthly_report(month_value=""):
         reverse=True,
     )
 
-    return {
+    return normalize_legacy_hebrew_data({
         "month": month_input_value(selected_month),
         "month_display": month_display_value(selected_month),
         "date_from": range_start.strftime("%Y-%m-%d"),
@@ -2816,7 +2979,7 @@ def build_ticket_monthly_report(month_value=""):
         },
         "all_tickets": all_ticket_rows,
         "coordinated_tickets": coordinated_rows,
-    }
+    })
 
 
 def save_support_attachment(file_storage, ticket_number, allowed_extensions=None):
@@ -2881,18 +3044,18 @@ def save_generated_support_attachment(content, filename, ticket_number, content_
     return save_support_attachment(generated_file, ticket_number, allowed_extensions=SUPPORT_ATTACHMENT_EXTENSIONS | {".pdf"})
 
 
-def parse_signature_data_url(signature_data_url, label="׳—׳×׳™׳׳”"):
+def parse_signature_data_url(signature_data_url, label="חתימה"):
     raw_value = str(signature_data_url or "").strip()
     match = re.fullmatch(r"data:image/(?P<subtype>png|jpeg|jpg);base64,(?P<data>[A-Za-z0-9+/=\s]+)", raw_value, re.IGNORECASE)
     if not match:
-        raise ValueError(f"{label} ׳׳™׳ ׳” ׳×׳§׳™׳ ׳”")
+        raise ValueError(f"{label} אינה תקינה")
     subtype = match.group("subtype").lower().replace("jpg", "jpeg")
     try:
         image_bytes = base64.b64decode(match.group("data"), validate=True)
     except Exception as exc:
-        raise ValueError(f"{label} ׳׳™׳ ׳” ׳×׳§׳™׳ ׳”") from exc
+        raise ValueError(f"{label} אינה תקינה") from exc
     if not image_bytes:
-        raise ValueError(f"{label} ׳׳™׳ ׳” ׳×׳§׳™׳ ׳”")
+        raise ValueError(f"{label} אינה תקינה")
     return image_bytes, subtype
 
 
@@ -2900,11 +3063,11 @@ def calculate_work_duration(start_time, end_time):
     start_value = str(start_time or "").strip()
     end_value = str(end_time or "").strip()
     if not re.fullmatch(r"\d{2}:\d{2}", start_value) or not re.fullmatch(r"\d{2}:\d{2}", end_value):
-        raise ValueError("׳™׳© ׳׳‘׳—׳•׳¨ ׳©׳¢׳× ׳”׳×׳—׳׳” ׳•׳©׳¢׳× ׳¡׳™׳•׳ ׳×׳§׳™׳ ׳•׳×")
+        raise ValueError("יש לבחור שעת התחלה ושעת סיום תקינות")
     start_minutes = int(start_value[:2]) * 60 + int(start_value[3:5])
     end_minutes = int(end_value[:2]) * 60 + int(end_value[3:5])
     if end_minutes <= start_minutes:
-        raise ValueError("׳©׳¢׳× ׳”׳¡׳™׳•׳ ׳—׳™׳™׳‘׳× ׳׳”׳™׳•׳× ׳׳—׳¨׳™ ׳©׳¢׳× ׳”׳”׳×׳—׳׳”")
+        raise ValueError("שעת הסיום חייבת להיות אחרי שעת ההתחלה")
     total_minutes = end_minutes - start_minutes
     hours = total_minutes // 60
     minutes = total_minutes % 60
@@ -2941,10 +3104,10 @@ def normalize_hot_field_report_line_items(items):
             continue
         if quantity:
             if not quantity.isdigit():
-                raise ValueError("׳›׳׳•׳× ׳—׳™׳™׳‘׳× ׳׳”׳™׳•׳× ׳׳¡׳₪׳¨ ׳‘׳™׳ 1 ׳-100")
+                raise ValueError("כמות חייבת להיות מספר בין 1 ל-100")
             quantity_value = int(quantity)
             if quantity_value < 1 or quantity_value > 100:
-                raise ValueError("׳›׳׳•׳× ׳—׳™׳™׳‘׳× ׳׳”׳™׳•׳× ׳׳¡׳₪׳¨ ׳‘׳™׳ 1 ׳-100")
+                raise ValueError("כמות חייבת להיות מספר בין 1 ל-100")
             quantity = str(quantity_value)
         normalized_items.append({
             "item_name": item_name,
@@ -2962,7 +3125,7 @@ def hot_field_report_photo_rows(photo_attachments):
             or attachment.get("saved_name")
             or f"Photo {index}"
         ).strip() or f"Photo {index}"
-        rows.append((f"׳¦׳™׳׳•׳ {index}", label))
+        rows.append((f"צילום {index}", label))
     return rows
 
 
@@ -3046,35 +3209,35 @@ def build_hot_field_report_pdf(ticket, report, technician_signature_bytes, custo
     details = ticket.get("details") or {}
     meta_rows = [
         [
-            pdf_paragraph("׳©׳ ׳”׳׳§׳•׳— ׳‘׳ ׳™׳׳‘׳•׳¡", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
+            pdf_paragraph("שם הלקוח בנימבוס", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
             pdf_paragraph(report.get("nimbus_customer_name") or details.get("customer_name") or details.get("call_number") or "-", text_style, rtl=True, latin_font_name=latin_regular_font, hebrew_font_name=hebrew_regular_font),
         ],
         [
-            pdf_paragraph("׳׳¡׳₪׳¨ ׳§׳¨׳™׳׳”", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
+            pdf_paragraph("מספר קריאה", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
             pdf_paragraph(details.get("call_number") or ticket.get("ticket_id") or "-", latin_style, rtl=False, latin_font_name=latin_regular_font, hebrew_font_name=hebrew_regular_font),
         ],
         [
-            pdf_paragraph("׳©׳ ׳₪׳¨׳˜׳™", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
+            pdf_paragraph("שם פרטי", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
             pdf_paragraph(report.get("contact_first_name") or "-", text_style, rtl=True, latin_font_name=latin_regular_font, hebrew_font_name=hebrew_regular_font),
         ],
         [
-            pdf_paragraph("׳©׳ ׳׳©׳₪׳—׳”", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
+            pdf_paragraph("שם משפחה", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
             pdf_paragraph(report.get("contact_last_name") or "-", text_style, rtl=True, latin_font_name=latin_regular_font, hebrew_font_name=hebrew_regular_font),
         ],
         [
-            pdf_paragraph("׳×׳₪׳§׳™׳“", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
+            pdf_paragraph("תפקיד", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
             pdf_paragraph(report.get("role") or "-", text_style, rtl=True, latin_font_name=latin_regular_font, hebrew_font_name=hebrew_regular_font),
         ],
         [
-            pdf_paragraph("׳›׳×׳•׳‘׳× ׳”׳”׳×׳§׳ ׳”", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
+            pdf_paragraph("כתובת ההתקנה", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
             pdf_paragraph(report.get("installation_address") or details.get("address") or "-", text_style, rtl=True, latin_font_name=latin_regular_font, hebrew_font_name=hebrew_regular_font),
         ],
         [
-            pdf_paragraph("׳˜׳׳₪׳•׳", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
+            pdf_paragraph("טלפון", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
             pdf_paragraph(report.get("phone") or "-", latin_style, rtl=False, latin_font_name=latin_regular_font, hebrew_font_name=hebrew_regular_font),
         ],
         [
-            pdf_paragraph("׳”׳¢׳¨׳•׳×", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
+            pdf_paragraph("הערות", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
             pdf_paragraph(report.get("customer_notes") or "-", text_style, rtl=True, latin_font_name=latin_regular_font, hebrew_font_name=hebrew_regular_font),
         ],
     ]
@@ -3085,9 +3248,9 @@ def build_hot_field_report_pdf(ticket, report, technician_signature_bytes, custo
     story.extend([
         pdf_paragraph("Nimbus Telecom", label_style, rtl=False, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
         Spacer(1, 3),
-        pdf_paragraph("׳˜׳•׳₪׳¡ ׳׳™׳©׳•׳¨ ׳§׳‘׳׳× ׳¦׳™׳•׳“ ׳•׳”׳×׳§׳ ׳”", title_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
+        pdf_paragraph("טופס אישור קבלת ציוד והתקנה", title_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
         Spacer(1, 5),
-        pdf_paragraph("׳׳׳™׳׳•׳™ ׳¢\"׳™ ׳ ׳¦׳™׳’ / ׳”׳׳§׳•׳—", section_title_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
+        pdf_paragraph("למילוי ע\"י נציג / הלקוח", section_title_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
     ])
 
     meta_table = Table(meta_rows, colWidths=[40 * mm, 130 * mm], hAlign="RIGHT")
@@ -3110,7 +3273,7 @@ def build_hot_field_report_pdf(ticket, report, technician_signature_bytes, custo
     if line_items:
         story.extend([
             pdf_paragraph(
-                "׳”׳ ׳ ׳™ ׳׳׳©׳¨ ׳‘׳–׳׳× ׳›׳™ ׳ ׳׳¡׳¨ ׳׳™׳“׳™ ׳”׳¦׳™׳•׳“ ׳”׳׳₪׳•׳¨׳˜ ׳׳”׳׳, ׳•׳‘׳•׳¦׳¢׳” ׳”׳×׳§׳ ׳×׳• ׳¢\"׳™ ׳˜׳›׳ ׳׳™ ׳׳˜׳¢׳ ׳ ׳™׳׳‘׳•׳¡:",
+                "הנני מאשר בזאת כי נמסר לידי הציוד המפורט להלן, ובוצעה התקנתו ע\"י טכנאי מטעם נימבוס:",
                 intro_style,
                 rtl=True,
                 latin_font_name=latin_regular_font,
@@ -3119,9 +3282,9 @@ def build_hot_field_report_pdf(ticket, report, technician_signature_bytes, custo
             Spacer(1, 6),
         ])
         table_rows = [[
-            pdf_paragraph("׳”׳¢׳¨׳•׳×", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
-            pdf_paragraph("׳›׳׳•׳×", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
-            pdf_paragraph("׳©׳ ׳₪׳¨׳™׳˜", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
+            pdf_paragraph("הערות", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
+            pdf_paragraph("כמות", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
+            pdf_paragraph("שם פריט", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
         ]]
         for row in line_items:
             table_rows.append([
@@ -3146,10 +3309,10 @@ def build_hot_field_report_pdf(ticket, report, technician_signature_bytes, custo
         ])
 
     story.extend([
-        pdf_paragraph("׳”׳¢׳¨׳•׳× ׳ ׳•׳¡׳₪׳•׳×", section_title_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
+        pdf_paragraph("הערות נוספות", section_title_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
         pdf_paragraph(report.get("additional_notes") or "-", text_style, rtl=True, latin_font_name=latin_regular_font, hebrew_font_name=hebrew_regular_font),
         Spacer(1, 8),
-        pdf_paragraph("׳¦׳™׳׳•׳ ׳׳–׳•׳¨ ׳¢׳‘׳•׳“׳”", section_title_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
+        pdf_paragraph("צילום אזור עבודה", section_title_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
     ])
 
     photo_rows = hot_field_report_photo_rows(report.get("area_photo_attachments") or [])
@@ -3177,12 +3340,12 @@ def build_hot_field_report_pdf(ticket, report, technician_signature_bytes, custo
     customer_signature_cell = (
         Image(io.BytesIO(customer_signature_bytes), width=72 * mm, height=28 * mm, hAlign="CENTER")
         if customer_signature_bytes
-        else pdf_paragraph("׳׳ ׳ ׳“׳¨׳©׳” ׳—׳×׳™׳׳× ׳׳§׳•׳—", text_style, rtl=True, latin_font_name=latin_regular_font, hebrew_font_name=hebrew_regular_font)
+        else pdf_paragraph("לא נדרשה חתימת לקוח", text_style, rtl=True, latin_font_name=latin_regular_font, hebrew_font_name=hebrew_regular_font)
     )
     signature_table = Table([
         [
-            pdf_paragraph("׳—׳×׳™׳׳× ׳”׳׳§׳•׳—", section_title_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
-            pdf_paragraph("׳—׳×׳™׳׳× ׳˜׳›׳ ׳׳™", section_title_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
+            pdf_paragraph("חתימת הלקוח", section_title_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
+            pdf_paragraph("חתימת טכנאי", section_title_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
         ],
         [
             customer_signature_cell,
@@ -3205,9 +3368,9 @@ def build_hot_field_report_pdf(ticket, report, technician_signature_bytes, custo
 
     technician_meta_table = Table([
         [
-            pdf_paragraph("׳׳•׳¢׳“ ׳”׳×׳§׳ ׳”", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
+            pdf_paragraph("מועד התקנה", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
             pdf_paragraph(report.get("installation_date") or "-", latin_style, rtl=False, latin_font_name=latin_regular_font, hebrew_font_name=hebrew_regular_font),
-            pdf_paragraph("׳˜׳›׳ ׳׳™ ׳׳‘׳¦׳¢", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
+            pdf_paragraph("טכנאי מבצע", label_style, rtl=True, latin_font_name=latin_bold_font, hebrew_font_name=hebrew_bold_font),
             pdf_paragraph(report.get("technician_name") or report.get("submitted_by") or "-", text_style, rtl=True, latin_font_name=latin_regular_font, hebrew_font_name=hebrew_regular_font),
         ],
     ], colWidths=[26 * mm, 48 * mm, 30 * mm, 66 * mm], hAlign="RIGHT")
@@ -3234,34 +3397,34 @@ def send_hot_field_report_email(ticket, report, pdf_filename, pdf_content):
         item_lines.append(
             " / ".join(part for part in [
                 str(row.get("item_name") or "").strip() or "-",
-                f"׳›׳׳•׳×: {str(row.get('quantity') or '').strip() or '-'}",
-                f"׳”׳¢׳¨׳•׳×: {str(row.get('notes') or '').strip() or '-'}",
+                f"כמות: {str(row.get('quantity') or '').strip() or '-'}",
+                f"הערות: {str(row.get('notes') or '').strip() or '-'}",
             ] if part)
         )
     body_lines = [
-        f"׳§׳¨׳™׳׳”: {ticket_label}",
-        f"׳׳¡׳₪׳¨ ׳§׳¨׳™׳׳”: {(details.get('call_number') or '').strip() or '-'}",
-        f"׳׳§׳•׳—: {(details.get('customer_name') or '').strip() or '-'}",
-        f"׳©׳ ׳”׳׳§׳•׳— ׳‘׳ ׳™׳׳‘׳•׳¡: {(report.get('nimbus_customer_name') or '').strip() or '-'}",
-        f"׳ ׳¦׳™׳’ / ׳׳§׳•׳—: {' '.join(part for part in [(report.get('contact_first_name') or '').strip(), (report.get('contact_last_name') or '').strip()] if part) or '-'}",
-        f"׳×׳₪׳§׳™׳“: {(report.get('role') or '').strip() or '-'}",
-        f"׳›׳×׳•׳‘׳×: {(report.get('installation_address') or details.get('address') or '').strip() or '-'}",
-        f"׳˜׳׳₪׳•׳: {(report.get('phone') or '').strip() or '-'}",
-        f"׳”׳¢׳¨׳•׳×: {(report.get('customer_notes') or '').strip() or '-'}",
-        f"׳”׳¢׳¨׳•׳× ׳ ׳•׳¡׳₪׳•׳×: {(report.get('additional_notes') or '').strip() or '-'}",
-        f"׳₪׳¨׳™׳˜׳™׳: {' | '.join(item_lines) if item_lines else '-'}",
-        f"׳¦׳™׳׳•׳׳™ ׳׳–׳•׳¨ ׳¢׳‘׳•׳“׳”: {len(report.get('area_photo_attachments') or [])}",
-        f"׳˜׳›׳ ׳׳™ ׳׳‘׳¦׳¢: {(report.get('technician_name') or report.get('submitted_by') or '').strip() or '-'}",
-        f"׳׳•׳¢׳“ ׳”׳×׳§׳ ׳”: {(report.get('installation_date') or '').strip() or '-'}",
-        f"׳–׳׳ ׳—׳×׳™׳׳”: {(report.get('submitted_at_display') or '').strip() or '-'}",
+        f"קריאה: {ticket_label}",
+        f"מספר קריאה: {(details.get('call_number') or '').strip() or '-'}",
+        f"לקוח: {(details.get('customer_name') or '').strip() or '-'}",
+        f"שם הלקוח בנימבוס: {(report.get('nimbus_customer_name') or '').strip() or '-'}",
+        f"נציג / לקוח: {' '.join(part for part in [(report.get('contact_first_name') or '').strip(), (report.get('contact_last_name') or '').strip()] if part) or '-'}",
+        f"תפקיד: {(report.get('role') or '').strip() or '-'}",
+        f"כתובת: {(report.get('installation_address') or details.get('address') or '').strip() or '-'}",
+        f"טלפון: {(report.get('phone') or '').strip() or '-'}",
+        f"הערות: {(report.get('customer_notes') or '').strip() or '-'}",
+        f"הערות נוספות: {(report.get('additional_notes') or '').strip() or '-'}",
+        f"פריטים: {' | '.join(item_lines) if item_lines else '-'}",
+        f"צילומי אזור עבודה: {len(report.get('area_photo_attachments') or [])}",
+        f"טכנאי מבצע: {(report.get('technician_name') or report.get('submitted_by') or '').strip() or '-'}",
+        f"מועד התקנה: {(report.get('installation_date') or '').strip() or '-'}",
+        f"זמן חתימה: {(report.get('submitted_at_display') or '').strip() or '-'}",
     ]
-    html_body = "<html><body dir='rtl'><h2>׳˜׳•׳₪׳¡ ׳׳™׳©׳•׳¨ ׳§׳‘׳׳× ׳¦׳™׳•׳“ ׳•׳”׳×׳§׳ ׳”</h2><ul>" + "".join(
+    html_body = "<html><body dir='rtl'><h2>טופס אישור קבלת ציוד והתקנה</h2><ul>" + "".join(
         f"<li><strong>{xml_escape(line.split(':', 1)[0])}:</strong> {xml_escape(line.split(':', 1)[1].strip() if ':' in line else '')}</li>"
         for line in body_lines
     ) + "</ul></body></html>"
     send_plain_email(
         HOT_FIELD_REPORT_CUSTOMER_EMAIL,
-        f"{ticket_label} - ׳˜׳•׳₪׳¡ ׳׳™׳©׳•׳¨ ׳§׳‘׳׳× ׳¦׳™׳•׳“ ׳•׳”׳×׳§׳ ׳”",
+        f"{ticket_label} - טופס אישור קבלת ציוד והתקנה",
         "\n".join(body_lines),
         html_body=html_body,
         attachments=[{
@@ -3280,7 +3443,7 @@ def save_hot_field_report(ticket_id, actor, payload, area_photo_files=None):
         raise LookupError("Ticket not found")
     board_slug = (ticket.get("board_slug") or "").strip().lower()
     if board_slug not in FIELD_REPORT_SUPPORTED_BOARD_SLUGS:
-        raise ValueError("׳˜׳•׳₪׳¡ ׳”׳—׳×׳׳” ׳ ׳×׳׳ ׳¨׳§ ׳‘׳§׳¨׳™׳׳•׳× ׳”׳•׳˜ ׳•׳₪׳™׳¡")
+        raise ValueError("טופס החתמה נתמך רק בקריאות הוט ופיס")
 
     details = dict(ticket.get("details") or {})
     previous_report = details.get("field_report") if isinstance(details.get("field_report"), dict) else {}
@@ -3299,20 +3462,20 @@ def save_hot_field_report(ticket_id, actor, payload, area_photo_files=None):
     line_items = normalize_hot_field_report_line_items(payload.get("line_items") or previous_report.get("line_items") or [])
 
     if not nimbus_customer_name:
-        raise ValueError("׳™׳© ׳׳׳׳ ׳©׳ ׳”׳׳§׳•׳— ׳‘׳ ׳™׳׳‘׳•׳¡")
+        raise ValueError("יש למלא שם הלקוח בנימבוס")
     if not contact_first_name:
-        raise ValueError("׳™׳© ׳׳׳׳ ׳©׳ ׳₪׳¨׳˜׳™")
+        raise ValueError("יש למלא שם פרטי")
     if not installation_address:
-        raise ValueError("׳™׳© ׳׳׳׳ ׳›׳×׳•׳‘׳× ׳”׳×׳§׳ ׳”")
+        raise ValueError("יש למלא כתובת התקנה")
     if not phone:
-        raise ValueError("׳™׳© ׳׳׳׳ ׳˜׳׳₪׳•׳")
+        raise ValueError("יש למלא טלפון")
     if not technician_name:
-        raise ValueError("׳™׳© ׳׳׳׳ ׳˜׳›׳ ׳׳™ ׳׳‘׳¦׳¢")
+        raise ValueError("יש למלא טכנאי מבצע")
 
-    technician_signature_bytes, _ = parse_signature_data_url(technician_signature_data_url, "׳—׳×׳™׳׳× ׳”׳˜׳›׳ ׳׳™")
+    technician_signature_bytes, _ = parse_signature_data_url(technician_signature_data_url, "חתימת הטכנאי")
     customer_signature_bytes = None
     if customer_signature_data_url:
-        customer_signature_bytes, _ = parse_signature_data_url(customer_signature_data_url, "׳—׳×׳™׳׳× ׳”׳׳§׳•׳—")
+        customer_signature_bytes, _ = parse_signature_data_url(customer_signature_data_url, "חתימת הלקוח")
     now = israel_now()
     submitted_display = now.strftime("%d/%m/%Y %H:%M")
     merged_photo_attachments = list(previous_report.get("area_photo_attachments") or [])
@@ -3431,6 +3594,11 @@ def resend_delivery_requested():
 
 
 def selected_email_provider():
+    explicit_provider = (os.environ.get("EMAIL_PROVIDER") or "").strip().lower()
+    if explicit_provider == "smtp":
+        return "smtp"
+    if explicit_provider == "resend":
+        return "resend"
     if resend_delivery_requested():
         return "resend"
     if smtp_email_enabled():
@@ -3455,8 +3623,17 @@ def user_friendly_email_error(message):
         return "Resend is not configured."
     if "connection unexpectedly closed" in lowered:
         return "The mail server closed the connection unexpectedly. Please try again."
+    if "recipient" in lowered and "not verified" in lowered:
+        return "The recipient is not allowed in the current email provider mode."
+    if "testing emails" in lowered or "test mode" in lowered:
+        return "The current email provider is in test mode. Use your verified inbox or switch local EMAIL_PROVIDER to smtp."
     if normalized:
-        return "Failed to send the email invitation. Please try again."
+        provider = selected_email_provider()
+        if provider == "resend":
+            return f"Failed to send the email invitation via Resend. {normalized}"
+        if provider == "smtp":
+            return f"Failed to send the email invitation via SMTP. {normalized}"
+        return f"Failed to send the email invitation. {normalized}"
     return ""
 
 
@@ -3716,113 +3893,113 @@ def coordination_ticket_email_context(ticket):
     calendar_address = coordination_ticket_calendar_address(ticket)
 
     top_rows = [
-        ("׳׳¡׳₪׳¨ ׳§׳¨׳™׳׳”", ticket_label),
-        ("׳׳•׳—", board_name),
-        ("׳ ׳•׳¦׳¨ ׳‘׳×׳׳¨׳™׳", ticket.get("created_at_display")),
-        ("׳™׳•׳¦׳¨", ticket.get("creator")),
-        ("׳¡׳˜׳˜׳•׳¡", ticket.get("status")),
-        ("׳׳©׳•׳™׳ ׳", ticket.get("assigned_to")),
+        ("מספר קריאה", ticket_label),
+        ("לוח", board_name),
+        ("נוצר בתאריך", ticket.get("created_at_display")),
+        ("יוצר", ticket.get("creator")),
+        ("סטטוס", ticket.get("status")),
+        ("משויך ל", ticket.get("assigned_to")),
     ]
 
     if board_slug == "support":
         detail_rows = [
-            ("׳¡׳•׳’ ׳›׳¨׳˜׳™׳¡", ticket.get("ticket_type")),
-            ("׳¡׳•׳’ ׳©׳™׳¨׳•׳×", ticket.get("service_type")),
-            ("׳“׳•׳׳™׳™׳", ticket.get("domain")),
-            ("׳¢׳“׳™׳₪׳•׳×", ticket.get("priority")),
-            ("׳×׳™׳׳•׳¨", ticket.get("description")),
-            ("׳₪׳×׳¨׳•׳", ticket.get("solution")),
-            ("׳¡׳•׳’ ׳׳§׳•׳—", details.get("customer_type")),
-            ("׳¡׳•׳’ ׳˜׳™׳₪׳•׳", details.get("service_mode")),
-            ("׳©׳ ׳”׳¢׳¡׳§", details.get("business_name")),
-            ("׳׳™׳© ׳§׳©׳¨", details.get("service_contact")),
-            ("׳›׳×׳•׳‘׳×", details.get("service_address")),
-            ("׳˜׳›׳ ׳׳™ ׳׳×׳•׳׳", details.get("coordinated_worker")),
-            ("׳×׳׳¨׳™׳ ׳‘׳™׳§׳•׳¨", details.get("visit_date")),
-            ("׳©׳¢׳× ׳‘׳™׳§׳•׳¨ ׳", details.get("visit_hour_from")),
-            ("׳©׳¢׳× ׳‘׳™׳§׳•׳¨ ׳¢׳“", details.get("visit_hour_to")),
-            ("׳”׳¢׳¨׳•׳× ׳›׳©׳", details.get("failure_notes")),
+            ("סוג כרטיס", ticket.get("ticket_type")),
+            ("סוג שירות", ticket.get("service_type")),
+            ("דומיין", ticket.get("domain")),
+            ("עדיפות", ticket.get("priority")),
+            ("תיאור", ticket.get("description")),
+            ("פתרון", ticket.get("solution")),
+            ("סוג לקוח", details.get("customer_type")),
+            ("סוג טיפול", details.get("service_mode")),
+            ("שם העסק", details.get("business_name")),
+            ("איש קשר", details.get("service_contact")),
+            ("כתובת", details.get("service_address")),
+            ("טכנאי מתואם", details.get("coordinated_worker")),
+            ("תאריך ביקור", details.get("visit_date")),
+            ("שעת ביקור מ", details.get("visit_hour_from")),
+            ("שעת ביקור עד", details.get("visit_hour_to")),
+            ("הערות כשל", details.get("failure_notes")),
         ]
         calendar_description_lines = [
-            f"׳׳¡׳₪׳¨ ׳§׳¨׳™׳׳”: {ticket_label}",
-            f"׳¡׳˜׳˜׳•׳¡: {(ticket.get('status') or '').strip() or '-'}",
-            f"׳¡׳•׳’ ׳׳§׳•׳—: {(details.get('customer_type') or '').strip() or '-'}",
-            f"׳©׳ ׳”׳¢׳¡׳§: {(details.get('business_name') or '').strip() or '-'}",
-            f"׳×׳™׳׳•׳¨: {(ticket.get('description') or '').strip() or '-'}",
-            f"׳›׳×׳•׳‘׳×: {calendar_address or '-'}",
-            f"׳׳™׳© ׳§׳©׳¨: {calendar_contact or '-'}",
-            f"׳˜׳›׳ ׳׳™ ׳׳×׳•׳׳: {(details.get('coordinated_worker') or '').strip() or '-'}",
+            f"מספר קריאה: {ticket_label}",
+            f"סטטוס: {(ticket.get('status') or '').strip() or '-'}",
+            f"סוג לקוח: {(details.get('customer_type') or '').strip() or '-'}",
+            f"שם העסק: {(details.get('business_name') or '').strip() or '-'}",
+            f"תיאור: {(ticket.get('description') or '').strip() or '-'}",
+            f"כתובת: {calendar_address or '-'}",
+            f"איש קשר: {calendar_contact or '-'}",
+            f"טכנאי מתואם: {(details.get('coordinated_worker') or '').strip() or '-'}",
         ]
-        calendar_summary = f"׳§׳¨׳™׳׳× ׳©׳™׳¨׳•׳× ׳ ׳™׳׳‘׳•׳¡ {ticket_label}"
-        location = calendar_address or "׳ ׳™׳׳‘׳•׳¡"
-        subject = f"׳§׳¨׳™׳׳× ׳©׳™׳¨׳•׳× ׳ ׳™׳׳‘׳•׳¡ ׳׳¡' ׳§׳¨׳™׳׳” : {ticket_label}"
+        calendar_summary = f"קריאת שירות נימבוס {ticket_label}"
+        location = calendar_address or "נימבוס"
+        subject = f"קריאת שירות נימבוס מס' קריאה : {ticket_label}"
     elif board_slug == "hot-kiryot":
         detail_rows = [
-            ("׳©׳¢׳” ׳•׳×׳׳¨׳™׳ ׳₪׳×׳™׳—׳× ׳×׳§׳׳”", details.get("opened_at")),
-            ("׳׳¡׳₪׳¨ ׳§׳¨׳™׳׳” ׳©׳”׳•׳§׳¦׳”", details.get("call_number")),
-            ("׳×׳•׳׳ ׳‘׳׳•׳§׳“ ׳©׳₪׳×׳— ׳₪׳ ׳™׳” / ׳˜׳™׳₪׳ ׳‘׳׳§׳•׳—", details.get("opened_by")),
-            ("׳—.׳₪. / ׳׳¡ ׳׳§׳•׳—", details.get("customer_id")),
-            ("׳©׳ ׳׳§׳•׳—", details.get("customer_name")),
-            ("׳§׳•׳“ ׳§׳• / ID-LINK", details.get("line_code")),
-            ("׳›׳×׳•׳‘׳×", details.get("address")),
-            ("׳׳™׳© ׳§׳©׳¨ ׳‘׳׳§׳•׳", details.get("on_site_contact")),
-            ("׳׳™׳© ׳§׳©׳¨ ׳˜׳›׳ ׳™ ׳׳˜׳¢׳ ׳”׳׳§׳•׳—", details.get("technical_contact")),
-            ("׳©׳¢׳•׳× ׳₪׳¢׳™׳׳•׳× / ׳–׳׳™׳ ׳•׳× ׳׳§׳•׳—", details.get("availability_hours")),
-            ("׳‘׳“׳™׳§׳•׳× ׳©׳‘׳•׳¦׳¢׳• ׳׳¨׳—׳•׳§", details.get("remote_checks")),
-            ("׳׳”׳•׳× ׳”׳×׳§׳׳”", details.get("issue_summary")),
-            ("׳₪׳¢׳•׳׳•׳× / ׳‘׳“׳™׳§׳•׳× ׳©׳˜׳›׳ ׳׳™ ׳¦׳¨׳™׳ ׳׳‘׳¦׳¢", details.get("technician_actions")),
-            ("׳¡׳•׳’ ׳¦׳™׳•׳“ ׳§׳™׳™׳ ׳׳¦׳ ׳”׳׳§׳•׳—", details.get("equipment_type")),
-            ("׳”׳¡׳›׳ ׳©׳™׳¨׳•׳× ׳•׳׳™׳–׳” ׳¦׳™׳•׳“ ׳‘׳׳—׳¨׳™׳•׳× ׳”׳•׳˜", details.get("service_agreement")),
-            ("׳₪׳¨׳˜׳™׳ ׳˜׳›׳ ׳™׳™׳ ׳ ׳•׳¡׳₪׳™׳", details.get("technical_notes")),
-            ("׳˜׳›׳ ׳׳™ ׳׳×׳•׳׳", details.get("coordinated_worker")),
-            ("׳×׳׳¨׳™׳ ׳‘׳™׳§׳•׳¨", details.get("visit_date")),
-            ("׳©׳¢׳× ׳‘׳™׳§׳•׳¨ ׳", details.get("visit_hour_from")),
-            ("׳©׳¢׳× ׳‘׳™׳§׳•׳¨ ׳¢׳“", details.get("visit_hour_to")),
-            ("׳”׳¢׳¨׳•׳× ׳›׳©׳", details.get("failure_notes")),
+            ("שעה ותאריך פתיחת תקלה", details.get("opened_at")),
+            ("מספר קריאה שהוקצה", details.get("call_number")),
+            ("תומך במוקד שפתח פניה / טיפל בלקוח", details.get("opened_by")),
+            ("ח.פ. / מס לקוח", details.get("customer_id")),
+            ("שם לקוח", details.get("customer_name")),
+            ("קוד קו / ID-LINK", details.get("line_code")),
+            ("כתובת", details.get("address")),
+            ("איש קשר במקום", details.get("on_site_contact")),
+            ("איש קשר טכני מטעם הלקוח", details.get("technical_contact")),
+            ("שעות פעילות / זמינות לקוח", details.get("availability_hours")),
+            ("בדיקות שבוצעו מרחוק", details.get("remote_checks")),
+            ("מהות התקלה", details.get("issue_summary")),
+            ("פעולות / בדיקות שטכנאי צריך לבצע", details.get("technician_actions")),
+            ("סוג ציוד קיים אצל הלקוח", details.get("equipment_type")),
+            ("הסכם שירות ואיזה ציוד באחריות הוט", details.get("service_agreement")),
+            ("פרטים טכניים נוספים", details.get("technical_notes")),
+            ("טכנאי מתואם", details.get("coordinated_worker")),
+            ("תאריך ביקור", details.get("visit_date")),
+            ("שעת ביקור מ", details.get("visit_hour_from")),
+            ("שעת ביקור עד", details.get("visit_hour_to")),
+            ("הערות כשל", details.get("failure_notes")),
         ]
         calendar_description_lines = [
-            f"׳׳¡׳₪׳¨ ׳§׳¨׳™׳׳”: {ticket_label}",
-            f"׳¡׳˜׳˜׳•׳¡: {(ticket.get('status') or '').strip() or '-'}",
-            f"׳׳§׳•׳—: {(details.get('customer_name') or '').strip() or '-'}",
-            f"׳׳”׳•׳× ׳”׳×׳§׳׳”: {(details.get('issue_summary') or '').strip() or '-'}",
-            f"׳›׳×׳•׳‘׳×: {calendar_address or '-'}",
-            f"׳׳™׳© ׳§׳©׳¨: {calendar_contact or '-'}",
-            f"׳˜׳›׳ ׳׳™ ׳׳×׳•׳׳: {(details.get('coordinated_worker') or '').strip() or '-'}",
+            f"מספר קריאה: {ticket_label}",
+            f"סטטוס: {(ticket.get('status') or '').strip() or '-'}",
+            f"לקוח: {(details.get('customer_name') or '').strip() or '-'}",
+            f"מהות התקלה: {(details.get('issue_summary') or '').strip() or '-'}",
+            f"כתובת: {calendar_address or '-'}",
+            f"איש קשר: {calendar_contact or '-'}",
+            f"טכנאי מתואם: {(details.get('coordinated_worker') or '').strip() or '-'}",
         ]
-        calendar_summary = f"׳§׳¨׳™׳׳× ׳©׳™׳¨׳•׳× ׳”׳•׳˜ ׳§׳¨׳™׳׳•׳× {ticket_label}"
-        location = calendar_address or "׳”׳•׳˜ ׳§׳¨׳™׳׳•׳×"
-        subject = f"׳§׳¨׳™׳׳× ׳©׳™׳¨׳•׳× ׳”׳•׳˜ ׳§׳¨׳™׳׳•׳× ׳׳¡' ׳§׳¨׳™׳׳” : {ticket_label}"
+        calendar_summary = f"קריאת שירות הוט קריאות {ticket_label}"
+        location = calendar_address or "הוט קריאות"
+        subject = f"קריאת שירות הוט קריאות מס' קריאה : {ticket_label}"
     else:
         terminal_number = (details.get("terminal_number") or "").strip()
         detail_rows = [
-            ("׳׳¡׳₪׳¨ ׳׳¡׳•׳£", details.get("terminal_number")),
-            ("׳›׳×׳•׳‘׳×", details.get("address")),
-            ("׳›׳×׳•׳‘׳× IP ׳¡׳˜׳˜׳™׳×", details.get("static_ip")),
-            ("׳׳׳˜׳•׳¨׳”", details.get("altura")),
+            ("מספר מסוף", details.get("terminal_number")),
+            ("כתובת", details.get("address")),
+            ("כתובת IP סטטית", details.get("static_ip")),
+            ("אלטורה", details.get("altura")),
             ("Loop Back", details.get("look_back")),
-            ("׳׳™׳© ׳§׳©׳¨", details.get("contact_name")),
-            ("׳˜׳׳₪׳•׳ ׳׳™׳© ׳§׳©׳¨", details.get("contact_phone")),
-            ("׳₪׳ ׳™׳™׳× ׳׳§׳•׳—", details.get("customer_request")),
-            ("׳₪׳¢׳•׳׳•׳×", details.get("actions_taken")),
-            ("׳˜׳›׳ ׳׳™ ׳׳×׳•׳׳", details.get("coordinated_worker")),
-            ("׳×׳׳¨׳™׳ ׳‘׳™׳§׳•׳¨", details.get("visit_date")),
-            ("׳©׳¢׳× ׳‘׳™׳§׳•׳¨ ׳", details.get("visit_hour_from")),
-            ("׳©׳¢׳× ׳‘׳™׳§׳•׳¨ ׳¢׳“", details.get("visit_hour_to")),
-            ("׳”׳¢׳¨׳•׳× ׳›׳©׳", details.get("failure_notes")),
+            ("איש קשר", details.get("contact_name")),
+            ("טלפון איש קשר", details.get("contact_phone")),
+            ("פניית לקוח", details.get("customer_request")),
+            ("פעולות", details.get("actions_taken")),
+            ("טכנאי מתואם", details.get("coordinated_worker")),
+            ("תאריך ביקור", details.get("visit_date")),
+            ("שעת ביקור מ", details.get("visit_hour_from")),
+            ("שעת ביקור עד", details.get("visit_hour_to")),
+            ("הערות כשל", details.get("failure_notes")),
         ]
         calendar_description_lines = [
-            f"׳׳¡׳₪׳¨ ׳§׳¨׳™׳׳”: {ticket_label}",
-            f"׳¡׳˜׳˜׳•׳¡: {(ticket.get('status') or '').strip() or '-'}",
-            f"׳׳¡׳₪׳¨ ׳׳¡׳•׳£: {terminal_number or '-'}",
-            f"׳₪׳ ׳™׳™׳× ׳׳§׳•׳—: {(details.get('customer_request') or '').strip() or '-'}",
-            f"׳₪׳¢׳•׳׳•׳×: {(details.get('actions_taken') or '').strip() or '-'}",
-            f"׳›׳×׳•׳‘׳×: {calendar_address or '-'}",
-            f"׳׳™׳© ׳§׳©׳¨: {calendar_contact or '-'}",
-            f"׳˜׳›׳ ׳׳™ ׳׳×׳•׳׳: {(details.get('coordinated_worker') or '').strip() or '-'}",
+            f"מספר קריאה: {ticket_label}",
+            f"סטטוס: {(ticket.get('status') or '').strip() or '-'}",
+            f"מספר מסוף: {terminal_number or '-'}",
+            f"פניית לקוח: {(details.get('customer_request') or '').strip() or '-'}",
+            f"פעולות: {(details.get('actions_taken') or '').strip() or '-'}",
+            f"כתובת: {calendar_address or '-'}",
+            f"איש קשר: {calendar_contact or '-'}",
+            f"טכנאי מתואם: {(details.get('coordinated_worker') or '').strip() or '-'}",
         ]
-        calendar_summary = f"׳§׳¨׳™׳׳× ׳©׳™׳¨׳•׳× ׳׳₪׳¢׳ ׳”׳₪׳™׳¡ {ticket_label}"
-        location = calendar_address or "׳׳₪׳¢׳ ׳”׳₪׳™׳¡"
-        subject = f"׳§׳¨׳™׳׳× ׳©׳™׳¨׳•׳× ׳׳₪׳¢׳ ׳”׳₪׳™׳¡ ׳׳¡' ׳§׳¨׳™׳׳” : {ticket_label}"
+        calendar_summary = f"קריאת שירות מפעל הפיס {ticket_label}"
+        location = calendar_address or "מפעל הפיס"
+        subject = f"קריאת שירות מפעל הפיס מס' קריאה : {ticket_label}"
 
     return {
         "board_name": board_name,
@@ -3892,7 +4069,7 @@ def build_pais_email_html(ticket, calendar_link=None, app_link=None):
         calendar_button = f"""
         <div style="margin:20px 0 0;text-align:center;">
           <a href="{xml_escape(calendar_link)}" style="display:inline-block;background:#28a86f;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:700;">
-            ׳”׳•׳¡׳£ ׳׳™׳•׳׳ Google
+            הוסף ליומן Google
           </a>
         </div>
         """
@@ -3902,7 +4079,7 @@ def build_pais_email_html(ticket, calendar_link=None, app_link=None):
         app_button = f"""
         <div style="margin:16px 0 0;text-align:center;">
           <a href="{xml_escape(app_link)}" style="display:inline-block;background:#1f4f8f;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:700;">
-            ׳׳¢׳‘׳¨ ׳׳׳₪׳׳™׳§׳¦׳™׳”
+            מעבר לאפליקציה
           </a>
         </div>
         <div style="margin:12px 0 0;text-align:center;font-size:13px;color:#6a6258;">
@@ -3955,18 +4132,18 @@ def nastia_waiting_alert_rows(ticket):
     details = ticket.get("details") or {}
     board_slug = (ticket.get("board_slug") or "").strip().lower()
     rows = [
-        ("׳¡׳˜׳˜׳•׳¡", normalize_ticket_status(ticket.get("board_slug"), ticket.get("status"))),
+        ("סטטוס", normalize_ticket_status(ticket.get("board_slug"), ticket.get("status"))),
     ]
     if board_slug == "hot-kiryot":
         rows.extend([
-            ("׳׳¡׳₪׳¨ ׳§׳¨׳™׳׳”", details.get("call_number")),
-            ("׳©׳ ׳׳§׳•׳—", details.get("customer_name")),
-            ("׳›׳×׳•׳‘׳×", coordination_ticket_calendar_address(ticket)),
+            ("מספר קריאה", details.get("call_number")),
+            ("שם לקוח", details.get("customer_name")),
+            ("כתובת", coordination_ticket_calendar_address(ticket)),
         ])
     else:
         rows.extend([
-            ("׳׳¡׳₪׳¨ ׳׳¡׳•׳£", details.get("terminal_number")),
-            ("׳›׳×׳•׳‘׳×", coordination_ticket_calendar_address(ticket)),
+            ("מספר מסוף", details.get("terminal_number")),
+            ("כתובת", coordination_ticket_calendar_address(ticket)),
         ])
     return rows
 
@@ -3974,17 +4151,17 @@ def nastia_waiting_alert_rows(ticket):
 def build_nastia_waiting_alert_email(ticket):
     board = get_ticket_board((ticket.get("board_slug") or "").strip().lower())
     ticket_label = ticket.get("ticket_id") or f"#{int(ticket.get('id') or 0):04d}"
-    subject = f"׳”׳×׳¨׳׳”: {ticket_label} ׳׳׳×׳™׳ ׳׳×׳™׳׳•׳"
+    subject = f"התראה: {ticket_label} ממתין לתיאום"
     rows = nastia_waiting_alert_rows(ticket)
     body_lines = [
-        "׳§׳¨׳™׳׳” ׳׳׳×׳™׳ ׳” ׳׳×׳™׳׳•׳ ׳׳¦׳ ׳ ׳¡׳˜׳™׳”.",
-        f"׳׳¡׳₪׳¨ ׳§׳¨׳™׳׳”: {ticket_label}",
-        f"׳׳•׳—: {(ticket.get('service_type') or board['name']).strip() or board['name']}",
+        "קריאה ממתינה לתיאום אצל נסטיה.",
+        f"מספר קריאה: {ticket_label}",
+        f"לוח: {(ticket.get('service_type') or board['name']).strip() or board['name']}",
     ] + [f"{label}: {_pais_email_value(value)}" for label, value in rows]
     if NASTIA_APP_LOGIN_URL:
         body_lines.extend([
             "",
-            f"׳§׳™׳©׳•׳¨ ׳׳׳₪׳׳™׳§׳¦׳™׳”: {NASTIA_APP_LOGIN_URL}",
+            f"קישור לאפליקציה: {NASTIA_APP_LOGIN_URL}",
         ])
     rendered_rows = "".join(
         f"""
@@ -4001,17 +4178,17 @@ def build_nastia_waiting_alert_email(ticket):
   <body style="margin:0;padding:24px;background:#f5f1ea;font-family:Arial,'Noto Sans Hebrew',sans-serif;color:#1f2f46;">
     <div style="max-width:540px;margin:0 auto;background:#fbfaf7;border:1px solid #ded5c9;border-radius:14px;overflow:hidden;">
       <div style="padding:20px 24px;background:linear-gradient(135deg,#fff2d8 0%,#eef4ff 100%);border-bottom:1px solid #ded5c9;">
-        <div style="font-size:13px;color:#7b7267;font-weight:700;">׳”׳×׳¨׳׳× ׳×׳™׳׳•׳</div>
+        <div style="font-size:13px;color:#7b7267;font-weight:700;">התראת תיאום</div>
         <div style="font-size:28px;font-weight:800;margin-top:6px;">{xml_escape(ticket_label)}</div>
       </div>
       <div style="padding:24px;">
-        <p style="margin:0 0 16px;font-size:16px;font-weight:700;">׳”׳§׳¨׳™׳׳” ׳׳׳×׳™׳ ׳” ׳׳×׳™׳׳•׳.</p>
+        <p style="margin:0 0 16px;font-size:16px;font-weight:700;">הקריאה ממתינה לתיאום.</p>
         <table role="presentation" style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #e7dfd2;border-radius:10px;overflow:hidden;">
           {rendered_rows}
         </table>
         <div style="margin:18px 0 0;text-align:center;">
           <a href="{xml_escape(NASTIA_APP_LOGIN_URL)}" style="display:inline-block;background:#1f4f8f;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:700;">
-            ׳׳¢׳‘׳¨ ׳׳׳₪׳׳™׳§׳¦׳™׳”
+            מעבר לאפליקציה
           </a>
         </div>
         <div style="margin:12px 0 0;text-align:center;font-size:13px;color:#6a6258;">
@@ -4030,27 +4207,27 @@ def nastia_cancellation_alert_rows(previous_ticket, updated_ticket):
     updated_details = (updated_ticket or {}).get("details") or {}
     board_slug = (updated_ticket.get("board_slug") or "").strip().lower()
     rows = [
-        ("׳¡׳˜׳˜׳•׳¡ ׳ ׳•׳›׳—׳™", normalize_ticket_status(updated_ticket.get("board_slug"), updated_ticket.get("status"))),
-        ("׳˜׳›׳ ׳׳™ ׳©׳‘׳•׳˜׳", previous_details.get("coordinated_worker")),
-        ("׳×׳׳¨׳™׳ ׳‘׳™׳§׳•׳¨ ׳©׳‘׳•׳˜׳", previous_details.get("visit_date")),
-        ("׳©׳¢׳× ׳‘׳™׳§׳•׳¨ ׳", previous_details.get("visit_hour_from")),
-        ("׳©׳¢׳× ׳‘׳™׳§׳•׳¨ ׳¢׳“", previous_details.get("visit_hour_to")),
+        ("סטטוס נוכחי", normalize_ticket_status(updated_ticket.get("board_slug"), updated_ticket.get("status"))),
+        ("טכנאי שבוטל", previous_details.get("coordinated_worker")),
+        ("תאריך ביקור שבוטל", previous_details.get("visit_date")),
+        ("שעת ביקור מ", previous_details.get("visit_hour_from")),
+        ("שעת ביקור עד", previous_details.get("visit_hour_to")),
     ]
     if board_slug == "support":
         rows.extend([
-            ("׳©׳ ׳”׳¢׳¡׳§", updated_details.get("business_name") or previous_details.get("business_name")),
-            ("׳›׳×׳•׳‘׳×", coordination_ticket_calendar_address(updated_ticket)),
+            ("שם העסק", updated_details.get("business_name") or previous_details.get("business_name")),
+            ("כתובת", coordination_ticket_calendar_address(updated_ticket)),
         ])
     elif board_slug == "hot-kiryot":
         rows.extend([
-            ("׳׳¡׳₪׳¨ ׳§׳¨׳™׳׳”", updated_details.get("call_number") or previous_details.get("call_number")),
-            ("׳©׳ ׳׳§׳•׳—", updated_details.get("customer_name") or previous_details.get("customer_name")),
-            ("׳›׳×׳•׳‘׳×", coordination_ticket_calendar_address(updated_ticket)),
+            ("מספר קריאה", updated_details.get("call_number") or previous_details.get("call_number")),
+            ("שם לקוח", updated_details.get("customer_name") or previous_details.get("customer_name")),
+            ("כתובת", coordination_ticket_calendar_address(updated_ticket)),
         ])
     else:
         rows.extend([
-            ("׳׳¡׳₪׳¨ ׳׳¡׳•׳£", updated_details.get("terminal_number") or previous_details.get("terminal_number")),
-            ("׳›׳×׳•׳‘׳×", coordination_ticket_calendar_address(updated_ticket)),
+            ("מספר מסוף", updated_details.get("terminal_number") or previous_details.get("terminal_number")),
+            ("כתובת", coordination_ticket_calendar_address(updated_ticket)),
         ])
     return rows
 
@@ -4058,17 +4235,17 @@ def nastia_cancellation_alert_rows(previous_ticket, updated_ticket):
 def build_nastia_cancellation_alert_email(previous_ticket, updated_ticket):
     board = get_ticket_board((updated_ticket.get("board_slug") or "").strip().lower())
     ticket_label = updated_ticket.get("ticket_id") or f"#{int(updated_ticket.get('id') or 0):04d}"
-    subject = f"׳”׳×׳¨׳׳”: {ticket_label} ׳‘׳™׳˜׳•׳ ׳‘׳™׳§׳•׳¨"
+    subject = f"התראה: {ticket_label} ביטול ביקור"
     rows = nastia_cancellation_alert_rows(previous_ticket, updated_ticket)
     body_lines = [
-        "׳‘׳™׳§׳•׳¨ ׳©׳×׳•׳׳ ׳‘׳•׳˜׳ ׳•׳ ׳“׳¨׳© ׳×׳™׳׳•׳ ׳׳—׳“׳©.",
-        f"׳׳¡׳₪׳¨ ׳§׳¨׳™׳׳”: {ticket_label}",
-        f"׳׳•׳—: {(updated_ticket.get('service_type') or board['name']).strip() or board['name']}",
+        "ביקור שתואם בוטל ונדרש תיאום מחדש.",
+        f"מספר קריאה: {ticket_label}",
+        f"לוח: {(updated_ticket.get('service_type') or board['name']).strip() or board['name']}",
     ] + [f"{label}: {_pais_email_value(value)}" for label, value in rows]
     if NASTIA_APP_LOGIN_URL:
         body_lines.extend([
             "",
-            f"׳§׳™׳©׳•׳¨ ׳׳׳₪׳׳™׳§׳¦׳™׳”: {NASTIA_APP_LOGIN_URL}",
+            f"קישור לאפליקציה: {NASTIA_APP_LOGIN_URL}",
         ])
     rendered_rows = "".join(
         f"""
@@ -4084,7 +4261,7 @@ def build_nastia_cancellation_alert_email(previous_ticket, updated_ticket):
         app_link = f"""
         <div style="margin:18px 0 0;text-align:center;">
           <a href="{xml_escape(NASTIA_APP_LOGIN_URL)}" style="display:inline-block;background:#8f3d1f;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:700;">
-            ׳׳¢׳‘׳¨ ׳׳׳₪׳׳™׳§׳¦׳™׳”
+            מעבר לאפליקציה
           </a>
         </div>
         <div style="margin:12px 0 0;text-align:center;font-size:13px;color:#6a6258;">
@@ -4097,11 +4274,11 @@ def build_nastia_cancellation_alert_email(previous_ticket, updated_ticket):
   <body style="margin:0;padding:24px;background:#f5f1ea;font-family:Arial,'Noto Sans Hebrew',sans-serif;color:#1f2f46;">
     <div style="max-width:540px;margin:0 auto;background:#fbfaf7;border:1px solid #ded5c9;border-radius:14px;overflow:hidden;">
       <div style="padding:20px 24px;background:linear-gradient(135deg,#ffe5dd 0%,#fff3e4 100%);border-bottom:1px solid #ded5c9;">
-        <div style="font-size:13px;color:#7b7267;font-weight:700;">׳”׳×׳¨׳׳× ׳‘׳™׳˜׳•׳ ׳‘׳™׳§׳•׳¨</div>
+        <div style="font-size:13px;color:#7b7267;font-weight:700;">התראת ביטול ביקור</div>
         <div style="font-size:28px;font-weight:800;margin-top:6px;">{xml_escape(ticket_label)}</div>
       </div>
       <div style="padding:24px;">
-        <p style="margin:0 0 16px;font-size:16px;font-weight:700;">׳”׳‘׳™׳§׳•׳¨ ׳©׳‘׳•׳˜׳ ׳“׳•׳¨׳© ׳×׳™׳׳•׳ ׳׳—׳“׳©.</p>
+        <p style="margin:0 0 16px;font-size:16px;font-weight:700;">הביקור שבוטל דורש תיאום מחדש.</p>
         <table role="presentation" style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #e7dfd2;border-radius:10px;overflow:hidden;">
           {rendered_rows}
         </table>
@@ -4135,12 +4312,12 @@ def should_notify_racheli(previous_ticket, updated_ticket, actor, changes):
         return False
     previous_mode = ((previous_ticket or {}).get("details") or {}).get("service_mode") or ""
     updated_mode = ((updated_ticket.get("details") or {}).get("service_mode") or "").strip()
-    return updated_mode == "׳׳©׳׳•׳—" and previous_mode != updated_mode
+    return updated_mode == "משלוח" and previous_mode != updated_mode
 
 
 def send_racheli_ticket_email(ticket):
     email_context = coordination_ticket_email_context(ticket)
-    selected_mode = ((ticket.get("details") or {}).get("service_mode") or "").strip() or "׳׳©׳׳•׳—"
+    selected_mode = ((ticket.get("details") or {}).get("service_mode") or "").strip() or "משלוח"
     send_plain_email(
         RACHELI_NOTIFICATION_EMAIL,
         f"{email_context['ticket_label']} - {selected_mode}",
@@ -4157,12 +4334,12 @@ def build_support_ticket_email_message(ticket, app_link=None):
     if calendar_link:
         body_lines.extend([
             "",
-            f"׳”׳•׳¡׳₪׳” ׳׳™׳•׳׳ Google: {calendar_link}",
+            f"הוספה ליומן Google: {calendar_link}",
         ])
     if app_link:
         body_lines.extend([
             "",
-            f"׳§׳™׳©׳•׳¨ ׳׳׳₪׳׳™׳§׳¦׳™׳”: {app_link}",
+            f"קישור לאפליקציה: {app_link}",
         ])
     return {
         "subject": email_context["subject"],
@@ -4799,9 +4976,9 @@ def get_active_users_for(service_name: str):
 def api_error(message, status=500, code="server_error"):
     raw_message = str(message)
     if is_google_sheets_quota_error(raw_message):
-        user_message = "׳”׳׳¢׳¨׳›׳× ׳¢׳׳•׳¡׳” ׳›׳¨׳’׳¢ ׳‘׳©׳ ׳׳’׳‘׳׳× ׳§׳¨׳™׳׳” ׳–׳׳ ׳™׳× ׳׳•׳ Google Sheets. ׳ ׳¡׳”/׳™ ׳©׳•׳‘ ׳‘׳¢׳•׳“ ׳“׳§׳”."
+        user_message = "המערכת עמוסה כרגע בשל מגבלת קריאה זמנית מול Google Sheets. נסה/י שוב בעוד דקה."
     elif code == "google_auth_or_sheet_error":
-        user_message = "׳׳™׳¨׳¢׳” ׳©׳’׳™׳׳” ׳–׳׳ ׳™׳× ׳‘׳˜׳¢׳™׳ ׳× ׳”׳ ׳×׳•׳ ׳™׳ ׳׳”׳׳¢׳¨׳›׳×. ׳ ׳¡׳”/׳™ ׳©׳•׳‘ ׳‘׳¢׳•׳“ ׳¨׳’׳¢."
+        user_message = "אירעה שגיאה זמנית בטעינת הנתונים מהמערכת. נסה/י שוב בעוד רגע."
     else:
         user_message = raw_message
     return jsonify({"ok": False, "code": code, "message": user_message}), status
@@ -5268,10 +5445,10 @@ def get_domain_from_crm(crmordernumber):
 def get_pending_customers(use_cache=True, allow_stale_on_error=True):
     """
     Returns customers where:
-      H == ׳³ֲ׳³ֲ׳³ֳ—׳³ג„¢׳³ֲ AND K == ׳³ֲ׳³ֲ§׳³ג€¢׳³ג€” ׳³ג€׳³ג€¢׳³ֳ—׳³ֲ§׳³ֲ
+      H == ממתין AND K == לקוח הותקן
     Also includes:
       - idnumber (hidden)
-      - numbercgr from sheet ׳³ג€”׳³ג„¢׳³ג‚×_׳³ֲ¡׳³ֲ׳³ֲ¡ (only rows where column C empty)
+      - numbercgr from sheet חיפ_סמס (only rows where column C empty)
       - cgr_row (for updates on export)
       - cgr_marked (green/yellow indicator from column B)
     """
@@ -5706,13 +5883,13 @@ def get_feature_report_counts(month_value, use_cache=True, allow_stale_on_error=
                 "count": count,
             })
 
-        report = {
+        report = normalize_legacy_hebrew_data({
             "month": month_value,
             "month_display": selected_month.strftime("%m/%Y"),
             "services": reports,
             "total": sum(item["count"] for item in reports),
             "waiting_total": dashboard_services_waiting_total(),
-        }
+        })
         return keyed_cache_set(
             FEATURE_REPORT_COUNTS_CACHE,
             cache_key,
@@ -5771,11 +5948,11 @@ def get_feature_report_monthly_totals(start_month_value, end_month_value, use_ca
                 "total": monthly_totals[month_value],
             })
 
-        totals_payload = {
+        totals_payload = normalize_legacy_hebrew_data({
             "start_month": start_month_value,
             "end_month": end_month_value,
             "months": months,
-        }
+        })
         return keyed_cache_set(
             FEATURE_REPORT_MONTHLY_TOTALS_CACHE,
             cache_key,
@@ -5861,26 +6038,26 @@ def canonicalize_feature_status_project_manager(value):
 def canonicalize_feature_status_label(value):
     raw_text = normalize_feature_status_text(value)
     if not raw_text:
-        return "׳׳ ׳”׳•׳’׳“׳¨"
+        return "לא הוגדר"
     lookup_text = normalize_feature_status_lookup_text(raw_text)
-    if "׳‘׳•׳¦׳¢" in lookup_text:
-        return "׳‘׳•׳¦׳¢"
-    if "׳˜׳¢׳•׳×" in lookup_text and "׳׳¡׳₪׳¨" in lookup_text:
-        return "׳˜׳¢׳•׳× ׳‘׳׳¡׳₪׳¨"
-    if "׳›׳₪׳™׳׳•׳×" in lookup_text:
-        return "׳›׳₪׳™׳׳•׳×"
-    if "׳׳ ׳”׳•׳’׳“׳¨" in lookup_text:
-        return "׳׳ ׳”׳•׳’׳“׳¨"
-    if "׳׳ ׳”׳•׳¢׳‘׳¨" in lookup_text and "׳ ׳•׳¡׳—" in lookup_text:
-        return "׳׳ ׳”׳•׳¢׳‘׳¨ ׳ ׳•׳¡׳—"
-    if "׳׳‘׳•׳˜׳" in lookup_text or "׳‘׳•׳˜׳" in lookup_text:
-        return "׳׳‘׳•׳˜׳"
-    if "׳׳׳×׳™׳" in lookup_text:
-        return "׳׳׳×׳™׳"
-    if "׳ ׳©׳׳—׳”" in lookup_text and "׳”׳•׳“׳¢׳”" in lookup_text:
-        return "׳ ׳©׳׳—׳” ׳”׳•׳“׳¢׳”"
-    if "׳ ׳©׳׳—" in lookup_text and "׳”׳•׳“׳¢׳”" in lookup_text:
-        return "׳ ׳©׳׳—׳” ׳”׳•׳“׳¢׳”"
+    if "בוצע" in lookup_text:
+        return "בוצע"
+    if "טעות" in lookup_text and "מספר" in lookup_text:
+        return "טעות במספר"
+    if "כפילות" in lookup_text:
+        return "כפילות"
+    if "לא הוגדר" in lookup_text:
+        return "לא הוגדר"
+    if "לא הועבר" in lookup_text and "נוסח" in lookup_text:
+        return "לא הועבר נוסח"
+    if "מבוטל" in lookup_text or "בוטל" in lookup_text:
+        return "מבוטל"
+    if "ממתין" in lookup_text:
+        return "ממתין"
+    if "נשלחה" in lookup_text and "הודעה" in lookup_text:
+        return "נשלחה הודעה"
+    if "נשלח" in lookup_text and "הודעה" in lookup_text:
+        return "נשלחה הודעה"
     return raw_text
 
 
@@ -5895,7 +6072,7 @@ def resolve_feature_status_value(row, config):
         if parse_report_date(completed_date_value, config.get("date_order", "mdy")):
             return STATUS_DONE
 
-    return "׳׳ ׳”׳•׳’׳“׳¨"
+    return "לא הוגדר"
 
 
 def feature_status_selected_month(month_value=""):
@@ -5905,7 +6082,7 @@ def feature_status_selected_month(month_value=""):
             parsed = datetime.strptime(raw, "%Y-%m")
             return parsed.date().replace(day=1)
         except ValueError as exc:
-            raise ValueError("׳—׳•׳“׳© ׳׳ ׳×׳§׳™׳") from exc
+            raise ValueError("חודש לא תקין") from exc
     now = datetime.now(ZoneInfo("Asia/Jerusalem")).date()
     return now.replace(day=1)
 
@@ -5913,7 +6090,7 @@ def feature_status_selected_month(month_value=""):
 def feature_status_entry_matches(entry, query_text="", query_type="all", status_filter="", project_manager_filter=""):
     normalized_status_filter = canonicalize_feature_status_label(status_filter) if status_filter else ""
     entry_status = canonicalize_feature_status_label(entry.get("status"))
-    if normalized_status_filter == "׳¡׳˜׳˜׳•׳¡ ׳׳—׳¨":
+    if normalized_status_filter == "סטטוס אחר":
         if entry_status in FEATURE_STATUS_COUNTER_ORDER:
             return False
     elif normalized_status_filter and entry_status != normalized_status_filter:
@@ -5972,7 +6149,7 @@ def build_feature_status_dashboard(month_value="", query_text="", query_type="al
         scoped_entries = []
 
         for row_index, row in enumerate(rows[1:], start=2):
-            status_value = resolve_feature_status_value(row, config)
+            status_value = normalize_legacy_hebrew_text(resolve_feature_status_value(row, config))
             date_value = (row[config["date_col"] - 1] if len(row) >= config.get("date_col", 0) else "").strip()
             entry_date = parse_report_date(date_value, config.get("date_order", "mdy"))
             if not entry_date:
@@ -5980,13 +6157,13 @@ def build_feature_status_dashboard(month_value="", query_text="", query_type="al
             if entry_date.year != selected_month.year or entry_date.month != selected_month.month:
                 continue
 
-            business_name = (row[config.get("business_col", 1) - 1] if len(row) >= config.get("business_col", 1) else "").strip()
-            customer_id = (row[config.get("customer_col", 2) - 1] if len(row) >= config.get("customer_col", 2) else "").strip()
-            order_id = (row[config.get("order_col", 5) - 1] if len(row) >= config.get("order_col", 5) else "").strip()
-            project_manager = (row[config.get("project_manager_col", 6) - 1] if len(row) >= config.get("project_manager_col", 6) else "").strip()
+            business_name = normalize_legacy_hebrew_text((row[config.get("business_col", 1) - 1] if len(row) >= config.get("business_col", 1) else "").strip())
+            customer_id = normalize_legacy_hebrew_text((row[config.get("customer_col", 2) - 1] if len(row) >= config.get("customer_col", 2) else "").strip())
+            order_id = normalize_legacy_hebrew_text((row[config.get("order_col", 5) - 1] if len(row) >= config.get("order_col", 5) else "").strip())
+            project_manager = normalize_legacy_hebrew_text((row[config.get("project_manager_col", 6) - 1] if len(row) >= config.get("project_manager_col", 6) else "").strip())
             canonical_project_manager = canonicalize_feature_status_project_manager(project_manager)
             canonical_status = canonicalize_feature_status_label(status_value)
-            display_status = canonical_status if canonical_status in set(FEATURE_STATUS_COUNTER_ORDER) | {"׳׳ ׳”׳•׳’׳“׳¨"} else status_value
+            display_status = canonical_status if canonical_status in set(FEATURE_STATUS_COUNTER_ORDER) | {"לא הוגדר"} else status_value
 
             entry = {
                 "row": row_index,
@@ -6001,8 +6178,8 @@ def build_feature_status_dashboard(month_value="", query_text="", query_type="al
                 "date": entry_date.strftime("%Y-%m-%d"),
                 "date_display": entry_date.strftime("%d/%m/%Y"),
                 "service_key": config["key"],
-                "service_label": config["label"],
-                "sheet": config["sheet"],
+                "service_label": normalize_legacy_hebrew_text(config["label"]),
+                "sheet": normalize_legacy_hebrew_text(config["sheet"]),
             }
             available_statuses.add(canonical_status)
             if canonical_project_manager or project_manager:
@@ -6031,30 +6208,30 @@ def build_feature_status_dashboard(month_value="", query_text="", query_type="al
         services.append({
             "key": config["key"],
             "label": config["label"],
-            "sheet": config["sheet"],
+            "sheet": normalize_legacy_hebrew_text(config["sheet"]),
             "found": bool(entries),
             "entry_count": len(entries),
-            "done_count": len([entry for entry in entries if entry.get("status_category") == "׳‘׳•׳¦׳¢"]),
-            "waiting_count": len([entry for entry in entries if entry.get("status_category") == "׳׳׳×׳™׳"]),
+            "done_count": len([entry for entry in entries if entry.get("status_category") == "בוצע"]),
+            "waiting_count": len([entry for entry in entries if entry.get("status_category") == "ממתין"]),
             "entries": entries,
         })
 
     all_entries.sort(key=lambda item: (item.get("date") or "", item.get("service_label") or "", item.get("business_name") or ""), reverse=True)
     services = sorted(services, key=lambda item: (-item["entry_count"], item["label"]))
     total_entries = len(all_entries)
-    done_count = len([entry for entry in all_entries if entry.get("status_category") == "׳‘׳•׳¦׳¢"])
-    waiting_count = len([entry for entry in all_entries if entry.get("status_category") == "׳׳׳×׳™׳"])
+    done_count = len([entry for entry in all_entries if entry.get("status_category") == "בוצע"])
+    waiting_count = len([entry for entry in all_entries if entry.get("status_category") == "ממתין"])
     other_count = total_entries - done_count - waiting_count
     status_counts = {status_name: 0 for status_name in FEATURE_STATUS_COUNTER_ORDER}
-    status_counts["׳¡׳˜׳˜׳•׳¡ ׳׳—׳¨"] = 0
+    status_counts["סטטוס אחר"] = 0
     for entry in query_scope_entries:
         status_name = canonicalize_feature_status_label(entry.get("status"))
         if status_name in status_counts:
             status_counts[status_name] += 1
         else:
-            status_counts["׳¡׳˜׳˜׳•׳¡ ׳׳—׳¨"] += 1
+            status_counts["סטטוס אחר"] += 1
 
-    return {
+    return normalize_legacy_hebrew_data({
         "month": selected_month.strftime("%Y-%m"),
         "month_display": selected_month.strftime("%m/%Y"),
         "query": str(query_text or "").strip(),
@@ -6065,7 +6242,7 @@ def build_feature_status_dashboard(month_value="", query_text="", query_type="al
         "entries": all_entries,
         "available_statuses": sorted(available_statuses),
         "available_project_managers": sort_feature_status_project_managers(set(FEATURE_STATUS_PROJECT_MANAGERS_ORDER) | available_project_managers),
-        "status_counts": [{"label": label, "count": status_counts.get(label, 0)} for label in FEATURE_STATUS_COUNTER_ORDER + ["׳¡׳˜׳˜׳•׳¡ ׳׳—׳¨"]],
+        "status_counts": [{"label": label, "count": status_counts.get(label, 0)} for label in FEATURE_STATUS_COUNTER_ORDER + ["סטטוס אחר"]],
         "summary": {
             "total_entries": total_entries,
             "done_count": done_count,
@@ -6073,7 +6250,7 @@ def build_feature_status_dashboard(month_value="", query_text="", query_type="al
             "other_count": other_count,
             "services_count": len([service for service in services if service["entry_count"] > 0]),
         },
-    }
+    })
 
 
 def build_feature_status_export_rows(entries):
@@ -6082,7 +6259,7 @@ def build_feature_status_export_rows(entries):
         rows.append([
             entry.get("service_label") or "-",
             entry.get("business_name") or "-",
-            entry.get("status") or entry.get("status_category") or "׳׳ ׳”׳•׳’׳“׳¨",
+            entry.get("status") or entry.get("status_category") or "לא הוגדר",
             entry.get("order_id") or "-",
             entry.get("customer_id") or "-",
             entry.get("project_manager") or entry.get("project_manager_raw") or "-",
@@ -6098,25 +6275,25 @@ def collapse_feature_status_entries(entries):
     filtered = []
     for entry in entries:
         status_value = (entry.get("status") or "").strip()
-        if status_value == "׳›׳₪׳™׳׳•׳×":
+        if status_value == "כפילות":
             continue
         filtered.append({
             "business_name": (entry.get("business_name") or "").strip(),
             "customer_id": (entry.get("customer_id") or "").strip(),
-            "status": status_value or "׳׳ ׳”׳•׳’׳“׳¨",
+            "status": status_value or "לא הוגדר",
         })
 
     source_entries = filtered or [{
         "business_name": (entries[0].get("business_name") or "").strip() if entries else "",
         "customer_id": (entries[0].get("customer_id") or "").strip() if entries else "",
-        "status": "׳׳ ׳”׳•׳’׳“׳¨",
+        "status": "לא הוגדר",
     }]
     statuses = [entry["status"] for entry in source_entries]
 
-    if "׳‘׳•׳¦׳¢" in statuses:
-        final_status = "׳‘׳•׳¦׳¢"
+    if "בוצע" in statuses:
+        final_status = "בוצע"
     else:
-        final_status = next((status for status in statuses if status != "׳׳ ׳”׳•׳’׳“׳¨"), "׳׳ ׳”׳•׳’׳“׳¨")
+        final_status = next((status for status in statuses if status != "לא הוגדר"), "לא הוגדר")
 
     primary_entry = next(
         (entry for entry in source_entries if entry["status"] == final_status),
@@ -6132,7 +6309,7 @@ def collapse_feature_status_entries(entries):
 def lookup_feature_status_by_customer_id(customer_id):
     normalized_customer_id = normalize_feature_status_customer_id(customer_id)
     if not normalized_customer_id:
-        raise ValueError("׳™׳© ׳׳”׳–׳™׳ ׳׳¡׳₪׳¨ ׳—.׳₪ ׳©׳ ׳”׳¢׳¡׳§")
+        raise ValueError("יש להזין מספר ח.פ של העסק")
 
     client = get_gspread_client()
     spreadsheet = client.open_by_key(SPREADSHEET_ID)
@@ -6160,7 +6337,7 @@ def lookup_feature_status_by_customer_id(customer_id):
                 "row": row_index,
                 "business_name": business_name,
                 "customer_id": row_customer_display,
-                "status": status_value or "׳׳ ׳”׳•׳’׳“׳¨",
+                "status": status_value or "לא הוגדר",
             })
 
         entries = collapse_feature_status_entries(entries)
@@ -6168,7 +6345,7 @@ def lookup_feature_status_by_customer_id(customer_id):
         services.append({
             "key": config["key"],
             "label": config["label"],
-            "sheet": config["sheet"],
+            "sheet": normalize_legacy_hebrew_text(config["sheet"]),
             "found": bool(entries),
             "entry_count": len(entries),
             "entries": entries,
@@ -6399,7 +6576,7 @@ def ticket_board_export_config(board_slug):
     normalized_board = (board_slug or "").strip().lower()
     if normalized_board == "hot-kiryot":
         return {
-            "headers": ["#", "׳׳¡׳₪׳¨ ׳§׳¨׳™׳׳”", "׳©׳ ׳׳§׳•׳—"],
+            "headers": ["#", "מספר קריאה", "שם לקוח"],
             "csv_fields": ["counter", "call_number", "customer_name"],
             "row_mapper": lambda row: {
                 "counter": row["counter"],
@@ -6454,7 +6631,7 @@ def root():
 @app.route("/login", methods=["GET", "POST"])
 def login():
 
-    # If already logged in ׳’ג€ ג€™ go to home
+    # If already logged in ג†’ go to home
     if session.get("logged_in"):
         return redirect(url_for("home"))
 
@@ -6496,7 +6673,7 @@ def home():
         return redirect(first_allowed_route())
 
     register_service_activity("dashboard")
-    return render_template("home.html", current_user=session.get("username", ""), show_user_management_card=support_user_is_admin())
+    return render_template("home.html", current_user=session.get("username", ""), show_user_management_card=support_user_can_manage_users())
 
 
 def render_dashboard_group_page(template_name):
@@ -6543,7 +6720,7 @@ def dashboard_reports_page():
 def user_management_page():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
-    if not support_user_is_admin():
+    if not support_user_can_manage_users():
         return redirect(first_allowed_route())
     return render_template("user_management.html", current_user=session.get("username", ""))
 
@@ -6552,8 +6729,8 @@ def user_management_page():
 def user_management_data():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
-    if not support_user_is_admin():
-        return api_error("Access denied", 403, "access_denied")
+    if not support_user_can_manage_users():
+        return api_error("אין הרשאה לגשת לעמוד זה", 403, "access_denied")
     return jsonify({"ok": True, "users": list_user_profiles(), "groups": list_user_groups()})
 
 
@@ -6561,8 +6738,8 @@ def user_management_data():
 def user_management_invite():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
-    if not support_user_is_admin():
-        return api_error("Access denied", 403, "access_denied")
+    if not support_user_can_manage_users():
+        return api_error("אין הרשאה לגשת לעמוד זה", 403, "access_denied")
 
     payload = request.get_json(silent=True) or {}
     email = (payload.get("email") or "").strip().lower()
@@ -6573,11 +6750,13 @@ def user_management_invite():
     scope_type = (payload.get("scope_type") or "").strip()
     scope_value = (payload.get("scope_value") or "").strip()
     allowed_pages = normalize_allowed_pages(payload.get("allowed_pages"))
+    if role == "admin_no_user_management":
+        allowed_pages = allowed_pages_for_role(role)
 
-    if role not in {"admin", "user", "tickets_only", "hot_submitter", "assigned_technician"}:
-        return jsonify({"ok": False, "message": "Invalid role"}), 400
+    if role not in {"admin", "admin_no_user_management", "user", "tickets_only", "hot_submitter", "assigned_technician"}:
+        return jsonify({"ok": False, "message": "תפקיד לא תקין"}), 400
     if not allowed_pages:
-        return jsonify({"ok": False, "message": "At least one allowed page is required"}), 400
+        return jsonify({"ok": False, "message": "יש לבחור לפחות עמוד מורשה אחד"}), 400
 
     try:
         result = create_or_refresh_user_invite(
@@ -6602,12 +6781,12 @@ def user_management_invite():
 def user_management_resend_invite(user_id):
     if not session.get("logged_in"):
         return redirect(url_for("login"))
-    if not support_user_is_admin():
-        return api_error("Access denied", 403, "access_denied")
+    if not support_user_can_manage_users():
+        return api_error("אין הרשאה לגשת לעמוד זה", 403, "access_denied")
 
     profile = get_user_profile_by_id(user_id)
     if not profile:
-        return jsonify({"ok": False, "message": "User not found"}), 404
+        return jsonify({"ok": False, "message": "המשתמש לא נמצא"}), 404
 
     try:
         result = create_or_refresh_user_invite(
@@ -6850,13 +7029,13 @@ def features_status_export():
         return api_error(exc, 500, "google_auth_or_sheet_error")
 
     rows = build_feature_status_export_rows(payload.get("entries") or [])
-    headers = ["׳©׳™׳¨׳•׳×", "׳©׳ ׳¢׳¡׳§", "׳¡׳˜׳˜׳•׳¡", "׳׳¡׳₪׳¨ ׳”׳–׳׳ ׳”", "׳—.׳₪", "׳׳ ׳”׳ ׳₪׳¨׳•׳™׳§׳˜", "׳×׳׳¨׳™׳"]
+    headers = ["שירות", "שם עסק", "סטטוס", "מספר הזמנה", "ח.פ", "מנהל פרויקט", "תאריך"]
     query_type_label = {
-        "all": "׳›׳׳׳™",
-        "customer_id": "׳—.׳₪",
-        "order_id": "׳׳¡׳₪׳¨ ׳”׳–׳׳ ׳”",
-        "project_manager": "׳׳ ׳”׳ ׳₪׳¨׳•׳™׳§׳˜",
-    }.get(payload.get("query_type"), "׳›׳׳׳™")
+        "all": "כללי",
+        "customer_id": "ח.פ",
+        "order_id": "מספר הזמנה",
+        "project_manager": "מנהל פרויקט",
+    }.get(payload.get("query_type"), "כללי")
     active_project_manager = payload.get("query") if payload.get("query_type") == "project_manager" else payload.get("project_manager_filter")
 
     if export_format == "csv":
@@ -6873,21 +7052,21 @@ def features_status_export():
             download_name=f"features-status-{payload['month']}.csv",
         )
 
-    pdf_rows = rows or [["-", "׳׳ ׳ ׳׳¦׳׳• ׳×׳•׳¦׳׳•׳× ׳׳™׳™׳¦׳•׳", "-", "-", "-", "-", "-"]]
+    pdf_rows = rows or [["-", "לא נמצאו תוצאות לייצוא", "-", "-", "-", "-", "-"]]
     pdf_buffer = build_pdf_buffer(
-        title="׳“׳•\"׳— ׳¡׳˜׳˜׳•׳¡ ׳₪׳™׳¦'׳¨׳™׳",
+        title="דו\"ח סטטוס פיצ'רים",
         metadata_rows=[
-            ("׳—׳•׳“׳©", payload.get("month_display") or ""),
-            ("׳׳ ׳”׳ ׳₪׳¨׳•׳™׳§׳˜", active_project_manager or "׳›׳ ׳”׳׳ ׳”׳׳™׳"),
-            ("׳¡׳˜׳˜׳•׳¡", payload.get("status_filter") or "׳›׳ ׳”׳¡׳˜׳˜׳•׳¡׳™׳"),
-            ("׳¡׳•׳’ ׳—׳™׳₪׳•׳©", query_type_label),
-            ("׳×׳•׳¦׳׳•׳×", len(rows)),
+            ("חודש", payload.get("month_display") or ""),
+            ("מנהל פרויקט", active_project_manager or "כל המנהלים"),
+            ("סטטוס", payload.get("status_filter") or "כל הסטטוסים"),
+            ("סוג חיפוש", query_type_label),
+            ("תוצאות", len(rows)),
         ],
         headers=headers,
         rows=pdf_rows,
         rtl_columns={0, 1, 2, 5},
         emphasis_columns={2},
-        emphasis_meta_labels={"׳—׳•׳“׳©", "׳׳ ׳”׳ ׳₪׳¨׳•׳™׳§׳˜", "׳¡׳˜׳˜׳•׳¡", "׳×׳•׳¦׳׳•׳×"},
+        emphasis_meta_labels={"חודש", "מנהל פרויקט", "סטטוס", "תוצאות"},
     )
     return send_file(
         pdf_buffer,
@@ -6948,7 +7127,7 @@ def features_report_export():
 
     rows = build_features_export_rows(report)
     pdf_buffer = build_pdf_buffer(
-        title="׳“׳•\"׳— ׳₪׳™׳¦'׳¨׳™׳",
+        title="דו\"ח פיצ'רים",
         metadata_rows=[
             ("Month", report.get("month_display") or ""),
             ("Total", report.get("total") or 0),
@@ -7011,7 +7190,7 @@ def features_report_recordings_detail():
             item.get("business_name") or "",
         ))
 
-        rows = [["׳©׳ ׳”׳¢׳¡׳§", "׳׳¡' ׳”׳–׳׳ ׳”"]]
+        rows = [["שם העסק", "מס' הזמנה"]]
         for recording in recordings:
             rows.append([
                 recording.get("business_name") or "",
@@ -7190,8 +7369,8 @@ def nastia_tickets_page():
         ticket_boards=load_ticket_boards(),
         ticket_board=board,
         page_mode="nastia",
-        page_title="׳ ׳¡׳˜׳™׳”",
-        page_subtitle="׳×׳׳•׳ ׳‘׳™׳§׳•׳¨׳™ ׳˜׳›׳ ׳׳™",
+        page_title="נסטיה",
+        page_subtitle="תאום ביקורי טכנאי",
         page_icon_path=board.get("icon_path") or "",
         ticket_queue="nastia",
         show_create_button=False,
@@ -7297,7 +7476,7 @@ def support_tickets_data():
     if queue_slug == "nastia":
         filtered.sort(
             key=lambda item: (
-                0 if normalize_ticket_status(item.get("board_slug"), item.get("status")) in {"׳׳׳×׳™׳", COORDINATION_PENDING_STATUS} else 1,
+                0 if normalize_ticket_status(item.get("board_slug"), item.get("status")) in {"ממתין", COORDINATION_PENDING_STATUS} else 1,
                 -int(item.get("id") or 0),
             )
         )
@@ -7374,7 +7553,7 @@ def pais_tickets_report_export():
 
     if export_format == "pdf":
         pdf_buffer = build_pdf_buffer(
-            title=board.get("name") or "׳“׳•\"׳— ׳§׳¨׳™׳׳•׳×",
+            title=board.get("name") or "דו\"ח קריאות",
             metadata_rows=[
                 ("Period", report.get("period") or ""),
                 ("Dates", f"{report.get('date_from') or ''} - {report.get('date_to') or ''}"),
@@ -7477,11 +7656,11 @@ def support_tickets_create():
         customer_request = (request.form.get("customer_request") or "").strip()
         actions_taken = (request.form.get("actions_taken") or "").strip()
         if not terminal_number:
-            return jsonify({"ok": False, "message": "׳׳¡׳₪׳¨ ׳׳¡׳•׳£ ׳”׳•׳ ׳©׳“׳” ׳—׳•׳‘׳”"}), 400
+            return jsonify({"ok": False, "message": "מספר מסוף הוא שדה חובה"}), 400
         if not address:
-            return jsonify({"ok": False, "message": "׳›׳×׳•׳‘׳× ׳”׳™׳ ׳©׳“׳” ׳—׳•׳‘׳”"}), 400
+            return jsonify({"ok": False, "message": "כתובת היא שדה חובה"}), 400
         if not customer_request:
-            return jsonify({"ok": False, "message": "׳₪׳ ׳™׳™׳× ׳׳§׳•׳— ׳”׳™׳ ׳©׳“׳” ׳—׳•׳‘׳”"}), 400
+            return jsonify({"ok": False, "message": "פניית לקוח היא שדה חובה"}), 400
         details = {
             "terminal_number": terminal_number,
             "address": address,
@@ -7501,7 +7680,7 @@ def support_tickets_create():
         service_type = board["name"]
         domain = ""
         priority = "Medium"
-        ticket_type = "׳©׳™׳¨׳•׳×"
+        ticket_type = "שירות"
         description = ""
         solution = ""
     elif board["slug"] == "support":
@@ -7509,8 +7688,8 @@ def support_tickets_create():
             return jsonify({"ok": False, "message": "Invalid ticket type"}), 400
         if priority not in SUPPORT_PRIORITIES:
             return jsonify({"ok": False, "message": "Invalid priority"}), 400
-        if service_type == "׳׳¨׳›׳–׳™׳™׳”" and not domain:
-            return jsonify({"ok": False, "message": "Domain is required for ׳׳¨׳›׳–׳™׳™׳”"}), 400
+        if service_type == "מרכזייה" and not domain:
+            return jsonify({"ok": False, "message": "Domain is required for מרכזייה"}), 400
         if not description:
             return jsonify({"ok": False, "message": "Description is required"}), 400
         service_mode = (request.form.get("service_mode") or "").strip()
@@ -7523,7 +7702,7 @@ def support_tickets_create():
         service_contact = (request.form.get("service_contact") or "").strip()
         service_address = (request.form.get("service_address") or "").strip()
         if service_mode and not all([business_name, service_contact, service_address]):
-            return jsonify({"ok": False, "message": "׳™׳© ׳׳׳׳ ׳©׳ ׳”׳¢׳¡׳§, ׳׳™׳© ׳§׳©׳¨ ׳•׳›׳×׳•׳‘׳× ׳¢׳‘׳•׳¨ ׳¡׳•׳’ ׳”׳˜׳™׳₪׳•׳ ׳©׳ ׳‘׳—׳¨"}), 400
+            return jsonify({"ok": False, "message": "יש למלא שם העסק, איש קשר וכתובת עבור סוג הטיפול שנבחר"}), 400
         details = {
             "customer_type": customer_type,
             "service_mode": service_mode,
@@ -7542,13 +7721,13 @@ def support_tickets_create():
         customer_name = (request.form.get("customer_name") or "").strip()
         issue_summary = (request.form.get("issue_summary") or "").strip()
         if not call_number:
-            return jsonify({"ok": False, "message": "׳׳¡׳₪׳¨ ׳§׳¨׳™׳׳” ׳”׳•׳ ׳©׳“׳” ׳—׳•׳‘׳”"}), 400
+            return jsonify({"ok": False, "message": "מספר קריאה הוא שדה חובה"}), 400
         if not address:
-            return jsonify({"ok": False, "message": "׳›׳×׳•׳‘׳× ׳”׳™׳ ׳©׳“׳” ׳—׳•׳‘׳”"}), 400
+            return jsonify({"ok": False, "message": "כתובת היא שדה חובה"}), 400
         if not customer_name:
-            return jsonify({"ok": False, "message": "׳©׳ ׳׳§׳•׳— ׳”׳•׳ ׳©׳“׳” ׳—׳•׳‘׳”"}), 400
+            return jsonify({"ok": False, "message": "שם לקוח הוא שדה חובה"}), 400
         if not issue_summary:
-            return jsonify({"ok": False, "message": "׳׳”׳•׳× ׳”׳×׳§׳׳” ׳”׳™׳ ׳©׳“׳” ׳—׳•׳‘׳”"}), 400
+            return jsonify({"ok": False, "message": "מהות התקלה היא שדה חובה"}), 400
         details = {
             "opened_at": (request.form.get("opened_at") or "").strip(),
             "call_number": call_number,
@@ -7575,7 +7754,7 @@ def support_tickets_create():
         service_type = board["name"]
         domain = ""
         priority = "Medium"
-        ticket_type = "׳©׳™׳¨׳•׳×"
+        ticket_type = "שירות"
         description = ""
         solution = ""
     else:
@@ -7583,8 +7762,8 @@ def support_tickets_create():
             return jsonify({"ok": False, "message": "Invalid ticket type"}), 400
         if priority not in SUPPORT_PRIORITIES:
             return jsonify({"ok": False, "message": "Invalid priority"}), 400
-        if service_type == "׳׳¨׳›׳–׳™׳™׳”" and not domain:
-            return jsonify({"ok": False, "message": "Domain is required for ׳׳¨׳›׳–׳™׳™׳”"}), 400
+        if service_type == "מרכזייה" and not domain:
+            return jsonify({"ok": False, "message": "Domain is required for מרכזייה"}), 400
         if not description:
             return jsonify({"ok": False, "message": "Description is required"}), 400
 
@@ -7599,7 +7778,7 @@ def support_tickets_create():
         "priority": priority,
         "description": description,
         "solution": solution,
-        "status": normalize_ticket_status(board["slug"], "׳׳׳×׳™׳" if board_supports_coordination(board["slug"]) else "Waiting"),
+        "status": normalize_ticket_status(board["slug"], "ממתין" if board_supports_coordination(board["slug"]) else "Waiting"),
         "assigned_to": assigned_to,
         "details": details,
     }
@@ -7642,9 +7821,9 @@ def support_tickets_update():
         status = normalize_ticket_status(target_ticket.get("board_slug"), payload.get("status"))
         payload["status"] = status
         if status not in assigned_technician_allowed_statuses():
-            return jsonify({"ok": False, "message": "Technician accounts can only set status to ׳‘׳•׳¦׳¢ ׳׳• ׳ ׳›׳©׳"}), 403
-        if status == "׳ ׳›׳©׳" and not isinstance(payload.get("details"), dict):
-            return jsonify({"ok": False, "message": "׳™׳© ׳׳׳׳ ׳¡׳™׳‘׳× ׳›׳©׳"}), 400
+            return jsonify({"ok": False, "message": "Technician accounts can only set status to בוצע או נכשל"}), 403
+        if status == "נכשל" and not isinstance(payload.get("details"), dict):
+            return jsonify({"ok": False, "message": "יש למלא סיבת כשל"}), 400
         if "details" in payload:
             details = payload.get("details")
             if not isinstance(details, dict):
@@ -7658,8 +7837,8 @@ def support_tickets_update():
             }
             if disallowed_fields:
                 return jsonify({"ok": False, "message": "Technician accounts can only update allowed ticket notes"}), 403
-            if status == "׳ ׳›׳©׳" and not str(details.get("failure_notes") or "").strip():
-                return jsonify({"ok": False, "message": "׳™׳© ׳׳׳׳ ׳¡׳™׳‘׳× ׳›׳©׳"}), 400
+            if status == "נכשל" and not str(details.get("failure_notes") or "").strip():
+                return jsonify({"ok": False, "message": "יש למלא סיבת כשל"}), 400
 
     if "details" in payload and isinstance(payload.get("details"), dict):
         details = payload["details"]
@@ -7669,7 +7848,7 @@ def support_tickets_update():
             (details.get("visit_hour_from") or "").strip(),
             (details.get("visit_hour_to") or "").strip(),
         ]) and not (payload.get("status") or "").strip():
-            payload["status"] = "׳×׳•׳׳"
+            payload["status"] = "תואם"
         elif (
             bool(payload.get("send_nastia_cancellation_notification"))
             and not any([
@@ -7705,7 +7884,7 @@ def support_tickets_update():
             (details.get("service_contact") or "").strip(),
             (details.get("service_address") or "").strip(),
         ]):
-            return jsonify({"ok": False, "message": "׳™׳© ׳׳׳׳ ׳©׳ ׳”׳¢׳¡׳§, ׳׳™׳© ׳§׳©׳¨ ׳•׳›׳×׳•׳‘׳× ׳¢׳‘׳•׳¨ ׳¡׳•׳’ ׳”׳˜׳™׳₪׳•׳ ׳©׳ ׳‘׳—׳¨"}), 400
+            return jsonify({"ok": False, "message": "יש למלא שם העסק, איש קשר וכתובת עבור סוג הטיפול שנבחר"}), 400
         coordinated_worker = (details.get("coordinated_worker") or "").strip()
         visit_date = (details.get("visit_date") or "").strip()
         visit_hour_from = (details.get("visit_hour_from") or "").strip()
@@ -7713,10 +7892,10 @@ def support_tickets_update():
         if coordinated_worker and coordinated_worker not in TECHNICIAN_SUPPORT_USERS:
             return jsonify({"ok": False, "message": "Invalid coordinated worker"}), 400
         if any([coordinated_worker, visit_date, visit_hour_from, visit_hour_to]) and not all([coordinated_worker, visit_date, visit_hour_from, visit_hour_to]):
-            return jsonify({"ok": False, "message": "׳™׳© ׳׳׳׳ ׳¢׳•׳‘׳“, ׳×׳׳¨׳™׳ ׳•׳©׳¢׳× ׳‘׳™׳§׳•׳¨ ׳׳׳׳”"}), 400
+            return jsonify({"ok": False, "message": "יש למלא עובד, תאריך ושעת ביקור מלאה"}), 400
         if visit_hour_from or visit_hour_to:
             if not visit_slot_is_valid(visit_hour_from, visit_hour_to):
-                return jsonify({"ok": False, "message": "׳™׳© ׳׳‘׳—׳•׳¨ ׳—׳׳•׳ ׳×׳™׳׳•׳ ׳©׳ ׳©׳¢׳” ׳׳—׳× ׳‘׳™׳ 09:00 ׳-18:00"}), 400
+                return jsonify({"ok": False, "message": "יש לבחור חלון תיאום של שעה אחת בין 09:00 ל-18:00"}), 400
         conflicting_ticket = coordination_slot_conflicts(
             payload.get("ticket_id"),
             coordinated_worker,
@@ -7727,10 +7906,10 @@ def support_tickets_update():
         if conflicting_ticket:
             return jsonify({
                 "ok": False,
-                "message": f"׳”׳¢׳•׳‘׳“ {coordinated_worker} ׳›׳‘׳¨ ׳×׳₪׳•׳¡ ׳‘׳×׳׳¨׳™׳ {visit_date} ׳‘׳™׳ {visit_hour_from} ׳-{visit_hour_to}",
+                "message": f"העובד {coordinated_worker} כבר תפוס בתאריך {visit_date} בין {visit_hour_from} ל-{visit_hour_to}",
             }), 400
-        if (payload.get("status") or "").strip() == "׳ ׳›׳©׳" and not (details.get("failure_notes") or "").strip():
-            return jsonify({"ok": False, "message": "׳™׳© ׳׳׳׳ ׳¡׳™׳‘׳× ׳›׳©׳"}), 400
+        if (payload.get("status") or "").strip() == "נכשל" and not (details.get("failure_notes") or "").strip():
+            return jsonify({"ok": False, "message": "יש למלא סיבת כשל"}), 400
     try:
         ticket = update_support_ticket_record(payload.get("ticket_id"), payload, actor)
     except LookupError:
@@ -7751,7 +7930,7 @@ def support_tickets_send_email():
     ticket_id = payload.get("ticket_id")
     to_address = str(payload.get("email") or "").strip()
     if not email_address_is_valid(to_address):
-        return jsonify({"ok": False, "message": "׳™׳© ׳׳”׳–׳™׳ ׳›׳×׳•׳‘׳× ׳׳™׳™׳ ׳×׳§׳™׳ ׳”"}), 400
+        return jsonify({"ok": False, "message": "יש להזין כתובת מייל תקינה"}), 400
 
     ticket = find_support_ticket(load_support_tickets(), ticket_id)
     if not ticket:
@@ -7762,7 +7941,7 @@ def support_tickets_send_email():
     except Exception as exc:
         return jsonify({"ok": False, "message": user_friendly_email_error(exc) or str(exc)}), 502
 
-    return jsonify({"ok": True, "message": "׳׳™׳™׳ ׳ ׳©׳׳— ׳‘׳”׳¦׳׳—׳”"})
+    return jsonify({"ok": True, "message": "מייל נשלח בהצלחה"})
 
 
 @app.route("/support-tickets-attachments", methods=["POST"])
@@ -7828,7 +8007,7 @@ def support_tickets_field_report():
     if not assigned_technician_can_access_ticket(target_ticket):
         return jsonify({"ok": False, "message": "Access denied"}), 403
     if (target_ticket.get("board_slug") or "").strip().lower() not in FIELD_REPORT_SUPPORTED_BOARD_SLUGS:
-        return jsonify({"ok": False, "message": "׳˜׳•׳₪׳¡ ׳”׳—׳×׳׳” ׳ ׳×׳׳ ׳¨׳§ ׳‘׳§׳¨׳™׳׳•׳× ׳”׳•׳˜ ׳•׳₪׳™׳¡"}), 400
+        return jsonify({"ok": False, "message": "טופס החתמה נתמך רק בקריאות הוט ופיס"}), 400
 
     try:
         ticket = save_hot_field_report(ticket_id, support_user_name(), payload, area_photo_files=area_photo_files)
@@ -8416,7 +8595,7 @@ def export_csv():
             "template": template_txt
         }
         )
-        # Update ׳³ג€”׳³ג„¢׳³ג‚×_׳³ֲ¡׳³ֲ׳³ֲ¡ columns C:E with Domain, date, and used checkbox.
+        # Update חיפ_סמס columns C:E with Domain, date, and used checkbox.
         if isinstance(cgr_row, int) and cgr_row >= 1 and domain:
             cgr_updates.append({
                 "range": (
@@ -8661,7 +8840,7 @@ def get_bot_customers():
                 "client_id": client_id,
                 "did": did,
                 "domain": "",
-                "status": "׳³ֲ׳³ֲ׳³ֳ—׳³ג„¢׳³ֲ"
+                "status": "ממתין"
             })
 
     return customers
@@ -8914,7 +9093,7 @@ def human_service_done():
 def dashboard():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
-    return render_template("home.html", current_user=session.get("username", ""), show_user_management_card=support_user_is_admin())
+    return render_template("home.html", current_user=session.get("username", ""), show_user_management_card=support_user_can_manage_users())
 
     
 

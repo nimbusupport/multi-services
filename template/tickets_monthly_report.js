@@ -19,7 +19,7 @@ const detailsChipLabel = document.getElementById("details-chip-label");
 const activeFilterSummary = document.getElementById("active-filter-summary");
 
 const BOARD_LABELS = {
-  all: "כללי",
+  all: "הכל",
   support: "נימבוס",
   pais: "מפעל הפיס",
   "hot-kiryot": "הוט",
@@ -28,7 +28,7 @@ const BOARD_LABELS = {
 const METRIC_CONFIG = {
   all: {
     title: "כל הקריאות בחודש",
-    chip: "קריאות מוצגות",
+    chip: "קריאות בחודש",
     summary: "כל הקריאות",
     match: () => true,
   },
@@ -39,10 +39,10 @@ const METRIC_CONFIG = {
     match: (row) => row.status === "תואם",
   },
   coordination: {
-    title: "קריאות שתואמו החודש",
-    chip: "בסיס אחוז תיאום",
-    summary: "אחוז תיאום",
-    match: (row) => row.status === "תואם",
+    title: "קריאות הממתינות לתיאום",
+    chip: "ממתין לתיאום",
+    summary: "ממתין לתיאום",
+    match: (row) => row.status === "ממתין לתיאום" || row.status === "ממתין לתאום" || row.status === "ממתין",
   },
   open: {
     title: "קריאות פתוחות",
@@ -55,6 +55,41 @@ const METRIC_CONFIG = {
 let activeReport = null;
 let activeBoardFilter = "all";
 let activeMetricFilter = "all";
+
+function looksLikeBrokenHebrew(value) {
+  const text = String(value || "");
+  return /[-]/.test(text) || (text.match(/׳/g) || []).length >= 2;
+}
+
+function repairBrokenHebrew(value) {
+  const text = String(value || "");
+  if (!looksLikeBrokenHebrew(text)) {
+    return text;
+  }
+  const chars = [];
+  for (const ch of text) {
+    const code = ch.charCodeAt(0);
+    chars.push(code <= 0xFF ? String.fromCharCode(code) : ch);
+  }
+  try {
+    return decodeURIComponent(escape(chars.join("")));
+  } catch {
+    return text;
+  }
+}
+
+function normalizeLegacyHebrewData(value) {
+  if (Array.isArray(value)) {
+    return value.map(normalizeLegacyHebrewData);
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, normalizeLegacyHebrewData(item)]));
+  }
+  if (typeof value === "string") {
+    return repairBrokenHebrew(value);
+  }
+  return value;
+}
 
 function currentMonthValue() {
   const now = new Date();
@@ -201,13 +236,13 @@ function renderTrend(months, selectedMonth) {
           <span
             class="trend-bar total"
             style="--total-height:${totalHeight}%"
-            title="כחול = סה&quot;כ קריאות בחודש הזה: ${item.total || 0}"
-            aria-label="סהכ קריאות: ${item.total || 0}"
+            title="כחול = סך"כ קריאות בחודש זה: ${item.total || 0}"
+            aria-label="סך קריאות: ${item.total || 0}"
           ></span>
           <span
             class="trend-bar coordinated"
             style="--coordinated-height:${coordinatedHeight}%"
-            title="ירוק = קריאות מתואמות בחודש הזה: ${item.coordinated || 0}"
+            title="ירוק = קריאות מתואמות בחודש זה: ${item.coordinated || 0}"
             aria-label="קריאות מתואמות: ${item.coordinated || 0}"
           ></span>
         </div>
@@ -229,7 +264,7 @@ function renderDetails() {
   activeFilterSummary.textContent = `${boardText} • ${metric.summary}`;
   coordinatedCountChip.textContent = rows.length;
   coordinatedEmptyState.hidden = rows.length > 0;
-  coordinatedEmptyState.textContent = `אין תוצאות עבור ${boardText} • ${metric.summary}.`;
+  coordinatedEmptyState.textContent = `אין רשומות עבור ${boardText} • ${metric.summary}.`;
 
   coordinatedTableBody.innerHTML = rows.map((row) => {
     const visitLabel = [row.visit_date || "", row.visit_hours || ""].filter(Boolean).join(" | ") || "-";
@@ -287,13 +322,13 @@ async function loadReport() {
   const month = monthInput.value || currentMonthValue();
   monthInput.value = month;
   refreshButton.disabled = true;
-  setMessage("טוען דו\"ח חודשי...");
+  setMessage("טוען את הדוח החודשי...");
 
   try {
     const response = await fetch(`/tickets-monthly-report-data?${new URLSearchParams({ month }).toString()}`);
-    const data = await response.json();
+    const data = normalizeLegacyHebrewData(await response.json());
     if (!response.ok || !data.ok) {
-      throw new Error(data.message || "טעינת הדוח נכשלה");
+      throw new Error(data.message || "אירעה שגיאה בטעינת הדוח");
     }
     renderReport(data.report || {});
     setMessage("");

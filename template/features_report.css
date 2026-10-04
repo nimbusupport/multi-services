@@ -232,9 +232,19 @@ body.features-report-page {
   padding: 0 14px;
   border-radius: 14px;
   border: 1px solid rgba(150, 193, 242, 0.22);
-  background: rgba(6, 19, 32, 0.72);
+  background: rgba(242, 243, 245, 0.72);
   color: #f1f7ff;
   font: inherit;
+}
+
+#month-filter {
+  color-scheme: dark;
+}
+
+#month-filter::-webkit-calendar-picker-indicator {
+  filter: invert(1) brightness(2);
+  opacity: 1;
+  cursor: pointer;
 }
 
 .toolbar-btn {
@@ -675,3 +685,4 @@ body.features-report-page {
     color: #111;
   }
 }
+

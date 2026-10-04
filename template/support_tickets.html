@@ -20,11 +20,11 @@
   <nav class="site-nav"{% if can_access_home %} hidden{% endif %}>
     <div class="site-nav-inner">
       <div class="site-nav-topbar">
-        <a class="brand" href="{{ '/home' if can_access_home else '/support-tickets' }}"><span class="brand-kicker">Support Suite</span><span class="brand-main">Services</span></a>
+        <a class="brand" href="{{ '/home' if can_access_home else '/support-tickets' }}"><span class="brand-kicker">מערכת שירות</span><span class="brand-main">קריאות</span></a>
         <div class="site-nav-top-actions">
           <div class="nav-user">{{ support_user or (current_user or "").split("@")[0] }}</div>
-          <a class="nav-logout nav-logout-icon" href="/logout" aria-label="Logout"><i class="fa-solid fa-right-from-bracket"></i></a>
-          <button class="nav-toggle" type="button" aria-label="Open menu"><i class="fa-solid fa-bars"></i></button>
+          <a class="nav-logout nav-logout-icon" href="/logout" aria-label="התנתקות"><i class="fa-solid fa-right-from-bracket"></i></a>
+          <button class="nav-toggle" type="button" aria-label="פתח תפריט"><i class="fa-solid fa-bars"></i></button>
         </div>
       </div>
       <div class="nav-links">
@@ -34,8 +34,8 @@
         <a class="nav-link" href="/f2m"><span class="nav-icon"><i class="fa-solid fa-envelope-open-text"></i></span><span class="nav-label">F2M</span></a>
         <a class="nav-link" href="/recording-storage"><span class="nav-icon"><i class="fa-solid fa-database"></i></span><span class="nav-label">אחסון</span></a>
         <a class="nav-link" href="/human-service"><span class="nav-icon"><i class="fa-solid fa-headset"></i></span><span class="nav-label">מוקד</span></a>
-        <a class="nav-link" href="/record"><span class="nav-icon"><i class="fa-solid fa-record-vinyl"></i></span><span class="nav-label">Recordings</span></a>
-        <a class="nav-link" href="/features-report"><span class="nav-icon"><i class="fa-solid fa-chart-simple"></i></span><span class="nav-label">Features Report</span></a>
+        <a class="nav-link" href="/record"><span class="nav-icon"><i class="fa-solid fa-record-vinyl"></i></span><span class="nav-label">הקלטות</span></a>
+        <a class="nav-link" href="/features-report"><span class="nav-icon"><i class="fa-solid fa-chart-simple"></i></span><span class="nav-label">דו"ח פיצ׳רים</span></a>
         {% endif %}
         {% if can_access_support %}
         <a class="nav-link {% if ticket_board.slug == 'support' and page_mode != 'nastia' %}active{% endif %}" href="/support-tickets"><span class="nav-icon"><img class="nav-pais-icon" src="https://tel1.nimbusip.com/themes/default/images/logo.png" alt=""></span><span class="nav-label">נימבוס</span></a>
@@ -50,11 +50,11 @@
         <a class="nav-link {% if page_mode == 'nastia' %}active{% endif %}" href="/nastia-tickets"><span class="nav-icon"><i class="fa-solid fa-user-clock"></i></span><span class="nav-label">נסטיה</span></a>
         {% endif %}
         {% if can_access_home %}
-        <a class="nav-link" href="/home"><span class="nav-icon"><i class="fa-solid fa-chart-column"></i></span><span class="nav-label">Dashboard</span></a>
+        <a class="nav-link" href="/home"><span class="nav-icon"><i class="fa-solid fa-chart-column"></i></span><span class="nav-label">דשבורד</span></a>
         {% endif %}
       </div>
       <div class="nav-footer">
-        <a class="nav-logout" href="/logout"><i class="fa-solid fa-right-from-bracket"></i> Logout</a>
+        <a class="nav-logout" href="/logout"><i class="fa-solid fa-right-from-bracket"></i> התנתקות</a>
       </div>
     </div>
   </nav>
@@ -67,9 +67,9 @@
       {% elif page_mode == 'nastia' %}
       <button class="ticket-tab active" type="button" data-scope="all"><i class="fa-solid fa-user-clock"></i><span>כל כרטיסי התאום</span><strong id="stat-all">0</strong></button>
       {% else %}
-      <button class="ticket-tab active" type="button" data-scope="all"><i class="fa-solid fa-inbox"></i><span>All Tickets</span><strong id="stat-all">0</strong></button>
-      <button class="ticket-tab" type="button" data-scope="my"><i class="fa-solid fa-user-check"></i><span>My Tickets</span></button>
-      <button class="ticket-tab" type="button" data-scope="unassigned"><i class="fa-regular fa-circle-question"></i><span>Unassigned</span><strong id="stat-unassigned">0</strong></button>
+      <button class="ticket-tab active" type="button" data-scope="all"><i class="fa-solid fa-inbox"></i><span>כל הקריאות</span><strong id="stat-all">0</strong></button>
+      <button class="ticket-tab" type="button" data-scope="my"><i class="fa-solid fa-user-check"></i><span>הקריאות שלי</span></button>
+      <button class="ticket-tab" type="button" data-scope="unassigned"><i class="fa-regular fa-circle-question"></i><span>ללא שיוך</span><strong id="stat-unassigned">0</strong></button>
       {% endif %}
 
       <div class="ticket-board-links">
@@ -174,7 +174,7 @@
           {% endif %}
           <div>
             <p>{{ page_subtitle }}</p>
-            <h1>{{ page_title }} <span id="stat-waiting">0 Waiting</span></h1>
+            <h1>{{ page_title }} <span id="stat-waiting">0 ממתינים</span></h1>
             {% if page_mode == 'nastia' %}
             <div class="ticket-board-waiting-strip" id="nastya-board-waiting">
               <button class="board-waiting-chip" type="button" data-board-counter="pais" data-board-filter="pais" aria-pressed="false">
@@ -189,7 +189,7 @@
               </button>
               <span class="tickets-refresh-indicator" id="tickets-refresh-indicator" hidden aria-live="polite">
                 <span class="tickets-refresh-spinner" aria-hidden="true"></span>
-                <span>Loading...</span>
+                <span>טוען...</span>
               </span>
             </div>
             {% endif %}
@@ -198,8 +198,8 @@
 
         {% if show_create_button and ticket_board.slug == 'support' %}
         <div class="ticket-create-controls">
-          <button class="add-ticket-btn" id="open-ticket-modal" type="button"><i class="fa-solid fa-plus"></i><span>Add Ticket</span></button>
-          <button class="icon-btn add-ticket-menu-toggle" id="open-create-menu" type="button" title="Ticket options"><i class="fa-solid fa-chevron-down"></i></button>
+          <button class="add-ticket-btn" id="open-ticket-modal" type="button"><i class="fa-solid fa-plus"></i><span>פתיחת קריאה</span></button>
+          <button class="icon-btn add-ticket-menu-toggle" id="open-create-menu" type="button" title="אפשרויות קריאה"><i class="fa-solid fa-chevron-down"></i></button>
           <div class="add-ticket-menu" id="ticket-create-menu">
             <button class="menu-item" id="create-regular-ticket" type="button"><img src="https://tel1.nimbusip.com/themes/default/images/logo.png" alt=""><span>נימבוס</span></button>
             {% if can_access_pais %}
@@ -215,16 +215,16 @@
           {% if page_icon_path %}
           <img src="{{ page_icon_path }}" alt="">
           {% endif %}
-          <span>Ticket חדש</span>
+          <span>קריאה חדשה</span>
         </button>
         {% endif %}
       </header>
 
       <form class="ticket-filters" id="ticket-filters-form">
         <label>
-          <span>Status</span>
+          <span>סטטוס</span>
           <select id="status-filter">
-            <option value="">All</option>
+            <option value="">הכל</option>
             {% if ticket_board.workflow == 'coordination' %}
             <option value="ממתין">ממתין</option>
             <option value="ממתין לתיאום">{% if page_mode == 'nastia' %}ממתין{% else %}ממתין לתיאום{% endif %}</option>
@@ -233,31 +233,31 @@
             <option value="בוצע">בוצע</option>
             <option value="נכשל">נכשל</option>
             {% else %}
-            <option value="Waiting">Waiting</option>
-            <option value="Done">Done</option>
+            <option value="Waiting">ממתין</option>
+            <option value="Done">בוצע</option>
             {% endif %}
           </select>
         </label>
         <label{% if ticket_operator_mode == 'assigned_technician' %} hidden{% endif %}>
-          <span>Assignee</span>
+          <span>משויך</span>
           <select id="assignee-filter"{% if ticket_operator_mode == 'assigned_technician' %} disabled{% endif %}>
-            <option value="">All Users</option>
+            <option value="">כל המשתמשים</option>
             {% for user in support_users %}
             <option value="{{ user }}">{{ user }}</option>
             {% endfor %}
           </select>
         </label>
         <label>
-          <span>Priority</span>
+          <span>עדיפות</span>
           <select id="priority-filter">
-            <option value="">All</option>
+            <option value="">הכל</option>
             {% for priority in priorities %}
             <option value="{{ priority }}">{{ priority }}</option>
             {% endfor %}
           </select>
         </label>
         <label>
-          <span>From</span>
+          <span>מתאריך</span>
           <input id="date-from-filter" type="date">
         </label>
         <label>
@@ -307,9 +307,9 @@
             </select>
           </label>
           <label>
-            <span>Status</span>
+            <span>סטטוס</span>
             <select id="pais-report-status">
-              <option value="">All</option>
+              <option value="">הכל</option>
               <option value="ממתין">ממתין</option>
               <option value="ממתין לתיאום">ממתין לתיאום</option>
               <option value="תואם">תואם</option>
@@ -319,7 +319,7 @@
             </select>
           </label>
           <label>
-            <span>From</span>
+            <span>מתאריך</span>
             <input id="pais-report-from" type="date">
           </label>
           <label>
@@ -396,7 +396,7 @@
           <input name="domain" id="domain-input" type="text" placeholder="customer.domain">
         </label>
         <label>
-          <span>Priority</span>
+          <span>עדיפות</span>
           <select name="priority" required>
             <option value="High">High</option>
             <option value="Medium" selected>Medium</option>
@@ -869,7 +869,7 @@
       <div class="confirm-actions">
         <button class="secondary-btn" id="clear-signature-btn" type="button">נקה</button>
         <button class="secondary-btn" id="cancel-signature-btn" type="button">Cancel</button>
-        <button class="create-ticket-btn" id="save-signature-btn" type="button">Done</button>
+        <button class="create-ticket-btn" id="save-signature-btn" type="button">סיום</button>
       </div>
     </section>
   </div>

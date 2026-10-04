@@ -16,7 +16,7 @@ const AUTO_REFRESH_INTERVAL_MS = 10000;
 const NASTYA_EDITABLE_STATUSES = ["ממתין לתיאום", "תואם", "בוצע", "נכשל"];
 const NASTYA_FINAL_STATUSES = ["בוצע", "נכשל"];
 
-const supportTicketsContext = window.supportTicketsContext || {};
+const supportTicketsContext = normalizeLegacyHebrewData(window.supportTicketsContext || {});
 const boardSlug = String(supportTicketsContext.boardSlug || "support");
 const boardName = String(supportTicketsContext.boardName || "נימבוס");
 const isAdmin = supportTicketsContext.isAdmin === true || supportTicketsContext.isAdmin === "true";
@@ -80,6 +80,41 @@ function canAssignedTechnicianEditTicket(ticket) {
   return isAssignedTechnicianMode
     && isCoordinationTicket(ticket)
     && ownerName === currentSupportUser;
+}
+
+function looksLikeBrokenHebrew(value) {
+  const text = String(value || "");
+  return /[-]/.test(text) || (text.match(/׳/g) || []).length >= 2;
+}
+
+function repairBrokenHebrew(value) {
+  const text = String(value || "");
+  if (!looksLikeBrokenHebrew(text)) {
+    return text;
+  }
+  const chars = [];
+  for (const ch of text) {
+    const code = ch.charCodeAt(0);
+    chars.push(code <= 0xFF ? String.fromCharCode(code) : ch);
+  }
+  try {
+    return decodeURIComponent(escape(chars.join("")));
+  } catch {
+    return text;
+  }
+}
+
+function normalizeLegacyHebrewData(value) {
+  if (Array.isArray(value)) {
+    return value.map(normalizeLegacyHebrewData);
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, normalizeLegacyHebrewData(item)]));
+  }
+  if (typeof value === "string") {
+    return repairBrokenHebrew(value);
+  }
+  return value;
 }
 
 function escapeHtml(value) {
@@ -1140,7 +1175,7 @@ async function savePaisDetail(ticketId) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    const data = await res.json().catch(() => ({}));
+    const data = normalizeLegacyHebrewData(await res.json().catch(() => ({})));
     if (!res.ok || !data.ok) {
       throw new Error(data.message || "Save failed");
     }
@@ -1374,7 +1409,7 @@ async function loadTickets() {
   try {
     const res = await fetch(`/support-tickets-data?${params.toString()}`);
     if (!res.ok) return;
-    const data = await res.json();
+    const data = normalizeLegacyHebrewData(await res.json());
     renderStats(data.stats);
     renderTickets(applyNastyaBoardFilter(applyReportQuickFilter(data.tickets)), data.users);
     document.getElementById("next-ticket-id").textContent = data.next_id || "#0001";
@@ -1501,7 +1536,7 @@ async function loadPaisReport() {
   try {
     const res = await fetch(`/pais-tickets-report-data?${paisReportParams().toString()}`);
     if (!res.ok) return;
-    const data = await res.json();
+    const data = normalizeLegacyHebrewData(await res.json());
     if (!data.ok) return;
     renderPaisReport(data);
   } finally {
@@ -1556,7 +1591,7 @@ async function updateTicket(ticketId, changes) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  const data = await res.json().catch(() => ({}));
+  const data = normalizeLegacyHebrewData(await res.json().catch(() => ({})));
   if (!res.ok || !data.ok) {
     openNotificationErrorModal(data.message || "Update failed");
     return;
@@ -1584,7 +1619,7 @@ async function deleteTicket(ticketId) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ ticket_id: ticketId }),
   });
-  const data = await res.json().catch(() => ({}));
+  const data = normalizeLegacyHebrewData(await res.json().catch(() => ({})));
   if (!res.ok || !data.ok) {
     alert(data.message || "Delete failed");
     return;
@@ -1802,7 +1837,7 @@ async function uploadDetailAttachments(event) {
       method: "POST",
       body: formData,
     });
-    const data = await res.json().catch(() => ({}));
+    const data = normalizeLegacyHebrewData(await res.json().catch(() => ({})));
     if (!res.ok || !data.ok) {
       throw new Error(data.message || "Upload failed");
     }
@@ -1831,7 +1866,7 @@ async function deleteDetailAttachment(ticketId, folder, savedName) {
         saved_name: savedName,
       }),
     });
-    const data = await res.json().catch(() => ({}));
+    const data = normalizeLegacyHebrewData(await res.json().catch(() => ({})));
     if (!res.ok || !data.ok) {
       throw new Error(data.message || "Delete failed");
     }
@@ -1855,7 +1890,7 @@ async function submitTicket(event) {
       method: "POST",
       body: new FormData(form),
     });
-    const data = await res.json().catch(() => ({}));
+    const data = normalizeLegacyHebrewData(await res.json().catch(() => ({})));
     if (!res.ok || !data.ok) {
       throw new Error(data.message || "Create failed");
     }
@@ -2129,7 +2164,7 @@ async function submitFieldReport(event) {
       method: "POST",
       body: formData,
     });
-    const data = await res.json().catch(() => ({}));
+    const data = normalizeLegacyHebrewData(await res.json().catch(() => ({})));
     if (!res.ok || !data.ok) {
       throw new Error(data.message || "Save failed");
     }
@@ -2856,7 +2891,7 @@ async function savePaisDetail(ticketId) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    const data = await res.json().catch(() => ({}));
+    const data = normalizeLegacyHebrewData(await res.json().catch(() => ({})));
     if (!res.ok || !data.ok) {
       throw new Error(data.message || "Save failed");
     }
@@ -2903,7 +2938,7 @@ async function sendTicketEmail(ticketId) {
         email,
       }),
     });
-    const data = await res.json().catch(() => ({}));
+    const data = normalizeLegacyHebrewData(await res.json().catch(() => ({})));
     if (!res.ok || !data.ok) {
       throw new Error(data.message || "שליחת המייל נכשלה");
     }
@@ -3108,7 +3143,7 @@ async function saveTicketDetailWithFeedback(ticketId, options = {}) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    const data = await res.json().catch(() => ({}));
+    const data = normalizeLegacyHebrewData(await res.json().catch(() => ({})));
     if (!res.ok || !data.ok) {
       throw new Error(data.message || "Save failed");
     }
@@ -3593,7 +3628,7 @@ async function submitFieldReport(event) {
       method: "POST",
       body: formData,
     });
-    const data = await res.json().catch(() => ({}));
+    const data = normalizeLegacyHebrewData(await res.json().catch(() => ({})));
     if (!res.ok || !data.ok) {
       throw new Error(data.message || "Save failed");
     }

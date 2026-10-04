@@ -16,7 +16,7 @@ body.user-management-page {
 }
 
 .user-management-wrap {
-  max-width: 1380px;
+  max-width: 1480px;
   margin: 0 auto;
   padding: 18px 16px 30px;
 }
@@ -67,7 +67,7 @@ body.user-management-page {
 
 .user-management-grid {
   display: grid;
-  grid-template-columns: minmax(340px, 400px) minmax(0, 1fr);
+  grid-template-columns: minmax(320px, 380px) minmax(0, 1fr);
   gap: 16px;
   align-items: start;
 }
@@ -259,10 +259,47 @@ body.user-management-page {
   min-height: 26px;
   padding: 0 10px;
   border-radius: 999px;
-  background: rgba(16, 43, 72, 0.88);
   border: 1px solid rgba(151, 194, 244, 0.34);
   margin: 2px;
   font-size: 12px;
+}
+
+.user-pill {
+  background: transparent;
+  color: #9fd5ff;
+}
+
+.email-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.user-log-trigger {
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0;
+  border-radius: 10px;
+  color: #9fe8ff;
+  border-color: rgba(122, 222, 255, 0.72);
+  background: rgba(74, 173, 255, 0.16);
+  box-shadow: 0 0 0 1px rgba(122, 222, 255, 0.18) inset;
+}
+
+.user-log-trigger:hover,
+.user-log-trigger:focus-visible {
+  color: #ffffff;
+  border-color: rgba(135, 231, 255, 0.95);
+  background: rgba(74, 173, 255, 0.28);
+}
+
+.user-log-trigger i {
+  color: inherit;
+}
+
+.status-pill {
+  background: rgba(16, 43, 72, 0.88);
 }
 
 .status-pill.done {
@@ -285,6 +322,77 @@ body.user-management-page {
 
 .action-btn:disabled {
   opacity: 0.78;
+}
+
+.user-log-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(2, 10, 18, 0.72);
+  backdrop-filter: blur(6px);
+}
+
+.user-log-modal[hidden] {
+  display: none !important;
+}
+
+.user-log-dialog {
+  width: min(560px, 100%);
+  max-height: min(88vh, 760px);
+  overflow: auto;
+  padding: 18px;
+  border-radius: 22px;
+  border: 1px solid var(--um-border);
+  background: rgba(9, 26, 44, 0.96);
+  box-shadow: 0 28px 60px rgba(2, 9, 18, 0.4);
+}
+
+.user-log-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.user-log-head h3 {
+  margin: 0;
+}
+
+.user-log-close {
+  min-width: 40px;
+  padding: 0;
+}
+
+.user-log-content {
+  display: grid;
+  gap: 10px;
+}
+
+.user-log-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 180px) minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(151, 194, 244, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.user-log-label {
+  color: #80e8db;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.user-log-value {
+  color: #edf6ff;
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 1080px) {
@@ -394,6 +502,11 @@ body.user-management-page {
 
   .users-table td .action-btn {
     width: 100%;
+  }
+
+  .user-log-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
   }
 }
 

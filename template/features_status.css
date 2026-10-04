@@ -257,6 +257,16 @@ body.features-status-page {
   font: inherit;
 }
 
+#status-month-input {
+  color-scheme: dark;
+}
+
+#status-month-input::-webkit-calendar-picker-indicator {
+  filter: invert(1) brightness(2);
+  opacity: 1;
+  cursor: pointer;
+}
+
 .toolbar-btn {
   min-height: 44px;
   display: inline-flex;
