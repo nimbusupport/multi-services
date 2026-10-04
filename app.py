@@ -422,7 +422,7 @@ SUPABASE_AUTH_KEY = (
     or os.environ.get("SUPABASE_KEY")
     or ""
 ).strip()
-USER_INVITE_FROM = (os.environ.get("USER_INVITE_FROM") or "noreplay@nimbusip.com").strip()
+USER_INVITE_FROM = (os.environ.get("USER_INVITE_FROM") or "noreply@nimbus.com").strip()
 USER_INVITE_LINK_TTL_HOURS = max(1, int((os.environ.get("USER_INVITE_LINK_TTL_HOURS") or "72").strip() or "72"))
 USER_PASSWORD_MIN_LENGTH = 12
 
@@ -1923,6 +1923,81 @@ def send_user_invite_email(to_address, invite_link, full_name=""):
         html_body=html_body,
     )
 
+
+
+
+def update_user_management_profile(user_id, email, full_name, role, group_code, allowed_pages, landing_page, scope_type, scope_value):
+    normalized_user_id = str(user_id or "").strip()
+    if not normalized_user_id:
+        raise ValueError("מזהה משתמש חסר")
+    normalized_email = (email or "").strip().lower()
+    if not normalized_email:
+        raise ValueError("אימייל הוא שדה חובה")
+    if not email_address_is_valid(normalized_email):
+        raise ValueError("כתובת האימייל לא תקינה")
+    if role not in {"admin", "admin_no_user_management", "user", "tickets_only", "hot_submitter", "assigned_technician"}:
+        raise ValueError("תפקיד לא תקין")
+
+    allowed_pages = normalize_allowed_pages(allowed_pages)
+    if role == "admin_no_user_management":
+        allowed_pages = allowed_pages_for_role(role)
+    if not allowed_pages:
+        raise ValueError("יש לבחור לפחות עמוד מורשה אחד")
+
+    profile = get_user_profile_by_id(normalized_user_id)
+    if not profile:
+        raise ValueError("המשתמש לא נמצא")
+
+    existing_profile = get_user_profile_by_email(normalized_email)
+    if existing_profile and existing_profile.get("id") != normalized_user_id:
+        raise ValueError("כבר קיים חשבון עם האימייל הזה")
+
+    update_supabase_auth_user(
+        normalized_user_id,
+        {
+            "email": normalized_email,
+            "email_confirm": True,
+            "user_metadata": {"full_name": full_name or ""},
+        },
+    )
+
+    _supabase_request(
+        "PATCH",
+        supabase_users_table_name(),
+        params={"id": f"eq.{normalized_user_id}"},
+        json_body={
+            "email": normalized_email,
+            "full_name": full_name,
+            "role": role,
+            "group_code": group_code,
+            "allowed_pages": allowed_pages,
+            "landing_page": landing_page,
+            "scope_type": scope_type or None,
+            "scope_value": scope_value or None,
+        },
+        prefer="return=minimal",
+    )
+
+    if normalized_email != (profile.get("email") or "").strip().lower():
+        revoke_open_user_invites(normalized_user_id)
+
+    return get_user_profile_by_id(normalized_user_id) or normalize_user_profile_row({
+        "id": normalized_user_id,
+        "email": normalized_email,
+        "full_name": full_name,
+        "role": role,
+        "group_code": group_code,
+        "allowed_pages": allowed_pages,
+        "landing_page": landing_page,
+        "scope_type": scope_type or "",
+        "scope_value": scope_value or "",
+        "active": profile.get("active", True),
+        "invited_at": profile.get("invited_at") or "",
+        "onboarded_at": profile.get("onboarded_at") or "",
+        "last_login_at": profile.get("last_login_at") or "",
+        "created_at": profile.get("created_at") or "",
+        "updated_at": profile.get("updated_at") or "",
+    })
 
 def create_or_refresh_user_invite(email, full_name, role, group_code, allowed_pages, landing_page, scope_type, scope_value):
     normalized_email = (email or "").strip().lower()
@@ -3663,7 +3738,7 @@ def send_plain_email_via_resend(to_address, subject, body, from_address=None, ht
     # Resend must use the verified sender configured for the account.
     resend_api_key = configured_resend_api_key()
     resend_api_url = configured_resend_api_url()
-    sender = str(configured_resend_from() or from_address or "").strip()
+    sender = str(from_address or configured_resend_from() or "").strip()
     if not (resend_api_key and sender):
         raise RuntimeError("Resend is not configured")
 
@@ -6804,6 +6879,83 @@ def user_management_resend_invite(user_id):
 
     return jsonify({"ok": True, **result})
 
+
+
+
+@app.route("/user-management/<user_id>/update", methods=["POST"])
+def user_management_update(user_id):
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+    if not support_user_can_manage_users():
+        return api_error("אין הרשאה לגשת לעמוד זה", 403, "access_denied")
+
+    payload = request.get_json(silent=True) or {}
+    email = (payload.get("email") or "").strip().lower()
+    full_name = (payload.get("full_name") or "").strip()
+    role = (payload.get("role") or "user").strip().lower()
+    group_code = (payload.get("group_code") or "").strip()
+    landing_page = (payload.get("landing_page") or "/home").strip() or "/home"
+    scope_type = (payload.get("scope_type") or "").strip()
+    scope_value = (payload.get("scope_value") or "").strip()
+    allowed_pages = payload.get("allowed_pages")
+
+    existing_profile = get_user_profile_by_id(user_id)
+    previous_email = (existing_profile or {}).get("email") or ""
+    try:
+        updated_profile = update_user_management_profile(
+            user_id,
+            email,
+            full_name,
+            role,
+            group_code,
+            allowed_pages,
+            landing_page,
+            scope_type,
+            scope_value,
+        )
+    except ValueError as exc:
+        return jsonify({"ok": False, "message": str(exc)}), 400
+    except Exception as exc:
+        return jsonify({"ok": False, "message": user_friendly_email_error(str(exc)) or str(exc)}), 500
+
+    session_username = (session.get("username") or "").strip().lower()
+    updated_email = (updated_profile.get("email") or "").strip().lower()
+    if session_username and session_username in {previous_email.strip().lower(), updated_email}:
+        session["username"] = updated_email
+        session["role"] = updated_profile.get("role") or "user"
+        session["allowed_pages"] = updated_profile.get("allowed_pages") or []
+        session["landing_page"] = updated_profile.get("landing_page") or ""
+        session["full_name"] = updated_profile.get("full_name") or ""
+
+    return jsonify({"ok": True, "user": updated_profile, "message": "פרטי המשתמש נשמרו"})
+
+
+@app.route("/user-management/<user_id>/reset-password", methods=["POST"])
+def user_management_reset_password(user_id):
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+    if not support_user_can_manage_users():
+        return api_error("אין הרשאה לגשת לעמוד זה", 403, "access_denied")
+
+    profile = get_user_profile_by_id(user_id)
+    if not profile:
+        return jsonify({"ok": False, "message": "המשתמש לא נמצא"}), 404
+
+    try:
+        result = create_or_refresh_user_invite(
+            profile["email"],
+            profile["full_name"],
+            profile["role"],
+            profile["group_code"],
+            profile["allowed_pages"],
+            profile["landing_page"],
+            profile["scope_type"],
+            profile["scope_value"],
+        )
+    except Exception as exc:
+        return jsonify({"ok": False, "message": user_friendly_email_error(str(exc)) or str(exc)}), 500
+
+    return jsonify({"ok": True, **result, "message": f"קישור לאיפוס סיסמה נשלח אל {result.get('email') or profile['email']}"})
 
 @app.route("/welcome", methods=["GET", "POST"])
 @app.route("/welcome/", methods=["GET", "POST"])

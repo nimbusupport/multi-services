@@ -65,9 +65,20 @@ const roleSelect = document.getElementById("invite-role");
 const userLogModal = document.getElementById("user-log-modal");
 const userLogContent = document.getElementById("user-log-content");
 const userLogClose = document.getElementById("user-log-close");
+const emailInput = document.getElementById("invite-email");
+const fullNameInput = document.getElementById("invite-full-name");
+const scopeTypeSelect = document.getElementById("invite-scope-type");
+const scopeValueInput = document.getElementById("invite-scope-value");
+const editUserIdInput = document.getElementById("edit-user-id");
+const formKicker = document.getElementById("user-form-kicker");
+const formTitle = document.getElementById("user-form-title");
+const submitLabel = document.getElementById("user-form-submit-label");
+const cancelEditButton = document.getElementById("cancel-edit-btn");
+const resetPasswordButton = document.getElementById("reset-password-btn");
 
 let usersMessageTimer = null;
 let currentUsersById = new Map();
+let currentEditUserId = "";
 let lastSyncedRole = roleSelect ? roleSelect.value : "";
 
 function setPanelMessage(element, text, kind = "") {
@@ -118,10 +129,11 @@ function isLimitedAdminRole(role) {
 }
 
 function landingOptionsForRole(role) {
+  const options = [{ value: "/home", label: "בית" }, ...BASE_LANDING_OPTIONS];
   if (isLimitedAdminRole(role)) {
-    return [{ value: "/home", label: "בית" }, ...BASE_LANDING_OPTIONS];
+    return options;
   }
-  return BASE_LANDING_OPTIONS;
+  return options;
 }
 
 function renderLandingOptions(selectedValue = "") {
@@ -224,6 +236,109 @@ function syncRoleBasedPermissions() {
   lastSyncedRole = currentRole;
 }
 
+
+function setCheckedPages(pageKeys) {
+  const selected = new Set(Array.isArray(pageKeys) ? pageKeys : []);
+  pagesHost.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
+    checkbox.checked = selected.has(checkbox.value);
+  });
+}
+
+function updateFormMode() {
+  const isEditing = Boolean(currentEditUserId);
+  if (formKicker) {
+    formKicker.textContent = isEditing ? "עריכת משתמש" : "הזמנה חדשה";
+  }
+  if (formTitle) {
+    formTitle.textContent = isEditing ? "עריכת משתמש והרשאות" : "הוספת משתמש ושליחת הזמנה";
+  }
+  if (submitLabel) {
+    submitLabel.textContent = isEditing ? "שמור שינויים" : "הוספת משתמש ושליחת הזמנה";
+  }
+  if (cancelEditButton) {
+    cancelEditButton.hidden = !isEditing;
+  }
+  if (resetPasswordButton) {
+    resetPasswordButton.hidden = !isEditing;
+  }
+}
+
+function resetUserForm(scrollToTop = false) {
+  currentEditUserId = "";
+  if (editUserIdInput) {
+    editUserIdInput.value = "";
+  }
+  form.reset();
+  if (roleSelect) {
+    roleSelect.value = "user";
+  }
+  renderPageOptions();
+  setCheckedPages(["home"]);
+  renderLandingOptions(landingOptionsForRole(roleSelect ? roleSelect.value : "")[0]?.value || "/dashboard-services");
+  if (groupSelect) {
+    groupSelect.value = "";
+  }
+  if (scopeTypeSelect) {
+    scopeTypeSelect.value = "";
+  }
+  if (scopeValueInput) {
+    scopeValueInput.value = "";
+  }
+  syncRoleBasedPermissions();
+  updateFormMode();
+  if (scrollToTop) {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+}
+
+function startEditUser(user) {
+  if (!user) {
+    return;
+  }
+  currentEditUserId = String(user.id || "");
+  if (editUserIdInput) {
+    editUserIdInput.value = currentEditUserId;
+  }
+  if (emailInput) {
+    emailInput.value = user.email || "";
+  }
+  if (fullNameInput) {
+    fullNameInput.value = user.full_name || "";
+  }
+  if (roleSelect) {
+    roleSelect.value = user.role || "user";
+  }
+  renderPageOptions();
+  setCheckedPages(Array.isArray(user.allowed_pages) && user.allowed_pages.length ? user.allowed_pages : ["home"]);
+  renderLandingOptions(user.landing_page || "");
+  if (groupSelect) {
+    groupSelect.value = user.group_code || "";
+  }
+  if (scopeTypeSelect) {
+    scopeTypeSelect.value = user.scope_type || "";
+  }
+  if (scopeValueInput) {
+    scopeValueInput.value = user.scope_value || "";
+  }
+  syncRoleBasedPermissions();
+  updateFormMode();
+  setInviteMessage("");
+  form.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function collectFormPayload() {
+  return {
+    email: emailInput.value.trim(),
+    full_name: fullNameInput.value.trim(),
+    role: roleSelect.value,
+    group_code: groupSelect.value,
+    landing_page: landingPageSelect.value,
+    scope_type: scopeTypeSelect.value,
+    scope_value: scopeValueInput.value.trim(),
+    allowed_pages: checkedPages(),
+  };
+}
+
 function formatLogDate(value) {
   if (!value) {
     return "-";
@@ -321,10 +436,16 @@ function renderUsers(users) {
         <td data-label="${TABLE_LABELS.landing_page}">${landingLabel(user.landing_page)}</td>
         <td data-label="${TABLE_LABELS.status}"><span class="status-pill ${statusClass}">${statusLabel}</span></td>
         <td data-label="${TABLE_LABELS.actions}">
-          <button class="action-btn resend-invite-btn" type="button" data-user-id="${user.id}">
-            <i class="fa-solid fa-paper-plane"></i>
-            <span>שלח הזמנה שוב</span>
-          </button>
+          <div class="table-actions">
+            <button class="ghost-btn edit-user-btn" type="button" data-user-id="${user.id}">
+              <i class="fa-solid fa-pen"></i>
+              <span>ערוך</span>
+            </button>
+            <button class="action-btn resend-invite-btn" type="button" data-user-id="${user.id}">
+              <i class="fa-solid fa-paper-plane"></i>
+              <span>שלח שוב</span>
+            </button>
+          </div>
         </td>
       </tr>
     `;
@@ -345,34 +466,32 @@ form.addEventListener("submit", async (event) => {
   event.preventDefault();
   setInviteMessage("");
 
-  const payload = {
-    email: document.getElementById("invite-email").value.trim(),
-    full_name: document.getElementById("invite-full-name").value.trim(),
-    role: document.getElementById("invite-role").value,
-    group_code: groupSelect.value,
-    landing_page: landingPageSelect.value,
-    scope_type: document.getElementById("invite-scope-type").value,
-    scope_value: document.getElementById("invite-scope-value").value.trim(),
-    allowed_pages: checkedPages(),
-  };
+  const payload = collectFormPayload();
+  const isEditing = Boolean(currentEditUserId);
+  const endpoint = isEditing ? `/user-management/${currentEditUserId}/update` : "/user-management-invite";
 
   try {
-    const response = await fetch("/user-management-invite", {
+    const response = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
     const data = await readJson(response);
     if (!response.ok || !data.ok) {
-      throw new Error(data.message || data.error || "יצירת ההזמנה נכשלה");
+      throw new Error(data.message || data.error || (isEditing ? "שמירת המשתמש נכשלה" : "יצירת ההזמנה נכשלה"));
     }
-    const inviteSuccessMessage = data.existing_account
-      ? `החשבון כבר קיים. נשלח קישור להגדרת סיסמה אל ${data.email}`
-      : `ההזמנה נשלחה אל ${data.email}`;
-    setInviteMessage(inviteSuccessMessage, "success");
-    setUsersMessage("");
-    form.reset();
-    renderPageOptions();
+    if (isEditing) {
+      setInviteMessage(`פרטי המשתמש ${data.user?.email || payload.email} נשמרו בהצלחה`, "success");
+      setUsersMessage(data.message || "פרטי המשתמש נשמרו", "success");
+      resetUserForm(true);
+    } else {
+      const inviteSuccessMessage = data.existing_account
+        ? `החשבון כבר קיים. נשלח קישור להגדרת סיסמה אל ${data.email}`
+        : `ההזמנה נשלחה אל ${data.email}`;
+      setInviteMessage(inviteSuccessMessage, "success");
+      setUsersMessage("");
+      resetUserForm(true);
+    }
     await loadUsers();
   } catch (error) {
     setInviteMessage(error.message, "error");
@@ -383,6 +502,12 @@ usersTableBody.addEventListener("click", async (event) => {
   const logButton = event.target.closest(".user-log-trigger");
   if (logButton) {
     openUserLog(currentUsersById.get(String(logButton.dataset.userId)));
+    return;
+  }
+
+  const editButton = event.target.closest(".edit-user-btn");
+  if (editButton) {
+    startEditUser(currentUsersById.get(String(editButton.dataset.userId)));
     return;
   }
 
@@ -441,7 +566,35 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
-renderPageOptions();
+resetUserForm();
+
+if (cancelEditButton) {
+  cancelEditButton.addEventListener("click", () => resetUserForm(true));
+}
+
+if (resetPasswordButton) {
+  resetPasswordButton.addEventListener("click", async () => {
+    if (!currentEditUserId) {
+      return;
+    }
+    resetPasswordButton.disabled = true;
+    try {
+      const response = await fetch(`/user-management/${currentEditUserId}/reset-password`, { method: "POST" });
+      const data = await readJson(response);
+      if (!response.ok || !data.ok) {
+        throw new Error(data.message || data.error || "איפוס הסיסמה נכשל");
+      }
+      setInviteMessage(data.message || `קישור לאיפוס סיסמה נשלח אל ${data.email}`, "success");
+      setUsersMessage(data.message || `קישור לאיפוס סיסמה נשלח אל ${data.email}`, "success");
+      await loadUsers();
+    } catch (error) {
+      setInviteMessage(error.message, "error");
+    } finally {
+      resetPasswordButton.disabled = false;
+    }
+  });
+}
+
 if (roleSelect) {
   roleSelect.addEventListener("change", syncRoleBasedPermissions);
 }

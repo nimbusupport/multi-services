@@ -33,12 +33,13 @@
       <section class="panel create-user-panel">
         <div class="panel-head">
           <div>
-            <p class="panel-kicker">הזמנה חדשה</p>
-            <h2>הוספת משתמש ושליחת הזמנה</h2>
+            <p id="user-form-kicker" class="panel-kicker">הזמנה חדשה</p>
+            <h2 id="user-form-title">הוספת משתמש ושליחת הזמנה</h2>
           </div>
         </div>
 
         <form id="user-invite-form" class="user-form">
+          <input id="edit-user-id" type="hidden">
           <label>
             <span>אימייל</span>
             <input id="invite-email" type="email" required placeholder="name@nimbusip.com">
@@ -88,10 +89,20 @@
           </fieldset>
 
           <p id="invite-message" class="form-message"></p>
-          <button class="submit-btn" type="submit">
-            <i class="fa-solid fa-paper-plane"></i>
-            <span>הוספת משתמש ושליחת הזמנה</span>
+          <div class="form-actions">
+            <button id="user-form-submit" class="submit-btn" type="submit">
+              <i class="fa-solid fa-paper-plane"></i>
+              <span id="user-form-submit-label">הוספת משתמש ושליחת הזמנה</span>
           </button>
+            <button id="reset-password-btn" class="ghost-btn" type="button" hidden>
+              <i class="fa-solid fa-key"></i>
+              <span>איפוס סיסמה</span>
+            </button>
+            <button id="cancel-edit-btn" class="ghost-btn" type="button" hidden>
+              <i class="fa-solid fa-xmark"></i>
+              <span>בטל עריכה</span>
+            </button>
+          </div>
         </form>
       </section>
 
