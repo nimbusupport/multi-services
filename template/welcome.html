@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nimbus Welcome</title>
+  <link rel="icon" type="image/jpeg" href="/favicon/favicon.jpg">
+  <meta name="description" content="Complete your Nimbus account setup.">
+  <link rel="stylesheet" href="/login.css">
+  <link rel="stylesheet" href="/welcome.css">
+</head>
+<body>
+  <main class="login-page">
+    <section class="carousel-panel" aria-label="Nimbus account setup">
+      <header class="carousel-brand">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span>NimbusTelecome</span>
+      </header>
+
+      <div class="carousel-stage welcome-stage">
+        <article class="carousel-slide active">
+          <img src="/login_src/assets/carousel-reports.jpg" alt="Nimbus onboarding">
+          <h2>Welcome to Nimbus</h2>
+          <p>Finish your first-time setup by confirming your invited email address and choosing a strong password.</p>
+        </article>
+      </div>
+
+      <p class="copyright">© 2026 NimbusTelecome Networks. All rights reserved.</p>
+    </section>
+
+    <section class="login-panel" aria-label="Complete account setup">
+      <div class="login-card">
+        <div class="login-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" focusable="false">
+            <path d="M12 3v18" />
+            <path d="M7 8h7a4 4 0 0 1 0 8H7z" />
+          </svg>
+        </div>
+        <p class="kicker">NimbusTelecome Services</p>
+        <h1>Set your password</h1>
+        <p class="subtitle">Use the invited email and create a password with at least 12 characters, one capital letter, and one digit.</p>
+
+        <form method="POST" action="/welcome">
+          <input type="hidden" name="token" value="{{ token }}">
+
+          <label class="input-shell" for="email">
+            <span class="input-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <path d="M4 6h16v12H4z" />
+                <path d="m4 7 8 6 8-6" />
+              </svg>
+            </span>
+            <span class="sr-only">Email</span>
+            <input id="email" type="email" name="email" value="{{ invite_email }}" placeholder="Email" required autocomplete="email">
+          </label>
+
+          <label class="input-shell" for="password">
+            <span class="input-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <path d="M7 10V8a5 5 0 0 1 10 0v2" />
+                <rect x="5" y="10" width="14" height="10" rx="2" />
+              </svg>
+            </span>
+            <span class="sr-only">New password</span>
+            <input id="password" type="password" name="password" placeholder="New password" required autocomplete="new-password">
+          </label>
+
+          <label class="input-shell" for="confirm_password">
+            <span class="input-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <path d="M7 10V8a5 5 0 0 1 10 0v2" />
+                <rect x="5" y="10" width="14" height="10" rx="2" />
+              </svg>
+            </span>
+            <span class="sr-only">Confirm password</span>
+            <input id="confirm_password" type="password" name="confirm_password" placeholder="Confirm password" required autocomplete="new-password">
+          </label>
+
+          {% if error %}
+          <p class="error">{{ error }}</p>
+          {% endif %}
+          {% if success %}
+          <p class="success">{{ success }}</p>
+          <a class="submit-btn success-link" href="/login">Go to sign in</a>
+          {% else %}
+          <button class="submit-btn" type="submit">Save password</button>
+          {% endif %}
+        </form>
+
+        <p class="hint">Only the invited email can complete this setup</p>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

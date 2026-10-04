@@ -1,0 +1,14 @@
+.welcome-stage {
+  min-height: 520px;
+}
+
+.success {
+  margin: 0;
+  color: #0f8a43;
+  font-weight: 800;
+  text-align: center;
+}
+
+.success-link {
+  text-decoration: none;
+}

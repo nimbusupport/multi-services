@@ -1946,6 +1946,65 @@ class SupportTicketsTestCase(unittest.TestCase):
         normalized = self.app_module.normalize_allowed_pages(["support_tickets", "pais_tickets", "nastia_tickets"])
         self.assertIn("hot_tickets", normalized)
 
+    def test_normalize_allowed_pages_backfills_monthly_report_for_legacy_report_users(self):
+        normalized = self.app_module.normalize_allowed_pages(["features_report", "features_status"])
+        self.assertIn("tickets_monthly_report", normalized)
+
+    def test_build_user_invite_link_uses_login_host_when_base_url_missing(self):
+        original_support_app_base_url = self.app_module.SUPPORT_APP_BASE_URL
+        original_nastia_app_login_url = self.app_module.NASTIA_APP_LOGIN_URL
+        original_env_support_app_base_url = os.environ.get("SUPPORT_APP_BASE_URL")
+        original_env_app_base_url = os.environ.get("APP_BASE_URL")
+        original_env_nastia_app_login_url = os.environ.get("NASTIA_APP_LOGIN_URL")
+        try:
+            self.app_module.SUPPORT_APP_BASE_URL = ""
+            self.app_module.NASTIA_APP_LOGIN_URL = "https://portal.example.com/login"
+            os.environ.pop("SUPPORT_APP_BASE_URL", None)
+            os.environ.pop("APP_BASE_URL", None)
+            os.environ.pop("NASTIA_APP_LOGIN_URL", None)
+            with self.app_module.app.test_request_context("/"):
+                invite_link = self.app_module.build_user_invite_link("abc 123")
+            self.assertEqual(invite_link, "https://portal.example.com/welcome?token=abc%20123")
+        finally:
+            self.app_module.SUPPORT_APP_BASE_URL = original_support_app_base_url
+            self.app_module.NASTIA_APP_LOGIN_URL = original_nastia_app_login_url
+            if original_env_support_app_base_url is None:
+                os.environ.pop("SUPPORT_APP_BASE_URL", None)
+            else:
+                os.environ["SUPPORT_APP_BASE_URL"] = original_env_support_app_base_url
+            if original_env_app_base_url is None:
+                os.environ.pop("APP_BASE_URL", None)
+            else:
+                os.environ["APP_BASE_URL"] = original_env_app_base_url
+            if original_env_nastia_app_login_url is None:
+                os.environ.pop("NASTIA_APP_LOGIN_URL", None)
+            else:
+                os.environ["NASTIA_APP_LOGIN_URL"] = original_env_nastia_app_login_url
+
+    def test_welcome_page_route_exists(self):
+        response = self.client.get("/welcome?token=test-token", follow_redirects=False)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Set your password", response.data)
+
+    def test_vercel_routes_all_paths_to_app_py(self):
+        with open("vercel.json", "r", encoding="utf-8") as handle:
+            config = json.load(handle)
+
+        self.assertIn("rewrites", config)
+        self.assertIn({"source": "/(.*)", "destination": "/app.py"}, config["rewrites"])
+
+    def test_user_without_monthly_report_permission_is_redirected_from_monthly_report(self):
+        with self.client.session_transaction() as session:
+            session["logged_in"] = True
+            session["username"] = "reports@example.com"
+            session["allowed_pages"] = ["features_report"]
+            session["role"] = "user"
+
+        response = self.client.get("/tickets-monthly-report", follow_redirects=False)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response.headers["Location"].endswith("/features-report"))
+
     def test_limited_ticket_user_can_only_access_ticket_pages(self):
         response = self.login("nastya@nimbusip.com", "tygeydfuyw5t3g")
 
@@ -3971,6 +4030,10 @@ class SupportTicketsTestCase(unittest.TestCase):
 
         self.assertEqual(captured["url"], "https://api.resend.com/emails")
         self.assertEqual(captured["json"]["from"], "Support <onboarding@resend.dev>")
+
+    def test_user_friendly_email_error_returns_readable_message(self):
+        message = self.app_module.user_friendly_email_error("domain is not verified")
+        self.assertEqual(message, "The sender domain is not verified in Resend.")
 
     def test_send_plain_email_does_not_fallback_to_smtp_when_resend_sender_is_configured(self):
         original_smtp_ssl = self.app_module.smtplib.SMTP_SSL

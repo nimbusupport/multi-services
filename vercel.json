@@ -14,5 +14,11 @@
     "app.py": {
       "excludeFiles": "{.venv/**,.worktrees/**,Screens/**,log/**,docs/**,test_*.py,**/__pycache__/**,**/*.pyc,features_services/.git.nested-backup/**}"
     }
-  }
+  },
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/app.py"
+    }
+  ]
 }

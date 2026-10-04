@@ -86,16 +86,41 @@
             <h2>דוחות</h2>
             <span class="connect-btn card-link-cta">לכל הדוחות</span>
             <div class="active-users">
-              <span class="active-user-empty">דו"ח פיצ'רים וסטטוס פיצ'רים</span>
+              <span class="active-user-empty">דו"ח קריאות חודשי, דו"ח פיצ'רים וסטטוס פיצ'רים</span>
             </div>
             <div class="meter-row">
               <span>דוחות זמינים</span>
-              <span id="dashboard-reports-waiting-count">2</span>
+              <span id="dashboard-reports-waiting-count">3</span>
             </div>
             <div class="meter"><div id="dashboard-reports-waiting-bar" style="width: 100%"></div></div>
           </div>
         </article>
       </a>
+
+      {% if show_user_management_card %}
+      <a class="service-card-link" href="/user-management" aria-label="פתח ניהול משתמשים">
+        <article class="service-card theme-user-management">
+          <div class="card-hero">
+            <div class="card-icon"><i class="fa-solid fa-user-shield"></i></div>
+          </div>
+          <div class="card-body">
+            <div class="card-topline">
+              <span class="badge report-group">ניהול</span>
+            </div>
+            <h2>ניהול משתמשים</h2>
+            <span class="connect-btn card-link-cta">הוספה ושליחת הזמנה</span>
+            <div class="active-users">
+              <span class="active-user-empty">משתמשים חדשים, הרשאות, וגישה לעמודים</span>
+            </div>
+            <div class="meter-row">
+              <span>גישה</span>
+              <span>Admin</span>
+            </div>
+            <div class="meter"><div style="width: 100%"></div></div>
+          </div>
+        </article>
+      </a>
+      {% endif %}
 
       <a class="service-card-link" href="/portals" aria-label="פתח פורטל שירותי ענן">
         <article class="service-card theme-portals portal-entry-card">

@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ניהול משתמשים</title>
+  <link rel="icon" type="image/jpeg" href="/favicon/favicon.jpg">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&display=swap">
+  <link rel="stylesheet" href="/home.css">
+  <link rel="stylesheet" href="/user_management.css">
+</head>
+<body class="dashboard-page user-management-page">
+  {% set active_nav = "dashboard" %}
+  {% include "_dashboard_top_nav.html" %}
+
+  <main class="user-management-wrap">
+    <section class="user-management-hero">
+      <a class="dashboard-back-link" href="/home">
+        <i class="fa-solid fa-arrow-right"></i>
+        <span>חזרה לדשבורד</span>
+      </a>
+      <div>
+        <p class="hero-kicker">Admin</p>
+        <h1>ניהול משתמשים</h1>
+        <p class="hero-subtitle">יצירת משתמשים חדשים, הגדרת הרשאות עמודים ושליחת הזמנה ראשונית במייל.</p>
+      </div>
+    </section>
+
+    <section class="user-management-grid">
+      <section class="panel create-user-panel">
+        <div class="panel-head">
+          <div>
+            <p class="panel-kicker">הזמנה חדשה</p>
+            <h2>הוספת משתמש ושליחת הזמנה</h2>
+          </div>
+        </div>
+
+        <form id="user-invite-form" class="user-form">
+          <label>
+            <span>אימייל</span>
+            <input id="invite-email" type="email" required placeholder="name@nimbusip.com">
+          </label>
+          <label>
+            <span>שם מלא</span>
+            <input id="invite-full-name" type="text" placeholder="שם משתמש">
+          </label>
+          <label>
+            <span>תפקיד</span>
+            <select id="invite-role">
+              <option value="user">User</option>
+              <option value="admin">Admin</option>
+              <option value="tickets_only">Tickets only</option>
+              <option value="hot_submitter">HOT submitter</option>
+              <option value="assigned_technician">Assigned technician</option>
+            </select>
+          </label>
+          <label>
+            <span>קבוצת משתמש</span>
+            <select id="invite-group-code">
+              <option value="">ללא</option>
+            </select>
+          </label>
+          <label>
+            <span>עמוד נחיתה</span>
+            <select id="invite-landing-page"></select>
+          </label>
+          <label>
+            <span>סוג סינון</span>
+            <select id="invite-scope-type">
+              <option value="">ללא</option>
+              <option value="project_manager">Project manager</option>
+              <option value="group">Group</option>
+              <option value="none">None</option>
+            </select>
+          </label>
+          <label>
+            <span>ערך סינון</span>
+            <input id="invite-scope-value" type="text">
+          </label>
+
+          <fieldset class="pages-fieldset">
+            <legend>עמודים מורשים</legend>
+            <div id="invite-pages" class="pages-grid"></div>
+          </fieldset>
+
+          <p id="invite-message" class="form-message"></p>
+          <button class="submit-btn" type="submit">
+            <i class="fa-solid fa-paper-plane"></i>
+            <span>הוספת משתמש ושליחת הזמנה</span>
+          </button>
+        </form>
+      </section>
+
+      <section class="panel user-list-panel">
+        <div class="panel-head">
+          <div>
+            <p class="panel-kicker">רשימת משתמשים</p>
+            <h2>משתמשים קיימים</h2>
+          </div>
+          <button id="refresh-users" class="ghost-btn" type="button">
+            <i class="fa-solid fa-rotate"></i>
+            <span>רענון</span>
+          </button>
+        </div>
+        <p id="users-message" class="form-message panel-message"></p>
+        <div class="table-wrap">
+          <table class="users-table">
+            <thead>
+              <tr>
+                <th>שם</th>
+                <th>אימייל</th>
+                <th>תפקיד</th>
+                <th>עמודים</th>
+                <th>עמוד נחיתה</th>
+                <th>סטטוס</th>
+                <th>פעולות</th>
+              </tr>
+            </thead>
+            <tbody id="users-table-body"></tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <script src="/nav.js"></script>
+  <script src="/user_management.js"></script>
+</body>
+</html>
