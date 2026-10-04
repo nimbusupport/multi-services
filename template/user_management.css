@@ -22,7 +22,7 @@
 
 .user-management-wrap {
   width: min(1480px, calc(100% - 32px));
-  margin: 26px auto 34px;
+  margin: 88px auto 34px;
   display: grid;
   gap: 18px;
   zoom: 0.8;
