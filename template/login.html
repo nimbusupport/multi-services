@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -116,6 +116,69 @@
           <button class="submit-btn" type="submit">Sign In</button>
         </form>
 
+        <div class="auth-helper-actions">
+          <button class="helper-toggle-btn" type="button" data-helper-target="registration-helper">Ask for registration</button>
+          <button class="helper-toggle-btn" type="button" data-helper-target="forgot-helper">Forgot password</button>
+        </div>
+        <p id="login-helper-status" class="helper-message login-helper-status" aria-live="polite"></p>
+
+        <section id="registration-helper" class="helper-panel" hidden aria-label="Request registration">
+          <div class="helper-panel-header">
+            <h2>Request registration</h2>
+            <p>Send an approval request to the Nimbus administrator.</p>
+          </div>
+          <form id="registration-request-form" novalidate>
+            <label class="input-shell" for="registration-email">
+              <span class="sr-only">Registration email</span>
+              <input id="registration-email" type="email" name="email" placeholder="Email" required autocomplete="email">
+            </label>
+            <label class="input-shell" for="registration-full-name">
+              <span class="sr-only">Full name</span>
+              <input id="registration-full-name" type="text" name="full_name" placeholder="Full name (optional)" autocomplete="name">
+            </label>
+            <label class="input-shell" for="registration-organization">
+              <span class="sr-only">Organization</span>
+              <select id="registration-organization" name="organization" required>
+                <option value="">Choose organization</option>
+                <option value="Nimbus">Nimbus</option>
+                <option value="HOT">HOT</option>
+                <option value="Technician Nimbus">Technician Nimbus</option>
+                <option value="Technician">Technician</option>
+              </select>
+            </label>
+            <button class="submit-btn secondary-submit-btn" type="submit">Send request</button>
+            <p id="registration-message" class="helper-message" aria-live="polite"></p>
+          </form>
+        </section>
+
+        <section id="forgot-helper" class="helper-panel" hidden aria-label="Reset password">
+          <div class="helper-panel-header">
+            <h2>Reset password</h2>
+            <p>Check the email first, then set a new password if the account exists.</p>
+          </div>
+          <form id="forgot-password-form" novalidate>
+            <label class="input-shell" for="forgot-email">
+              <span class="sr-only">Forgot password email</span>
+              <input id="forgot-email" type="email" name="email" placeholder="Email" required autocomplete="email">
+            </label>
+            <button class="submit-btn secondary-submit-btn" id="forgot-check-btn" type="button">Check email</button>
+
+            <div id="forgot-password-fields" class="helper-fields" hidden>
+              <label class="input-shell" for="forgot-password-new">
+                <span class="sr-only">New password</span>
+                <input id="forgot-password-new" type="password" name="password" placeholder="New password" autocomplete="new-password">
+              </label>
+              <label class="input-shell" for="forgot-password-confirm">
+                <span class="sr-only">Confirm new password</span>
+                <input id="forgot-password-confirm" type="password" name="confirm_password" placeholder="Confirm new password" autocomplete="new-password">
+              </label>
+              <button class="submit-btn secondary-submit-btn" id="forgot-save-btn" type="submit">Save new password</button>
+            </div>
+
+            <p id="forgot-message" class="helper-message" aria-live="polite"></p>
+          </form>
+        </section>
+
         <p class="hint">Only allowed users can connect</p>
       </div>
     </section>
@@ -124,3 +187,6 @@
   <script src="/login.js"></script>
 </body>
 </html>
+
+
+

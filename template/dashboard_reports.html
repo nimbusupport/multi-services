@@ -17,10 +17,12 @@
 
   <main class="dashboard-wrap">
     <section class="dashboard-hero dashboard-hero-split">
+      {% if can_access_home %}
       <a class="dashboard-back-link" href="/home">
         <i class="fa-solid fa-arrow-right"></i>
         <span>חזרה לדאשבורד</span>
       </a>
+      {% endif %}
       <div class="hero-copy">
         <p class="welcome">קטגוריית על</p>
         <h1>דוחות</h1>

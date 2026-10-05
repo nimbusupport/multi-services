@@ -1,4 +1,4 @@
-const form = document.getElementById("user-invite-form");
+﻿const form = document.getElementById("user-invite-form");
 const usersTableBody = document.getElementById("users-table-body");
 const inviteMessage = document.getElementById("invite-message");
 const usersMessage = document.getElementById("users-message");
@@ -56,16 +56,16 @@ const PAGE_GROUPS = [
     pages: [
       { key: "bot", label: "בוט" },
       { key: "sms", label: "SMS" },
-      { key: "storage", label: "הקלטות" },
       { key: "f2m", label: "F2M" },
-      { key: "hot", label: "HOT" },
-      { key: "cloud", label: "מוקד אנושי" },
+      { key: "recording_storage", label: "אחסון הקלטות" },
+      { key: "human_service", label: "מוקד אנושי" },
+      { key: "record", label: "הקלטות פתיח" },
     ],
   },
   {
     title: "דוחות",
     pages: [
-      { key: "tickets_monthly_report", label: "דוח חודשי" },
+      { key: "tickets_monthly_report", label: "\u05d3\u05d5\"\u05d7 \u05e7\u05e8\u05d9\u05d0\u05d5\u05ea \u05d7\u05d5\u05d3\u05e9\u05d9" },
       { key: "features_report", label: "דוח פיצ'רים" },
       { key: "features_status", label: "סטטוס פיצ'רים" },
     ],
@@ -74,20 +74,32 @@ const PAGE_GROUPS = [
     title: "תקלות",
     pages: [
       { key: "support_tickets", label: "קריאות שירות" },
-      { key: "pais", label: "פיס" },
-      { key: "reports", label: "נסטיה" },
+      { key: "pais_tickets", label: "פיס" },
+      { key: "hot_tickets", label: "קריאות שירות הוט" },
+      { key: "nastia_tickets", label: "נסטיה" },
     ],
   },
 ];
 
 const PAGE_OPTIONS = PAGE_GROUPS.flatMap((group) => group.pages);
-const BASE_LANDING_OPTIONS = [
-  { value: "/home", label: "בית" },
-  { value: "/dashboard-services", label: "שירותים" },
-  { value: "/dashboard-service-tickets", label: "קריאות שירות" },
-  { value: "/dashboard-reports", label: "דוחות" },
-  { value: "/user-management", label: "ניהול משתמשים" },
-];
+const LANDING_LABELS = {
+  "/home": "בית",
+  "/dashboard-services": "שירותים",
+  "/dashboard-service-tickets": "קריאות שירות",
+  "/dashboard-reports": "דוחות",
+  "/user-management": "ניהול משתמשים",
+  "/configuration": "הגדרות",
+  "/sms": "SMS",
+  "/bot": "בוט",
+  "/f2m": "F2M",
+  "/recording-storage": "אחסון הקלטות",
+  "/human-service": "מוקד אנושי",
+  "/record": "הקלטות פתיח",
+  "/support-tickets": "קריאות שירות",
+  "/pais-tickets": "קריאות שירות פיס",
+  "/hot-kiryot-tickets": "קריאות שירות הוט",
+  "/nastia-tickets": "נסטיה",
+};
 
 const TABLE_LABELS = {
   full_name: "שם",
@@ -193,19 +205,67 @@ function accessLevelLabel(value) {
   return value === "read_only" ? "קריאה בלבד" : "קריאה ועריכה";
 }
 
-function landingOptionsForRole(role) {
-  if (role === "assigned_technician" || role === "external_technician") {
-    return [
-      { value: "/dashboard-service-tickets", label: "קריאות שירות" },
-      { value: "/home", label: "בית" },
-    ];
-  }
-  return BASE_LANDING_OPTIONS;
+function hasAnyPage(pageKeys, keys) {
+  return keys.some((key) => pageKeys.has(key));
 }
 
+function canUseHomeDashboard(pageKeys) {
+  let groupCount = 0;
+  if (hasAnyPage(pageKeys, ["bot", "sms", "f2m", "recording_storage", "human_service", "record"])) {
+    groupCount += 1;
+  }
+  if (hasAnyPage(pageKeys, ["tickets_monthly_report", "features_report", "features_status"])) {
+    groupCount += 1;
+  }
+  if (hasAnyPage(pageKeys, ["support_tickets", "pais_tickets", "hot_tickets", "nastia_tickets"])) {
+    groupCount += 1;
+  }
+  if (hasAnyPage(pageKeys, ["user_management"])) {
+    groupCount += 1;
+  }
+  return pageKeys.has("home") && groupCount >= 2;
+}
+
+function landingOptionsForSelection(pageKeys) {
+  const selected = new Set(pageKeys || []);
+  const options = [];
+  const pushOption = (value) => {
+    if (!options.some((item) => item.value === value)) {
+      options.push({ value, label: LANDING_LABELS[value] || value });
+    }
+  };
+
+  if (canUseHomeDashboard(selected)) {
+    pushOption("/home");
+    if (hasAnyPage(selected, ["bot", "sms", "f2m", "recording_storage", "human_service", "record"])) {
+      pushOption("/dashboard-services");
+    }
+    if (hasAnyPage(selected, ["support_tickets", "pais_tickets", "hot_tickets", "nastia_tickets"])) {
+      pushOption("/dashboard-service-tickets");
+    }
+  }
+
+  if (hasAnyPage(selected, ["tickets_monthly_report", "features_report", "features_status"])) {
+    pushOption("/dashboard-reports");
+  }
+  if (selected.has("sms")) pushOption("/sms");
+  if (selected.has("bot")) pushOption("/bot");
+  if (selected.has("f2m")) pushOption("/f2m");
+  if (selected.has("recording_storage")) pushOption("/recording-storage");
+  if (selected.has("human_service")) pushOption("/human-service");
+  if (selected.has("record")) pushOption("/record");
+  if (selected.has("support_tickets")) pushOption("/support-tickets");
+  if (selected.has("pais_tickets")) pushOption("/pais-tickets");
+  if (selected.has("hot_tickets")) pushOption("/hot-kiryot-tickets");
+  if (selected.has("nastia_tickets")) pushOption("/nastia-tickets");
+  if (selected.has("user_management")) pushOption("/user-management");
+
+  return options.length ? options : [{ value: "", label: "בחרו הרשאות תחילה" }];
+}
+
+
 function landingLabel(value) {
-  const option = BASE_LANDING_OPTIONS.find((item) => item.value === value);
-  return option ? option.label : (value || "-");
+  return LANDING_LABELS[value] || (value || "-");
 }
 
 function pageLabel(pageKey) {
@@ -218,12 +278,12 @@ function isLimitedAdminRole(role) {
 }
 
 function renderLandingOptions(selectedValue = "") {
-  const options = landingOptionsForRole(roleSelect ? roleSelect.value : "");
+  const options = landingOptionsForSelection(checkedPages());
   landingPageSelect.innerHTML = options
     .map((option) => `<option value="${option.value}">${option.label}</option>`)
     .join("");
   const hasMatch = options.some((item) => item.value === selectedValue);
-  landingPageSelect.value = hasMatch ? selectedValue : options[0]?.value || "/home";
+  landingPageSelect.value = hasMatch ? selectedValue : options[0]?.value || "";
 }
 
 function renderPageOptions() {
@@ -233,7 +293,7 @@ function renderPageOptions() {
       <div class="permission-group-grid">
         ${group.pages.map((page) => `
           <label class="page-option">
-            <input type="checkbox" value="${page.key}" ${page.key === "home" ? "checked" : ""}>
+            <input type="checkbox" value="${page.key}">
             <span>${page.label}</span>
           </label>
         `).join("")}
@@ -476,8 +536,8 @@ function openCreateUserMode() {
     accessLevelSelect.value = "read_write";
   }
   renderPageOptions();
-  setCheckedPages(["home"]);
-  renderLandingOptions(landingOptionsForRole(roleSelect ? roleSelect.value : "")[0]?.value || "/home");
+  setCheckedPages([]);
+  renderLandingOptions("");
   if (groupSelect) {
     groupSelect.value = "";
   }
@@ -508,8 +568,8 @@ function resetUserForm(scrollToTop = false) {
     accessLevelSelect.value = "read_write";
   }
   renderPageOptions();
-  setCheckedPages(["home"]);
-  renderLandingOptions(landingOptionsForRole(roleSelect ? roleSelect.value : "")[0]?.value || "/home");
+  setCheckedPages([]);
+  renderLandingOptions("");
   if (groupSelect) {
     groupSelect.value = "";
   }
@@ -547,7 +607,7 @@ function startEditUser(user) {
     roleSelect.value = user.role || "user";
   }
   renderPageOptions();
-  setCheckedPages(Array.isArray(user.allowed_pages) && user.allowed_pages.length ? user.allowed_pages : ["home"]);
+  setCheckedPages(Array.isArray(user.allowed_pages) ? user.allowed_pages : []);
   renderLandingOptions(user.landing_page || "");
   if (groupSelect) {
     groupSelect.value = user.group_code || "";
@@ -576,7 +636,7 @@ function collectFormPayload() {
     role: roleSelect?.value || "user",
     group_code: groupSelect?.value || "",
     access_level: accessLevelSelect?.value || "read_write",
-    landing_page: landingPageSelect?.value || "/home",
+    landing_page: landingPageSelect?.value || "",
     scope_type: scopeTypeSelect?.value || "",
     scope_value: (scopeValueInput?.value || "").trim(),
     allowed_pages: checkedPages(),
@@ -739,6 +799,7 @@ if (pagesHost) {
     const target = event.target;
     if (target instanceof HTMLInputElement && target.type === "checkbox") {
       updatePagesSummary();
+      renderLandingOptions(landingPageSelect?.value || "");
     }
   });
 }
@@ -868,3 +929,4 @@ if (roleSelect) {
 resetUserForm();
 setPagesExpanded(false);
 loadUsers().catch((error) => setUsersMessage(error.message, "error"));
+

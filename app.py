@@ -370,6 +370,13 @@ FULL_ACCESS_PAGES = {
     "hot_tickets",
     "nastia_tickets",
 }
+LEGACY_ALLOWED_PAGE_ALIASES = {
+    "storage": "recording_storage",
+    "cloud": "human_service",
+    "pais": "pais_tickets",
+    "reports": "nastia_tickets",
+    "hot": "hot_tickets",
+}
 REPORT_ALLOWED_PAGES = {"tickets_monthly_report", "features_report", "features_status"}
 TICKETS_ONLY_ALLOWED_PAGES = {"support_tickets", "pais_tickets", "hot_tickets", "nastia_tickets"}
 ACCESS_LEVEL_READ_ONLY = "read_only"
@@ -427,6 +434,13 @@ SUPABASE_AUTH_KEY = (
     or ""
 ).strip()
 USER_INVITE_FROM = (os.environ.get("USER_INVITE_FROM") or "noreply@nimbusip.com").strip()
+USER_REGISTRATION_REQUEST_TO = (os.environ.get("USER_REGISTRATION_REQUEST_TO") or "zura@nimbusip.com").strip()
+LOGIN_REGISTRATION_ORGANIZATIONS = {
+    "Nimbus",
+    "HOT",
+    "Technician Nimbus",
+    "Technician",
+}
 USER_INVITE_LINK_TTL_HOURS = max(1, int((os.environ.get("USER_INVITE_LINK_TTL_HOURS") or "72").strip() or "72"))
 USER_PASSWORD_MIN_LENGTH = 12
 
@@ -1004,21 +1018,18 @@ def normalize_allowed_pages(values):
         return sorted(FULL_ACCESS_PAGES)
     if isinstance(values, str):
         values = [values]
-    normalized = {
-        str(value).strip().lower()
-        for value in values
-        if str(value).strip() and not str(value).strip().lower().startswith(ACCESS_LEVEL_TOKEN_PREFIX)
-    }
+    normalized = set()
+    for value in values or []:
+        raw = str(value).strip().lower()
+        if not raw or raw.startswith(ACCESS_LEVEL_TOKEN_PREFIX):
+            continue
+        if raw == "all":
+            return sorted(FULL_ACCESS_PAGES)
+        mapped = LEGACY_ALLOWED_PAGE_ALIASES.get(raw, raw)
+        if mapped in FULL_ACCESS_PAGES:
+            normalized.add(mapped)
     if not normalized:
-        return sorted(FULL_ACCESS_PAGES)
-    if "all" in normalized:
-        return sorted(FULL_ACCESS_PAGES)
-    # Backfill newly added ticket boards for users whose stored allowed_pages
-    # were saved before these board keys existed.
-    if normalized.intersection({"support_tickets", "pais_tickets", "nastia_tickets", "hot_tickets"}):
-        normalized.add("hot_tickets")
-    # Backfill the monthly tickets report for legacy report users that already
-    # had both report cards before the third report permission existed.
+        return []
     if {"features_report", "features_status"}.issubset(normalized):
         normalized.add("tickets_monthly_report")
     return sorted(normalized)
@@ -1078,12 +1089,121 @@ def current_user_can_write():
 
 
 def user_can_access_page(page_key):
-    return (page_key or "").strip().lower() in allowed_pages_for_current_user()
+    normalized_page_key = (page_key or "").strip().lower()
+    if normalized_page_key == "home":
+        return can_access_home_dashboard()
+    if normalized_page_key == "dashboard_reports":
+        return can_access_reports_dashboard()
+    return normalized_page_key in allowed_pages_for_current_user()
 
 
 def can_access_reports_dashboard():
     allowed = allowed_pages_for_current_user()
-    return "home" in allowed or bool(allowed.intersection(REPORT_ALLOWED_PAGES))
+    return bool(allowed.intersection(REPORT_ALLOWED_PAGES))
+
+
+def permission_group_keys(allowed_pages=None):
+    allowed = set(allowed_pages or allowed_pages_for_current_user())
+    groups = set()
+    if allowed.intersection({"sms", "bot", "f2m", "recording_storage", "human_service", "record"}):
+        groups.add("services")
+    if allowed.intersection(REPORT_ALLOWED_PAGES):
+        groups.add("reports")
+    if allowed.intersection(TICKETS_ONLY_ALLOWED_PAGES):
+        groups.add("tickets")
+    if allowed.intersection({"user_management", "configuration"}):
+        groups.add("admin")
+    return groups
+
+
+def can_access_home_dashboard_for_allowed_pages(allowed_pages):
+    allowed = set(allowed_pages or [])
+    return "home" in allowed and len(permission_group_keys(allowed)) >= 2
+
+
+def can_access_home_dashboard():
+    return can_access_home_dashboard_for_allowed_pages(allowed_pages_for_current_user())
+
+
+def first_ticket_route(allowed_pages=None):
+    allowed = set(allowed_pages or allowed_pages_for_current_user())
+    if "support_tickets" in allowed:
+        return url_for("support_tickets_page")
+    if "pais_tickets" in allowed:
+        return url_for("pais_tickets_page")
+    if "hot_tickets" in allowed:
+        return url_for("hot_kiryot_tickets_page")
+    if "nastia_tickets" in allowed:
+        return url_for("nastia_tickets_page")
+    return url_for("support_tickets_page")
+
+
+def first_service_route(allowed_pages=None):
+    allowed = set(allowed_pages or allowed_pages_for_current_user())
+    if "sms" in allowed:
+        return "/sms"
+    if "bot" in allowed:
+        return "/bot"
+    if "f2m" in allowed:
+        return "/f2m"
+    if "recording_storage" in allowed:
+        return "/recording-storage"
+    if "human_service" in allowed:
+        return "/human-service"
+    if "record" in allowed:
+        return "/record"
+    return "/sms"
+
+
+def landing_page_options_for_allowed_pages(allowed_pages):
+    allowed = set(normalize_allowed_pages(allowed_pages))
+    options = []
+    if can_access_home_dashboard_for_allowed_pages(allowed):
+        options.extend(["/home", "/dashboard-services", "/dashboard-service-tickets"])
+    if allowed.intersection(REPORT_ALLOWED_PAGES):
+        options.append("/dashboard-reports")
+    if "sms" in allowed:
+        options.append("/sms")
+    if "bot" in allowed:
+        options.append("/bot")
+    if "f2m" in allowed:
+        options.append("/f2m")
+    if "recording_storage" in allowed:
+        options.append("/recording-storage")
+    if "human_service" in allowed:
+        options.append("/human-service")
+    if "record" in allowed:
+        options.append("/record")
+    if "support_tickets" in allowed:
+        options.append("/support-tickets")
+    if "pais_tickets" in allowed:
+        options.append("/pais-tickets")
+    if "hot_tickets" in allowed:
+        options.append("/hot-kiryot-tickets")
+    if "nastia_tickets" in allowed:
+        options.append("/nastia-tickets")
+    if "user_management" in allowed:
+        options.append("/user-management")
+    if "configuration" in allowed:
+        options.append("/configuration")
+    return list(dict.fromkeys(options))
+
+
+def normalize_landing_page(landing_page, allowed_pages):
+    normalized_landing = (landing_page or "").strip()
+    allowed = set(normalize_allowed_pages(allowed_pages))
+    options = landing_page_options_for_allowed_pages(allowed)
+    if not options:
+        return ""
+    if normalized_landing in options:
+        return normalized_landing
+    if normalized_landing == "/dashboard-reports" and allowed.intersection(REPORT_ALLOWED_PAGES):
+        return "/dashboard-reports"
+    if normalized_landing == "/dashboard-services":
+        return first_service_route(allowed)
+    if normalized_landing == "/dashboard-service-tickets":
+        return first_ticket_route(allowed)
+    return options[0]
 
 
 def first_allowed_route():
@@ -1095,13 +1215,19 @@ def first_allowed_route():
             return url_for("hot_kiryot_tickets_page")
         if "support_tickets" in allowed:
             return url_for("support_tickets_page")
-    landing_page = (session.get("landing_page") or "").strip()
+    landing_page = normalize_landing_page((session.get("landing_page") or "").strip(), allowed)
+    if landing_page != (session.get("landing_page") or ""):
+        session["landing_page"] = landing_page
     if landing_page == "/dashboard-reports" and can_access_reports_dashboard():
         return landing_page
-    landing_key = route_page_key(landing_page) if landing_page else None
-    if landing_page and landing_key and landing_key in allowed:
-        return landing_page
-    if "home" in allowed:
+    if landing_page in {"/home", "/dashboard-services", "/dashboard-service-tickets"}:
+        if can_access_home_dashboard():
+            return landing_page
+    else:
+        landing_key = route_page_key(landing_page) if landing_page else None
+        if landing_page and landing_key and user_can_access_page(landing_key):
+            return landing_page
+    if can_access_home_dashboard():
         return url_for("home")
     if "tickets_monthly_report" in allowed:
         return url_for("tickets_monthly_report_page")
@@ -1120,6 +1246,34 @@ def first_allowed_route():
     return url_for("home")
 
 
+
+@app.context_processor
+def inject_navigation_permissions():
+    allowed = allowed_pages_for_current_user() if session.get("logged_in") else set()
+    ticket_labels = {
+        "support_tickets": "קריאות שירות",
+        "pais_tickets": "קריאות שירות פיס",
+        "hot_tickets": "קריאות שירות הוט",
+        "nastia_tickets": "קריאות שירות נסטיה",
+    }
+    ticket_keys = [key for key in ("support_tickets", "pais_tickets", "hot_tickets", "nastia_tickets") if key in allowed]
+    single_ticket_key = ticket_keys[0] if len(ticket_keys) == 1 else ""
+    return {
+        "nav_can_access_home": can_access_home_dashboard() if session.get("logged_in") else False,
+        "nav_can_access_portals": can_access_home_dashboard() if session.get("logged_in") else False,
+        "nav_can_access_tickets": bool(allowed.intersection(TICKETS_ONLY_ALLOWED_PAGES)),
+        "nav_tickets_route": first_ticket_route(allowed) if ticket_keys else url_for("support_tickets_page"),
+        "nav_tickets_label": ticket_labels.get(single_ticket_key, "קריאות"),
+        "nav_can_access_reports": bool(allowed.intersection(REPORT_ALLOWED_PAGES)),
+        "nav_can_access_recordings": "record" in allowed,
+        "nav_can_access_human_service": "human_service" in allowed,
+        "nav_can_access_recording_storage": "recording_storage" in allowed,
+        "nav_can_access_f2m": "f2m" in allowed,
+        "nav_can_access_bot": "bot" in allowed,
+        "nav_can_access_sms": "sms" in allowed,
+        "nav_can_access_configuration": "configuration" in allowed,
+        "nav_first_allowed_route": first_allowed_route() if session.get("logged_in") else url_for("login"),
+    }
 def support_page_key(board_slug=None, queue_slug=None):
     normalized_queue = (queue_slug or "").strip().lower()
     if normalized_queue == "nastia":
@@ -1174,11 +1328,13 @@ def route_page_key(path):
         return "nastia_tickets"
     if normalized_path.startswith("/tickets-monthly-report"):
         return "tickets_monthly_report"
+    if normalized_path == "/dashboard-reports":
+        return "dashboard_reports"
     if normalized_path.startswith("/dashboard-data") or normalized_path in {
         "/home",
         "/dashboard-services",
         "/dashboard-service-tickets",
-        "/dashboard-reports",
+        "/dashboard-service-tickets",
     }:
         return "home"
     if normalized_path.startswith("/configuration"):
@@ -1793,7 +1949,7 @@ def normalize_user_profile_row(row):
         "group_code": (row.get("group_code") or "").strip(),
         "allowed_pages": allowed_pages,
         "access_level": access_level,
-        "landing_page": (row.get("landing_page") or "").strip() or "/home",
+        "landing_page": normalize_landing_page((row.get("landing_page") or "").strip(), allowed_pages),
         "scope_type": (row.get("scope_type") or "").strip(),
         "scope_value": (row.get("scope_value") or "").strip(),
         "active": bool(row.get("active", True)),
@@ -2054,6 +2210,93 @@ def send_user_invite_email(to_address, invite_link, full_name=""):
 
 
 
+
+def send_registration_request_email(requested_email, full_name="", organization=""):
+    normalized_email = (requested_email or "").strip().lower()
+    display_name = (full_name or "").strip()
+    organization_name = (organization or "").strip()
+    recipient = (USER_REGISTRATION_REQUEST_TO or "").strip()
+    if not recipient:
+        raise RuntimeError("Registration approval email recipient is not configured")
+
+    requested_at = datetime.now(timezone.utc).astimezone().strftime('%d/%m/%Y %H:%M')
+    subject = "Nimbus בקשת הרשמה חדשה"
+    body_lines = [
+        "התקבלה בקשת הרשמה חדשה לעמוד ההתחברות של Nimbus.",
+        "",
+        f"אימייל מבוקש: {normalized_email}",
+    ]
+    if display_name:
+        body_lines.append(f"שם מלא: {display_name}")
+    if organization_name:
+        body_lines.append(f"שם מחלקה: {organization_name}")
+    body_lines.extend([
+        f"תאריך: {requested_at}",
+        "",
+        "יש לבדוק את הבקשה ולאשר יצירת משתמש לפי הצורך.",
+    ])
+    body = "\n".join(body_lines)
+
+    html_name = f"<p><strong>שם מלא:</strong> {xml_escape(display_name)}</p>" if display_name else ""
+    html_organization = f"<p><strong>שם מחלקה:</strong> {xml_escape(organization_name)}</p>" if organization_name else ""
+    html_body = f"""
+    <div style="font-family:Segoe UI,Arial,sans-serif;direction:rtl;text-align:right;max-width:640px;margin:0 auto;">
+      <h2 style="color:#163f72;">בקשת הרשמה חדשה</h2>
+      <p>התקבלה בקשת הרשמה חדשה לעמוד ההתחברות של Nimbus.</p>
+      <p><strong>אימייל מבוקש:</strong> {xml_escape(normalized_email)}</p>
+      {html_name}
+      {html_organization}
+      <p><strong>תאריך:</strong> {xml_escape(requested_at)}</p>
+      <p>יש לבדוק את הבקשה ולאשר יצירת משתמש לפי הצורך.</p>
+    </div>
+    """
+    send_plain_email(
+        recipient,
+        subject,
+        body,
+        from_address=USER_INVITE_FROM,
+        html_body=html_body,
+    )
+
+
+def find_login_account_by_email(email):
+    normalized_email = (email or "").strip().lower()
+    if not normalized_email:
+        return {"profile": None, "auth_user": None, "email": ""}
+
+    profile = get_user_profile_by_email(normalized_email)
+    auth_user = None
+    if profile and profile.get("id"):
+        auth_user = {"id": profile.get("id"), "email": profile.get("email") or normalized_email}
+    elif supabase_auth_enabled():
+        try:
+            auth_user = find_supabase_auth_user_by_email(normalized_email)
+        except Exception:
+            auth_user = None
+
+    return {
+        "profile": profile,
+        "auth_user": auth_user,
+        "email": normalized_email,
+    }
+
+
+def reset_login_account_password(email, new_password):
+    account = find_login_account_by_email(email)
+    profile = account.get("profile") or {}
+    auth_user = account.get("auth_user") or {}
+    user_id = str((profile.get("id") or auth_user.get("id") or "")).strip()
+    if not user_id:
+        raise ValueError("No account found for this email")
+    if not supabase_auth_enabled():
+        raise RuntimeError("Supabase Auth is not configured")
+
+    update_payload = {"password": new_password, "email_confirm": True}
+    full_name = (profile.get("full_name") or "").strip()
+    if full_name:
+        update_payload["user_metadata"] = {"full_name": full_name}
+    update_supabase_auth_user(user_id, update_payload)
+    return account
 def set_user_management_profile_active(user_id, active):
     normalized_user_id = str(user_id or "").strip()
     if not normalized_user_id:
@@ -2085,6 +2328,7 @@ def update_user_management_profile(user_id, email, full_name, role, group_code, 
 
     allowed_pages = normalize_allowed_pages(allowed_pages)
     access_level = normalize_access_level(access_level)
+    landing_page = normalize_landing_page(landing_page, allowed_pages)
     if role == "admin_no_user_management":
         allowed_pages = allowed_pages_for_role(role)
     if not allowed_pages:
@@ -2148,7 +2392,9 @@ def update_user_management_profile(user_id, email, full_name, role, group_code, 
 
 def create_or_refresh_user_invite(email, full_name, role, group_code, allowed_pages, landing_page, scope_type, scope_value, access_level):
     normalized_email = (email or "").strip().lower()
+    allowed_pages = normalize_allowed_pages(allowed_pages)
     access_level = normalize_access_level(access_level)
+    landing_page = normalize_landing_page(landing_page, allowed_pages)
     if not normalized_email:
         raise ValueError("Email is required")
     if not email_address_is_valid(normalized_email):
@@ -5303,8 +5549,6 @@ def _supabase_login_user(username):
 def authenticate_login(username, password):
     username = (username or "").strip().lower()
     override = LOGIN_USER_OVERRIDES.get(username)
-    if not override and not username.endswith(f"@{ALLOWED_EMAIL_DOMAIN}"):
-        return None
 
     profile = get_user_profile_by_email(username)
     if profile and profile.get("active"):
@@ -5320,6 +5564,9 @@ def authenticate_login(username, password):
             "landing_page": profile.get("landing_page") or "/home",
             "full_name": profile.get("full_name") or "",
         }
+
+    if not override and not username.endswith(f"@{ALLOWED_EMAIL_DOMAIN}"):
+        return None
 
     supabase_user = _supabase_login_user(username)
     if supabase_user:
@@ -6956,13 +7203,96 @@ def login():
     return render_template("login.html")
 
 
+@app.route("/login/request-registration", methods=["POST"])
+def login_request_registration():
+    payload = request.get_json(silent=True) or request.form or {}
+    email = (payload.get("email") or "").strip().lower()
+    full_name = (payload.get("full_name") or "").strip()
+    organization = (payload.get("organization") or "").strip()
+
+    if not email:
+        return jsonify({"ok": False, "message": "Email is required"}), 400
+    if not email_address_is_valid(email):
+        return jsonify({"ok": False, "message": "Please enter a valid email address"}), 400
+    if not organization:
+        return jsonify({"ok": False, "message": "Please choose an organization"}), 400
+    if organization not in LOGIN_REGISTRATION_ORGANIZATIONS:
+        return jsonify({"ok": False, "message": "Selected organization is not valid"}), 400
+
+    account = find_login_account_by_email(email)
+    if account.get("profile") or account.get("auth_user"):
+        return jsonify({
+            "ok": False,
+            "account_exists": True,
+            "message": "Account already exists. Please use Forgot password.",
+        }), 400
+
+    try:
+        send_registration_request_email(email, full_name=full_name, organization=organization)
+    except Exception as exc:
+        return jsonify({"ok": False, "message": user_friendly_email_error(str(exc)) or str(exc)}), 500
+
+    return jsonify({
+        "ok": True,
+        "message": "Registration request delivered",
+    })
+
+
+@app.route("/login/forgot-password/check", methods=["POST"])
+def login_forgot_password_check():
+    payload = request.get_json(silent=True) or request.form or {}
+    email = (payload.get("email") or "").strip().lower()
+
+    if not email:
+        return jsonify({"ok": False, "message": "Email is required"}), 400
+    if not email_address_is_valid(email):
+        return jsonify({"ok": False, "message": "Please enter a valid email address"}), 400
+
+    account = find_login_account_by_email(email)
+    if not (account.get("profile") or account.get("auth_user")):
+        return jsonify({"ok": False, "message": "No account found for this email"}), 404
+
+    return jsonify({"ok": True, "message": "Email found. You can set a new password now."})
+
+
+@app.route("/login/forgot-password/reset", methods=["POST"])
+def login_forgot_password_reset():
+    payload = request.get_json(silent=True) or request.form or {}
+    email = (payload.get("email") or "").strip().lower()
+    password = payload.get("password") or ""
+    confirm_password = payload.get("confirm_password") or ""
+
+    if not email:
+        return jsonify({"ok": False, "message": "Email is required"}), 400
+    if not email_address_is_valid(email):
+        return jsonify({"ok": False, "message": "Please enter a valid email address"}), 400
+    if not password:
+        return jsonify({"ok": False, "message": "New password is required"}), 400
+    if password != confirm_password:
+        return jsonify({"ok": False, "message": "Passwords do not match"}), 400
+    if not user_password_is_valid(password):
+        return jsonify({
+            "ok": False,
+            "message": f"Password must be at least {USER_PASSWORD_MIN_LENGTH} characters long and include one capital letter and one digit",
+        }), 400
+
+    try:
+        reset_login_account_password(email, password)
+    except ValueError as exc:
+        return jsonify({"ok": False, "message": str(exc)}), 404
+    except Exception as exc:
+        return jsonify({"ok": False, "message": user_friendly_email_error(str(exc)) or str(exc)}), 500
+
+    return jsonify({"ok": True, "message": f"Password updated successfully for {email}. You can sign in now."})
+
+
 # ================= HOME =================
 @app.route("/home")
 def home():
 
     if not session.get("logged_in"):
         return redirect(url_for("login"))
-    if not user_can_access_page("home"):
+    if not can_access_home_dashboard():
         return redirect(first_allowed_route())
 
     register_service_activity("dashboard")
@@ -6972,11 +7302,21 @@ def home():
 def render_dashboard_group_page(template_name):
     if not session.get("logged_in"):
         return redirect(url_for("login"))
-    if not user_can_access_page("home"):
+    if not can_access_home_dashboard():
         return redirect(first_allowed_route())
 
     register_service_activity("dashboard")
-    return render_template(template_name, current_user=session.get("username", ""))
+    allowed_pages = allowed_pages_for_current_user()
+    return render_template(
+        template_name,
+        current_user=session.get("username", ""),
+        can_access_home=can_access_home_dashboard(),
+        can_access_support="support_tickets" in allowed_pages,
+        can_access_pais="pais_tickets" in allowed_pages,
+        can_access_hot="hot_tickets" in allowed_pages,
+        can_access_nastia="nastia_tickets" in allowed_pages,
+        ticket_board_links_count=sum(1 for key in ("support_tickets", "pais_tickets", "hot_tickets", "nastia_tickets") if key in allowed_pages),
+    )
 
 
 @app.route("/dashboard-services")
@@ -7001,7 +7341,7 @@ def dashboard_reports_page():
     return render_template(
         "dashboard_reports.html",
         current_user=session.get("username", ""),
-        can_access_home="home" in allowed_pages,
+        can_access_home=can_access_home_dashboard(),
         can_access_tickets_monthly_report="tickets_monthly_report" in allowed_pages,
         can_access_features_report="features_report" in allowed_pages,
         can_access_features_status="features_status" in allowed_pages,
@@ -7682,6 +8022,8 @@ def render_ticket_board_page(board_slug):
     register_service_activity(support_page_key(board_slug))
     allowed_pages = allowed_pages_for_current_user()
     board_page_key = support_page_key(board["slug"])
+    if not user_can_access_page(board_page_key):
+        return redirect(first_allowed_route())
     can_write_board = current_user_can_write()
     assigned_technician_mode = support_user_is_assigned_technician()
     hot_submitter_mode = support_user_is_hot_submitter()
@@ -7718,11 +8060,12 @@ def render_ticket_board_page(board_slug):
         default_ticket_scope="my" if assigned_technician_mode else "all",
         access_level=current_user_access_level(),
         can_write_board=can_write_board,
-        can_access_home="home" in allowed_pages,
+        can_access_home=can_access_home_dashboard(),
         can_access_support="support_tickets" in allowed_pages,
         can_access_pais="pais_tickets" in allowed_pages,
         can_access_hot="hot_tickets" in allowed_pages,
         can_access_nastia="nastia_tickets" in allowed_pages,
+        ticket_board_links_count=sum(1 for key in ("support_tickets", "pais_tickets", "hot_tickets", "nastia_tickets") if key in allowed_pages),
     )
 
 
@@ -7783,7 +8126,7 @@ def hot_kiryot_tickets_page():
 def nastia_tickets_page():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
-    if support_user_is_assigned_technician():
+    if support_user_is_assigned_technician() or not user_can_access_page("nastia_tickets"):
         return redirect(first_allowed_route())
     board = get_ticket_board("pais")
     register_service_activity("nastia_tickets")
@@ -7819,7 +8162,7 @@ def nastia_tickets_page():
         can_edit_existing_tickets=True,
         can_view_board_report=False,
         default_ticket_scope="all",
-        can_access_home="home" in allowed_pages,
+        can_access_home=can_access_home_dashboard(),
         can_access_support="support_tickets" in allowed_pages,
         can_access_pais="pais_tickets" in allowed_pages,
         can_access_hot="hot_tickets" in allowed_pages,
@@ -7834,7 +8177,10 @@ def support_tickets_data():
 
     board_slug = (request.args.get("board") or "support").strip().lower()
     queue_slug = (request.args.get("queue") or "").strip().lower()
-    register_service_activity(support_page_key(board_slug, queue_slug))
+    page_key = support_page_key(board_slug, queue_slug)
+    if not user_can_access_page(page_key):
+        return api_error("אין הרשאה לגשת לעמוד זה", 403, "access_denied")
+    register_service_activity(page_key)
     tickets = load_support_tickets() if queue_slug == "nastia" else load_support_tickets(board_slug)
     scope = (request.args.get("scope") or "all").strip().lower()
     status_filter = (request.args.get("status") or "").strip()
@@ -9561,3 +9907,14 @@ def dashboard():
 
 if __name__ == "__main__":
     app.run(port=5059, debug=True)
+
+
+
+
+
+
+
+
+
+
+

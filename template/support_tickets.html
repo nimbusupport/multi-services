@@ -72,6 +72,7 @@
       <button class="ticket-tab" type="button" data-scope="unassigned"><i class="fa-regular fa-circle-question"></i><span>ללא שיוך</span><strong id="stat-unassigned">0</strong></button>
       {% endif %}
 
+      {% if ticket_board_links_count > 1 %}
       <div class="ticket-board-links">
         {% if can_access_support %}
         <a class="ticket-board-link {% if ticket_board.slug == 'support' and page_mode != 'nastia' %}active{% endif %}" href="/support-tickets">
@@ -98,6 +99,7 @@
         </a>
         {% endif %}
       </div>
+      {% endif %}
 
       {% if can_access_home %}
       <div class="portal-menu collapsed">

@@ -38,6 +38,14 @@ jobs: dict[str, dict] = {}
 active_job_id: str | None = None
 
 
+@app.after_request
+def add_no_cache_headers(response):
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
+
+
 def digits_only(value: str) -> str:
     return "".join(ch for ch in (value or "").strip() if ch.isdigit())
 
@@ -188,6 +196,8 @@ def get_job_snapshot(job_id: str) -> dict:
             "success_count": job["success_count"],
             "failure_count": job["failure_count"],
             "error": job["error"],
+            "route_mode": job["route_mode"],
+            "manual_route_target": job["manual_route_target"],
             "items": [dict(item) for item in job["items"]],
         }
 
@@ -208,7 +218,13 @@ def update_job_item(job_id: str, row_number: int, **updates) -> None:
         raise KeyError(f"Row {row_number} not found in job {job_id}.")
 
 
-def run_selected_numbers(job_id: str, selected_items: list[dict]) -> None:
+def run_selected_numbers(
+    job_id: str,
+    selected_items: list[dict],
+    *,
+    route_mode: str,
+    manual_route_target: str | None,
+) -> None:
     global active_job_id
 
     try:
@@ -216,43 +232,49 @@ def run_selected_numbers(job_id: str, selected_items: list[dict]) -> None:
         set_job_state(job_id, status="running", started_at=datetime.now().isoformat(timespec="seconds"))
         ws = get_sheet()
 
-        def progress_callback(result, index: int, total: int) -> None:
-            row_number = selected_items[index - 1]["row"]
-            serialized_result = serialize_result(result)
-            item_status = "done" if result.ok else "failed"
-            marked_in_sheet = False
+        with runner.CGRTAutomationSession(headless=True) as session:
+            for index, item in enumerate(selected_items, start=1):
+                row_number = item["row"]
+                update_job_item(
+                    job_id,
+                    row_number,
+                    status="running",
+                    started_at=datetime.now().isoformat(timespec="seconds"),
+                )
 
-            if result.ok:
-                try:
-                    ws.update_cell(row_number, COL_MARKED, True)
-                    marked_in_sheet = True
-                except Exception as exc:
-                    item_status = "failed"
-                    serialized_result["ok"] = False
-                    serialized_result["message"] = (
-                        f"{result.message} CGRT was created, but column B could not be updated: {exc}"
-                    )
+                result = session.create_did(
+                    item["number"],
+                    manual_route_target=manual_route_target if route_mode == "manual" else None,
+                )
+                serialized_result = serialize_result(result)
+                item_status = "done" if result.ok else "failed"
+                marked_in_sheet = False
 
-            item_updates = {
-                "status": item_status,
-                "result": serialized_result,
-                "finished_at": datetime.now().isoformat(timespec="seconds"),
-                "marked_in_sheet": marked_in_sheet,
-            }
+                if result.ok:
+                    try:
+                        ws.update_cell(row_number, COL_MARKED, True)
+                        marked_in_sheet = True
+                    except Exception as exc:
+                        item_status = "failed"
+                        serialized_result["ok"] = False
+                        serialized_result["message"] = (
+                            f"{result.message} CGRT was created, but column B could not be updated: {exc}"
+                        )
 
-            update_job_item(job_id, row_number, **item_updates)
+                update_job_item(
+                    job_id,
+                    row_number,
+                    status=item_status,
+                    result=serialized_result,
+                    finished_at=datetime.now().isoformat(timespec="seconds"),
+                    marked_in_sheet=marked_in_sheet,
+                )
 
-            with jobs_lock:
-                job = jobs[job_id]
-                job["completed"] = index
-                job["success_count"] = sum(1 for item in job["items"] if item["status"] == "done")
-                job["failure_count"] = sum(1 for item in job["items"] if item["status"] == "failed")
-
-        runner.run_batch(
-            [item["number"] for item in selected_items],
-            headless=True,
-            progress_callback=progress_callback,
-        )
+                with jobs_lock:
+                    job = jobs[job_id]
+                    job["completed"] = index
+                    job["success_count"] = sum(1 for job_item in job["items"] if job_item["status"] == "done")
+                    job["failure_count"] = sum(1 for job_item in job["items"] if job_item["status"] == "failed")
 
         set_job_state(job_id, status="completed", finished_at=datetime.now().isoformat(timespec="seconds"))
     except Exception as exc:
@@ -286,8 +308,13 @@ def api_create_job():
 
     payload = request.get_json(silent=True) or {}
     selected_rows = payload.get("rows") or []
+    route_mode = str(payload.get("route_mode") or "default").strip().lower()
+    manual_route_target = str(payload.get("manual_route_target") or "").strip()
     if not isinstance(selected_rows, list) or not selected_rows:
         return jsonify({"ok": False, "message": "Select at least one number."}), 400
+
+    if route_mode not in {"default", "manual"}:
+        return jsonify({"ok": False, "message": "Invalid route mode."}), 400
 
     try:
         selected_rows = [int(row) for row in selected_rows]
@@ -312,6 +339,14 @@ def api_create_job():
         except ValueError as exc:
             return jsonify({"ok": False, "message": f"{item['number']}: {exc}"}), 400
 
+    if route_mode == "manual":
+        try:
+            manual_route_target = runner.normalize_primary_route_target(manual_route_target)
+        except ValueError as exc:
+            return jsonify({"ok": False, "message": str(exc)}), 400
+    else:
+        manual_route_target = None
+
     with job_lock:
         if active_job_id is not None:
             return jsonify({"ok": False, "message": "Another CGRT job is already running."}), 409
@@ -330,13 +365,16 @@ def api_create_job():
         "success_count": 0,
         "failure_count": 0,
         "error": None,
+        "route_mode": route_mode,
+        "manual_route_target": manual_route_target,
         "items": [
             {
                 "row": item["row"],
                 "number": item["number"],
-                "status": "queued",
+                "status": "waiting",
                 "marked_in_sheet": False,
                 "result": None,
+                "started_at": None,
                 "finished_at": None,
             }
             for item in selected_items
@@ -346,7 +384,15 @@ def api_create_job():
     with jobs_lock:
         jobs[job_id] = job
 
-    worker = threading.Thread(target=run_selected_numbers, args=(job_id, selected_items), daemon=True)
+    worker = threading.Thread(
+        target=run_selected_numbers,
+        args=(job_id, selected_items),
+        kwargs={
+            "route_mode": route_mode,
+            "manual_route_target": manual_route_target,
+        },
+        daemon=True,
+    )
     worker.start()
 
     return jsonify({"ok": True, "job_id": job_id, "job": get_job_snapshot(job_id)})

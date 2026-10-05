@@ -29,14 +29,34 @@
           <h2>Run Status</h2>
           <p id="jobSummary" class="muted">No active run.</p>
         </div>
+        <button id="openRunStatusBtn" class="secondary-btn" type="button" disabled>Open Run Window</button>
       </div>
 
       <div class="progress-shell">
         <div id="progressBar" class="progress-bar"></div>
       </div>
 
-      <div id="resultsList" class="results-list">
-        <div class="empty-card">Run details will appear here after you start.</div>
+      <div class="status-counters">
+        <article class="status-counter waiting">
+          <span>Waiting</span>
+          <strong id="waitingCount">0</strong>
+        </article>
+        <article class="status-counter running">
+          <span>Running</span>
+          <strong id="runningCount">0</strong>
+        </article>
+        <article class="status-counter done">
+          <span>Done</span>
+          <strong id="doneCount">0</strong>
+        </article>
+        <article class="status-counter failed">
+          <span>Failed</span>
+          <strong id="failedCount">0</strong>
+        </article>
+      </div>
+
+      <div class="status-footnote">
+        <p id="runStatusNote" class="muted">Open the run window to follow waiting, running, and completed numbers.</p>
       </div>
     </section>
 
@@ -53,6 +73,81 @@
       </div>
 
       <div id="message" class="message hidden"></div>
+
+      <div class="selection-toolbar">
+        <div class="selection-summary-card">
+          <p class="selection-label">Selection</p>
+          <strong id="selectionSummary">Checked 0 | Auto 0 | Total 0</strong>
+          <p id="batchHint" class="muted">Choose a batch size to auto-include the first numbers from the list.</p>
+        </div>
+
+        <label class="range-picker" for="batchSize">
+          <span>Auto-add from top of list</span>
+          <select id="batchSize">
+            <option value="0" selected>Only checked numbers</option>
+            <option value="5">5 numbers</option>
+            <option value="10">10 numbers</option>
+            <option value="15">15 numbers</option>
+            <option value="20">20 numbers</option>
+            <option value="25">25 numbers</option>
+            <option value="30">30 numbers</option>
+            <option value="35">35 numbers</option>
+            <option value="40">40 numbers</option>
+            <option value="45">45 numbers</option>
+            <option value="50">50 numbers</option>
+            <option value="55">55 numbers</option>
+            <option value="60">60 numbers</option>
+            <option value="65">65 numbers</option>
+            <option value="70">70 numbers</option>
+            <option value="75">75 numbers</option>
+            <option value="80">80 numbers</option>
+            <option value="85">85 numbers</option>
+            <option value="90">90 numbers</option>
+            <option value="95">95 numbers</option>
+            <option value="100">100 numbers</option>
+          </select>
+        </label>
+
+        <div class="route-config-card">
+          <p class="selection-label">Primary Destination</p>
+          <div class="route-mode-list" id="routeModeList">
+            <label class="route-mode-option">
+              <input type="radio" name="routeMode" value="default" checked>
+              <span>
+                <strong>Default Route</strong>
+                <small>Use the current fixed destination.</small>
+              </span>
+            </label>
+            <label class="route-mode-option">
+              <input type="radio" name="routeMode" value="manual">
+              <span>
+                <strong>Manual Route</strong>
+                <small>Use `{DID_ALIAS}@IP:PORT` for this run only.</small>
+              </span>
+            </label>
+          </div>
+          <label class="manual-route-field" for="manualRouteTarget">
+            <span>Ready Routes</span>
+            <select id="manualRoutePreset" disabled>
+              <option value="custom" selected>Custom Manual Route</option>
+              <option value="37.142.14.34:5060">Nimbus Tel1</option>
+              <option value="80.246.128.141:5060">Nimbus CC</option>
+            </select>
+          </label>
+          <label class="manual-route-field" for="manualRouteTarget">
+            <span>Manual IP:PORT</span>
+            <input
+              id="manualRouteTarget"
+              type="text"
+              inputmode="text"
+              autocomplete="off"
+              placeholder="52.28.195.200:5060"
+              disabled
+            >
+          </label>
+          <p id="routeHint" class="muted">Default mode keeps the existing fixed primary destination.</p>
+        </div>
+      </div>
 
       <div class="table-sticky-head" aria-hidden="true">
         <div>Select</div>
@@ -83,6 +178,46 @@
       </div>
     </section>
   </main>
+
+  <div id="runStatusModal" class="status-modal" aria-hidden="true">
+    <div class="status-modal-card" role="dialog" aria-modal="true" aria-labelledby="runStatusModalTitle">
+      <div class="status-modal-head">
+        <div>
+          <p class="eyebrow">Live Progress</p>
+          <h2 id="runStatusModalTitle">CGRT Run Window</h2>
+          <p id="modalJobSummary" class="muted">No run started yet.</p>
+        </div>
+        <button id="closeRunStatusBtn" class="modal-close-btn" type="button" aria-label="Close run window">x</button>
+      </div>
+
+      <div class="progress-shell modal-progress">
+        <div id="modalProgressBar" class="progress-bar"></div>
+      </div>
+
+      <div class="status-counters modal-status-counters">
+        <article class="status-counter waiting">
+          <span>Waiting</span>
+          <strong id="modalWaitingCount">0</strong>
+        </article>
+        <article class="status-counter running">
+          <span>Running</span>
+          <strong id="modalRunningCount">0</strong>
+        </article>
+        <article class="status-counter done">
+          <span>Done</span>
+          <strong id="modalDoneCount">0</strong>
+        </article>
+        <article class="status-counter failed">
+          <span>Failed</span>
+          <strong id="modalFailedCount">0</strong>
+        </article>
+      </div>
+
+      <div id="resultsList" class="results-list results-scroll">
+        <div class="empty-card">Run details will appear here after you start.</div>
+      </div>
+    </div>
+  </div>
 
   <script src="{{ url_for('static', filename='app.js') }}" defer></script>
 </body>

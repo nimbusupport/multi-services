@@ -17,10 +17,12 @@
 
   <main class="dashboard-wrap">
     <section class="dashboard-hero dashboard-hero-split">
+      {% if can_access_home %}
       <a class="dashboard-back-link" href="/home">
         <i class="fa-solid fa-arrow-right"></i>
         <span>חזרה לדאשבורד</span>
       </a>
+      {% endif %}
       <div class="hero-copy">
         <p class="welcome">קטגוריית על</p>
         <h1>קריאות שירות</h1>
@@ -28,6 +30,7 @@
     </section>
 
     <section class="card-grid">
+      {% if can_access_support %}
       <article class="service-card theme-tickets">
         <div class="card-hero">
           <div class="card-icon"><i class="fa-solid fa-ticket"></i></div>
@@ -46,7 +49,9 @@
           <div class="meter"><div id="support_tickets-waiting-bar"></div></div>
         </div>
       </article>
+      {% endif %}
 
+      {% if can_access_pais %}
       <article class="service-card theme-pais">
         <div class="card-hero">
           <div class="card-icon card-icon-image">
@@ -67,7 +72,9 @@
           <div class="meter"><div id="pais_tickets-waiting-bar"></div></div>
         </div>
       </article>
+      {% endif %}
 
+      {% if can_access_hot %}
       <article class="service-card theme-hot">
         <div class="card-hero">
           <div class="card-icon card-icon-image">
@@ -88,6 +95,7 @@
           <div class="meter"><div id="hot_tickets-waiting-bar"></div></div>
         </div>
       </article>
+      {% endif %}
     </section>
   </main>
 

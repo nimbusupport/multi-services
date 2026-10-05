@@ -26,7 +26,7 @@ load_dotenv(BASE_DIR / ".env", override=True)
 LOGIN_URL = "https://billing.nimbusip.com/admin/login/?next=/admin/login/"
 DID_LIST_URL = "https://billing.nimbusip.com/admin/management/did/"
 CUSTOMER_VALUE = "15555304679453049"
-PRIMARY_DESTINATION = "{DID_ALIAS}@52.28.195.112:5080"
+DEFAULT_PRIMARY_DESTINATION = "{DID_ALIAS}@52.28.195.112:5080"
 
 
 @dataclass
@@ -51,6 +51,44 @@ def normalize_did_input(raw_value: str) -> str:
     if not did_input.isdigit() or len(did_input) < 8:
         raise ValueError("Invalid number. Must be digits and at least 8 characters after stripping 0s.")
     return did_input
+
+
+def normalize_primary_route_target(raw_value: str) -> str:
+    target = str(raw_value or "").strip()
+    if not target:
+        raise ValueError("Manual route target is required.")
+
+    try:
+        host, port_text = target.rsplit(":", 1)
+    except ValueError as exc:
+        raise ValueError("Manual route must look like 52.28.195.200:5060.") from exc
+
+    octets = host.split(".")
+    if len(octets) != 4:
+        raise ValueError("Manual route must use an IPv4 address.")
+
+    for octet in octets:
+        if not octet.isdigit():
+            raise ValueError("Manual route IP must contain digits only.")
+        value = int(octet)
+        if not (0 <= value <= 255):
+            raise ValueError("Manual route IP parts must be between 0 and 255.")
+
+    if not port_text.isdigit():
+        raise ValueError("Manual route port must be numeric.")
+
+    port = int(port_text)
+    if not (1 <= port <= 65535):
+        raise ValueError("Manual route port must be between 1 and 65535.")
+
+    return f"{host}:{port}"
+
+
+def build_primary_destination(alias: str, manual_route_target: str | None = None) -> str:
+    if manual_route_target:
+        normalized_target = normalize_primary_route_target(manual_route_target)
+        return f"{alias}@{normalized_target}"
+    return DEFAULT_PRIMARY_DESTINATION
 
 
 def get_cgrt_login_credentials() -> tuple[str, str]:
@@ -112,10 +150,11 @@ class CGRTAutomationSession:
         driver.find_element(By.XPATH, "//input[@value='Sign in']").click()
         wait.until(EC.presence_of_element_located((By.XPATH, "//body")))
 
-    def create_did(self, did_input: str) -> DidCreationResult:
+    def create_did(self, did_input: str, *, manual_route_target: str | None = None) -> DidCreationResult:
         normalized = normalize_did_input(did_input)
         full_number = f"972{normalized}"
         alias = f"0{normalized}"
+        primary_destination = build_primary_destination(alias, manual_route_target)
 
         driver = self._require_driver()
         wait = self._require_wait()
@@ -140,7 +179,7 @@ class CGRTAutomationSession:
         Select(driver.find_element(By.ID, "id_primary_route")).select_by_index(4)
         time.sleep(1)
 
-        driver.find_element(By.ID, "id_primary_destination").send_keys(PRIMARY_DESTINATION)
+        driver.find_element(By.ID, "id_primary_destination").send_keys(primary_destination)
         time.sleep(1)
 
         driver.find_element(
@@ -187,15 +226,21 @@ class CGRTAutomationSession:
         return self.wait
 
 
-def run_script(did_input: str, *, headless: bool = True) -> DidCreationResult:
+def run_script(
+    did_input: str,
+    *,
+    headless: bool = True,
+    manual_route_target: str | None = None,
+) -> DidCreationResult:
     with CGRTAutomationSession(headless=headless) as session:
-        return session.create_did(did_input)
+        return session.create_did(did_input, manual_route_target=manual_route_target)
 
 
 def run_batch(
     did_inputs: Iterable[str],
     *,
     headless: bool = True,
+    manual_route_target: str | None = None,
     progress_callback: Callable[[DidCreationResult, int, int], None] | None = None,
 ) -> list[DidCreationResult]:
     results: list[DidCreationResult] = []
@@ -204,7 +249,7 @@ def run_batch(
 
     with CGRTAutomationSession(headless=headless) as session:
         for index, did_input in enumerate(normalized_inputs, start=1):
-            result = session.create_did(did_input)
+            result = session.create_did(did_input, manual_route_target=manual_route_target)
             results.append(result)
             if progress_callback:
                 progress_callback(result, index, total)
