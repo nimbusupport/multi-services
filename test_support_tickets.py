@@ -929,6 +929,37 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertEqual(calls[0]["json_body"][0]["slug"], "hot-kiryot")
         self.assertEqual(calls[1]["path"], "support_tickets")
 
+    def test_read_only_ticket_user_can_view_attachment_for_allowed_ticket_page(self):
+        with self.client.session_transaction() as session:
+            session["logged_in"] = True
+            session["username"] = "viewer@example.com"
+            session["role"] = "user"
+            session["allowed_pages"] = ["pais_tickets"]
+            session["access_level"] = self.app_module.ACCESS_LEVEL_READ_ONLY
+
+        tickets = self.app_module.load_support_tickets()
+        tickets[0]["board_slug"] = "pais"
+        self.app_module.save_support_tickets(tickets)
+
+        response = self.client.get("/support-ticket-attachment/TicketID0001/example.jpg", follow_redirects=False)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, b"jpg")
+
+    def test_read_only_ticket_user_cannot_view_attachment_for_disallowed_ticket_page(self):
+        with self.client.session_transaction() as session:
+            session["logged_in"] = True
+            session["username"] = "viewer@example.com"
+            session["role"] = "user"
+            session["allowed_pages"] = ["pais_tickets"]
+            session["access_level"] = self.app_module.ACCESS_LEVEL_READ_ONLY
+
+        response = self.client.get("/support-ticket-attachment/TicketID0001/example.jpg", follow_redirects=False)
+
+        self.assertEqual(response.status_code, 403)
+        payload = response.get_json()
+        self.assertEqual(payload["code"], "access_denied")
+
     def test_support_tickets_data_still_loads_when_supabase_attachment_queries_fail(self):
         original_request = self.app_module._supabase_request
         self.app_module.SUPABASE_URL = "https://supabase.example"

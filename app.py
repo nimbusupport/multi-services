@@ -1286,12 +1286,41 @@ def support_page_key(board_slug=None, queue_slug=None):
     return "support_tickets"
 
 
+def attachment_allowed_page_keys(ticket_folder, filename=""):
+    normalized_folder = (ticket_folder or "").strip()
+    normalized_name = secure_filename(filename or "")
+    if not re.fullmatch(r"TicketID\d{4}", normalized_folder):
+        return set()
+
+    for ticket in load_support_tickets():
+        attachments = ticket.get("attachments") or []
+        for attachment in attachments:
+            if (attachment.get("folder") or "").strip() != normalized_folder:
+                continue
+            saved_name = secure_filename(attachment.get("saved_name") or "")
+            if normalized_name and saved_name and saved_name != normalized_name:
+                continue
+            allowed = {board_page_key(ticket.get("board_slug"))}
+            if pais_ticket_is_coordination(ticket):
+                allowed.add("nastia_tickets")
+            return allowed
+    return set()
+
+
+def can_access_attachment(ticket_folder, filename=""):
+    allowed_page_keys = attachment_allowed_page_keys(ticket_folder, filename)
+    return bool(allowed_page_keys and any(user_can_access_page(page_key) for page_key in allowed_page_keys))
+
+
 def route_page_key(path):
     normalized_path = (path or "").strip().lower()
     if normalized_path in {"", "/"}:
         return None
     if normalized_path.startswith("/support-ticket-attachment"):
-        return "support_tickets"
+        ticket_folder = (request.view_args or {}).get("ticket_folder") or ""
+        filename = (request.view_args or {}).get("filename") or ""
+        allowed_page_keys = attachment_allowed_page_keys(ticket_folder, filename)
+        return next(iter(sorted(allowed_page_keys))) if allowed_page_keys else None
     if normalized_path == "/support-tickets-data":
         return support_page_key(request.args.get("board"), request.args.get("queue"))
     if normalized_path == "/support-tickets-create":
@@ -8888,6 +8917,8 @@ def support_tickets_delete():
 def support_ticket_attachment(ticket_folder, filename):
     if not session.get("logged_in"):
         return redirect(url_for("login"))
+    if not can_access_attachment(ticket_folder, filename):
+        return api_error("Access denied", 403, "access_denied")
 
     if not re.fullmatch(r"TicketID\d{4}", ticket_folder):
         return jsonify({"ok": False, "message": "Invalid ticket folder"}), 400
