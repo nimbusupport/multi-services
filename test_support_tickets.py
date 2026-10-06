@@ -1434,6 +1434,78 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertEqual(payload["leaderboard"][0]["user"], "ניר")
         self.assertEqual(payload["leaderboard"][0]["done"], 1)
 
+    def test_pais_report_data_all_period_includes_previous_month_open_tickets(self):
+        self.app_module.israel_now = lambda: datetime(2026, 10, 6, 10, 0, tzinfo=ZoneInfo("Asia/Jerusalem"))
+        tickets = self.app_module.load_support_tickets()
+        tickets.extend([
+            {
+                "id": 2,
+                "board_slug": "pais",
+                "created_at": "2026-09-28T09:00:00+03:00",
+                "created_at_display": "28/09/2026 09:00",
+                "creator": "Admin",
+                "ticket_type": "שירות",
+                "service_type": "מפעל הפיס",
+                "domain": "",
+                "priority": "Medium",
+                "description": "",
+                "solution": "",
+                "status": "ממתין לתיאום",
+                "assigned_to": "נסטיה",
+                "details": {
+                    "terminal_number": "3001",
+                    "address": "C",
+                    "customer_request": "R3",
+                    "actions_taken": "A3",
+                },
+                "attachments": [],
+                "updates": [],
+            },
+            {
+                "id": 3,
+                "board_slug": "pais",
+                "created_at": "2026-10-03T09:00:00+03:00",
+                "created_at_display": "03/10/2026 09:00",
+                "creator": "Admin",
+                "ticket_type": "שירות",
+                "service_type": "מפעל הפיס",
+                "domain": "",
+                "priority": "Medium",
+                "description": "",
+                "solution": "",
+                "status": "בוצע",
+                "assigned_to": "ניר",
+                "details": {
+                    "terminal_number": "3002",
+                    "address": "D",
+                    "customer_request": "R4",
+                    "actions_taken": "A4",
+                },
+                "attachments": [],
+                "updates": [],
+            },
+        ])
+        self.app_module.save_support_tickets(tickets)
+
+        self.login("admin@nimbusip.com")
+        response = self.client.get("/pais-tickets-report-data?period=all&status=%D7%9E%D7%9E%D7%AA%D7%99%D7%9F%20%D7%9C%D7%AA%D7%99%D7%90%D7%95%D7%9D")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["period"], "all")
+        self.assertEqual(payload["summary"]["total"], 1)
+        self.assertEqual(payload["summary"]["coordination"], 1)
+        self.assertEqual(payload["tickets"][0]["details"]["terminal_number"], "3001")
+
+    def test_pais_report_period_defaults_to_all_in_ticket_page(self):
+        self.login("admin@nimbusip.com")
+
+        response = self.client.get("/pais-tickets", follow_redirects=False)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('<option value="all" selected>All periods</option>'.encode("utf-8"), response.data)
+
     def test_pais_csv_export_contains_counter_and_total(self):
         self.app_module.israel_now = lambda: datetime(2026, 7, 15, 10, 0, tzinfo=ZoneInfo("Asia/Jerusalem"))
         tickets = self.app_module.load_support_tickets()
@@ -1969,6 +2041,19 @@ class SupportTicketsTestCase(unittest.TestCase):
 
         blocked_response = self.client.get("/user-management", follow_redirects=False)
         self.assertEqual(blocked_response.status_code, 302)
+
+    def test_nastia_route_renders_for_user_with_nastia_permission(self):
+        with self.client.session_transaction() as session:
+            session["logged_in"] = True
+            session["username"] = "support@example.com"
+            session["role"] = "tickets_only"
+            session["allowed_pages"] = ["nastia_tickets"]
+
+        response = self.client.get("/nastia-tickets", follow_redirects=False)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("נסטיה".encode("utf-8"), response.data)
+        self.assertIn("תאום ביקורי טכנאי".encode("utf-8"), response.data)
 
     def test_selected_email_provider_honors_explicit_smtp_override(self):
         original_email_provider = os.environ.get("EMAIL_PROVIDER")

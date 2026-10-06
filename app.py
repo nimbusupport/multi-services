@@ -3163,6 +3163,9 @@ def pais_report_range(period, date_from_raw=None, date_to_raw=None):
     if custom_from or custom_to:
         return custom_from, custom_to
 
+    if period == "all":
+        return None, None
+
     now = israel_now()
     if period == "weekly":
         start = (now - timedelta(days=6)).replace(hour=0, minute=0, second=0, microsecond=0)
@@ -8131,6 +8134,7 @@ def nastia_tickets_page():
     board = get_ticket_board("pais")
     register_service_activity("nastia_tickets")
     allowed_pages = allowed_pages_for_current_user()
+    can_write_board = current_user_can_write()
     return render_template(
         "support_tickets.html",
         current_user=session.get("username", ""),
@@ -8162,11 +8166,14 @@ def nastia_tickets_page():
         can_edit_existing_tickets=True,
         can_view_board_report=False,
         default_ticket_scope="all",
+        access_level=current_user_access_level(),
+        can_write_board=can_write_board,
         can_access_home=can_access_home_dashboard(),
         can_access_support="support_tickets" in allowed_pages,
         can_access_pais="pais_tickets" in allowed_pages,
         can_access_hot="hot_tickets" in allowed_pages,
         can_access_nastia="nastia_tickets" in allowed_pages,
+        ticket_board_links_count=sum(1 for key in ("support_tickets", "pais_tickets", "hot_tickets", "nastia_tickets") if key in allowed_pages),
     )
 
 
@@ -8281,7 +8288,7 @@ def pais_tickets_report_data():
     period = (request.args.get("period") or "monthly").strip().lower()
     date_from = (request.args.get("date_from") or "").strip()
     date_to = (request.args.get("date_to") or "").strip()
-    if period not in {"daily", "weekly", "monthly"}:
+    if period not in {"all", "daily", "weekly", "monthly"}:
         period = "monthly"
 
     report = build_ticket_board_report(
@@ -8308,7 +8315,7 @@ def pais_tickets_report_export():
     export_format = (request.args.get("format") or "csv").strip().lower()
     date_from = (request.args.get("date_from") or "").strip()
     date_to = (request.args.get("date_to") or "").strip()
-    if period not in {"daily", "weekly", "monthly"}:
+    if period not in {"all", "daily", "weekly", "monthly"}:
         period = "monthly"
     if export_format not in {"csv", "pdf"}:
         export_format = "csv"
@@ -8325,6 +8332,7 @@ def pais_tickets_report_export():
     rows = build_ticket_board_export_rows(report)
     export_config = ticket_board_export_config(board_slug)
     csv_rows = [export_config["row_mapper"](row) for row in rows]
+    report_date_label = f"{report['date_from']}_to_{report['date_to']}" if (report.get("date_from") or report.get("date_to")) else "all_dates"
 
     if export_format == "pdf":
         pdf_buffer = build_pdf_buffer(
@@ -8345,7 +8353,7 @@ def pais_tickets_report_export():
             pdf_buffer,
             mimetype="application/pdf",
             as_attachment=True,
-            download_name=f"{board_slug}_tickets_{period}_{report['date_from']}_to_{report['date_to']}.pdf",
+            download_name=f"{board_slug}_tickets_{period}_{report_date_label}.pdf",
         )
 
     csv_text = io.StringIO()
@@ -8365,7 +8373,7 @@ def pais_tickets_report_export():
         output,
         mimetype="text/csv",
         as_attachment=True,
-        download_name=f"{board_slug}_tickets_{period}_{report['date_from']}_to_{report['date_to']}.csv",
+        download_name=f"{board_slug}_tickets_{period}_{report_date_label}.csv",
     )
 
 
