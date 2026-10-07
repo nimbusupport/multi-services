@@ -2086,6 +2086,9 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertIn("נסטיה".encode("utf-8"), response.data)
         self.assertIn("תאום ביקורי טכנאי".encode("utf-8"), response.data)
 
+        page_html = response.get_data(as_text=True)
+        self.assertIn('<option value="ממתין לתיאום">ממתין לתיאום</option>', page_html)
+        self.assertNotIn('<option value="ממתין">ממתין</option>', page_html)
         self.assertIn(b"canDeleteTickets: false", response.data)
 
     def test_selected_email_provider_honors_explicit_smtp_override(self):

@@ -2220,42 +2220,50 @@ async function submitFieldReport(event) {
 
 function displayTicketStatus(ticket) {
   const normalizedStatus = normalizePendingStatus(ticket?.status);
-  if (pageMode === "nastia" && isCoordinationTicket(ticket) && normalizedStatus === "ממתין לתיאום") {
-    return "ממתין";
+  if (pageMode === "nastia" && isCoordinationTicket(ticket) && normalizedStatus === "ממתין") {
+    return "ממתין לתיאום";
   }
   return normalizedStatus || "";
 }
 
 function statusOptionsForTicket(ticket) {
   const normalizedStatus = normalizePendingStatus(ticket.status);
+  const effectiveStatus = isCoordinationTicket(ticket) && isNastyaQueuePage && normalizedStatus === "ממתין"
+    ? "ממתין לתיאום"
+    : normalizedStatus;
   if (canAssignedTechnicianEditTicket(ticket)) {
-    const normalizedStatus = normalizePendingStatus(ticket.status);
-    const placeholder = TECHNICIAN_FINAL_STATUSES.includes(normalizedStatus)
+    const placeholder = TECHNICIAN_FINAL_STATUSES.includes(effectiveStatus)
       ? ""
       : '<option value="" selected disabled>בחר סטטוס</option>';
     return `${placeholder}${TECHNICIAN_FINAL_STATUSES.map((status) => `
-      <option value="${escapeHtml(status)}" ${normalizedStatus === status ? "selected" : ""}>${escapeHtml(status)}</option>
+      <option value="${escapeHtml(status)}" ${effectiveStatus === status ? "selected" : ""}>${escapeHtml(status)}</option>
     `).join("")}`;
   }
-  if (isCoordinationTicket(ticket) && isNastyaQueuePage && NASTYA_EDITABLE_STATUSES.includes(normalizedStatus)) {
+  if (isCoordinationTicket(ticket) && isNastyaQueuePage && NASTYA_EDITABLE_STATUSES.includes(effectiveStatus)) {
     const options = [
-      { value: normalizedStatus, label: displayTicketStatus(ticket) },
+      { value: effectiveStatus, label: displayTicketStatus({ ...ticket, status: effectiveStatus }) },
       ...coordinationFinalStatusesForCurrentUser()
-        .filter((status) => status !== normalizedStatus)
+        .filter((status) => status !== effectiveStatus)
         .map((status) => ({ value: status, label: status })),
     ];
     return options.map(({ value, label }) => `
-      <option value="${escapeHtml(value)}" ${normalizedStatus === value ? "selected" : ""}>${escapeHtml(label)}</option>
+      <option value="${escapeHtml(value)}" ${effectiveStatus === value ? "selected" : ""}>${escapeHtml(label)}</option>
     `).join("");
   }
-  const options = isCoordinationTicket(ticket) ? availablePaisStatusesForCurrentUser(ticket.status) : supportStatuses;
+  const options = isCoordinationTicket(ticket)
+    ? availablePaisStatusesForCurrentUser(ticket.status).filter((status) => !(isNastyaQueuePage && normalizePendingStatus(status) === "ממתין"))
+    : supportStatuses;
   return options.map((status) => `
-    <option value="${escapeHtml(status)}" ${normalizedStatus === status ? "selected" : ""}>${escapeHtml(status)}</option>
+    <option value="${escapeHtml(status)}" ${effectiveStatus === status ? "selected" : ""}>${escapeHtml(status)}</option>
   `).join("");
 }
 
 function canNastyaEditPaisInlineStatus(ticket) {
-  return isCoordinationTicket(ticket) && isNastyaQueuePage && NASTYA_EDITABLE_STATUSES.includes(normalizePendingStatus(ticket.status));
+  const normalizedStatus = normalizePendingStatus(ticket.status);
+  const effectiveStatus = isCoordinationTicket(ticket) && isNastyaQueuePage && normalizedStatus === "ממתין"
+    ? "ממתין לתיאום"
+    : normalizedStatus;
+  return isCoordinationTicket(ticket) && isNastyaQueuePage && NASTYA_EDITABLE_STATUSES.includes(effectiveStatus);
 }
 
 function confirmCancelledStatusChange(ticket, nextStatus) {
@@ -2528,14 +2536,18 @@ function coordinationStatusEditor(ticket) {
     return "";
   }
   const isCoordinatorView = isNastyaQueuePage;
-  const showCoordinatorStatus = isCoordinatorView && NASTYA_EDITABLE_STATUSES.includes(ticket.status);
+  const normalizedStatus = normalizePendingStatus(ticket.status);
+  const coordinatorStatus = isCoordinatorView && normalizedStatus === "ממתין"
+    ? "ממתין לתיאום"
+    : normalizedStatus;
+  const showCoordinatorStatus = isCoordinatorView && NASTYA_EDITABLE_STATUSES.includes(coordinatorStatus);
   const coordinatorStatusOptions = [
-    { value: ticket.status, label: displayTicketStatus(ticket) },
+    { value: coordinatorStatus, label: displayTicketStatus({ ...ticket, status: coordinatorStatus }) },
     ...coordinationFinalStatusesForCurrentUser()
-      .filter((status) => status !== ticket.status)
+      .filter((status) => status !== coordinatorStatus)
       .map((status) => ({ value: status, label: status })),
   ]
-    .map(({ value, label }) => `<option value="${escapeHtml(value)}" ${ticket.status === value ? "selected" : ""}>${escapeHtml(label)}</option>`)
+    .map(({ value, label }) => `<option value="${escapeHtml(value)}" ${coordinatorStatus === value ? "selected" : ""}>${escapeHtml(label)}</option>`)
     .join("");
 
   if (showCoordinatorStatus) {

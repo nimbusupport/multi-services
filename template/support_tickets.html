@@ -228,8 +228,8 @@
           <select id="status-filter">
             <option value="">הכל</option>
             {% if ticket_board.workflow == 'coordination' %}
-            <option value="ממתין">ממתין</option>
-            <option value="ממתין לתיאום">{% if page_mode == 'nastia' %}ממתין{% else %}ממתין לתיאום{% endif %}</option>
+            {% if page_mode != 'nastia' %}<option value="ממתין">ממתין</option>{% endif %}
+            <option value="ממתין לתיאום">ממתין לתיאום</option>
             <option value="תואם">תואם</option>
             <option value="אין מענה">אין מענה</option>
             <option value="בוצע">בוצע</option>
