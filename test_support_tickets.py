@@ -2086,6 +2086,8 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertIn("נסטיה".encode("utf-8"), response.data)
         self.assertIn("תאום ביקורי טכנאי".encode("utf-8"), response.data)
 
+        self.assertIn(b"canDeleteTickets: false", response.data)
+
     def test_selected_email_provider_honors_explicit_smtp_override(self):
         original_email_provider = os.environ.get("EMAIL_PROVIDER")
         original_resend_api_key = os.environ.get("RESEND_API_KEY")
@@ -2138,6 +2140,105 @@ class SupportTicketsTestCase(unittest.TestCase):
         response = self.client.get("/welcome?token=test-token", follow_redirects=False)
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"Set your password", response.data)
+
+    def test_login_request_registration_accepts_contractor_organization(self):
+        original_sender = self.app_module.send_registration_request_email
+        sent = []
+        try:
+            self.app_module.send_registration_request_email = lambda email, full_name="", organization="": sent.append({"email": email, "full_name": full_name, "organization": organization})
+            response = self.client.post(
+                "/login/request-registration",
+                json={"email": "new.contractor@nimbusip.com", "full_name": "Contractor User", "organization": "Contractor"},
+            )
+        finally:
+            self.app_module.send_registration_request_email = original_sender
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(sent[0]["organization"], "Contractor")
+
+    def test_login_request_registration_requires_full_name(self):
+        response = self.client.post(
+            "/login/request-registration",
+            json={"email": "new.user@nimbusip.com", "full_name": "", "organization": "Nimbus"},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        payload = response.get_json()
+        self.assertEqual(payload["message"], "Full name is required")
+
+    def test_root_admin_support_page_shows_delete_ticket_option(self):
+        with self.client.session_transaction() as session:
+            session["logged_in"] = True
+            session["username"] = "admin@nimbusip.com"
+            session["role"] = "admin"
+            session["allowed_pages"] = ["support_tickets"]
+            session["access_level"] = self.app_module.ACCESS_LEVEL_READ_WRITE
+
+        response = self.client.get("/support-tickets", follow_redirects=False)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"canDeleteTickets: true", response.data)
+
+    def test_zura_root_admin_gets_full_access_and_write_permissions(self):
+        with self.app.test_request_context("/"):
+            from flask import session
+
+            session["logged_in"] = True
+            session["username"] = "zura@nimbusip.com"
+            session["role"] = "user"
+            session["allowed_pages"] = ["pais_tickets"]
+            session["access_level"] = self.app_module.ACCESS_LEVEL_READ_ONLY
+
+            self.assertTrue(self.app_module.support_user_is_admin())
+            self.assertTrue(self.app_module.support_user_can_manage_users())
+            self.assertIn("user_management", self.app_module.allowed_pages_for_current_user())
+            self.assertTrue(self.app_module.current_user_can_write())
+
+    def test_support_ticket_assignee_choices_include_active_user_names_without_duplicates(self):
+        original_list_user_profiles = self.app_module.list_user_profiles
+        try:
+            self.app_module.list_user_profiles = lambda: [
+                {"full_name": "Zura Shalikashvili", "active": True},
+                {"full_name": "Zura Shapira", "active": True},
+                {"full_name": "Dana Cohen", "active": True},
+                {"full_name": "Inactive User", "active": False},
+            ]
+            users = self.app_module.support_ticket_assignee_choices([])
+        finally:
+            self.app_module.list_user_profiles = original_list_user_profiles
+
+        self.assertEqual(users.count("Zura.S"), 1)
+        self.assertIn("Dana.C", users)
+        self.assertNotIn("Inactive.U", users)
+
+    def test_support_ticket_create_accepts_active_user_assignee_name(self):
+        original_list_user_profiles = self.app_module.list_user_profiles
+        try:
+            self.app_module.list_user_profiles = lambda: [
+                {"full_name": "Dana Cohen", "active": True},
+            ]
+            self.login("admin@nimbusip.com")
+            response = self.client.post(
+                "/support-tickets-create",
+                data={
+                    "board_slug": "support",
+                    "service_type": "\u05de\u05e6\u05dc\u05de\u05d5\u05ea",
+                    "ticket_type": "\u05ea\u05e7\u05dc\u05d4",
+                    "priority": "Medium",
+                    "description": "Check",
+                    "solution": "",
+                    "assigned_to": "Dana Cohen",
+                },
+            )
+        finally:
+            self.app_module.list_user_profiles = original_list_user_profiles
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["ticket"]["assigned_to"], "Dana.C")
 
     def test_vercel_config_keeps_app_py_function_entry(self):
         with open("vercel.json", "r", encoding="utf-8") as handle:

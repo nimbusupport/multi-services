@@ -35,6 +35,7 @@ const canManageExistingTicketAttachments = supportTicketsContext.canManageExisti
 const canDeleteTicketAttachments = supportTicketsContext.canDeleteTicketAttachments === true || supportTicketsContext.canDeleteTicketAttachments === "true";
 const canEditExistingTickets = supportTicketsContext.canEditExistingTickets === true || supportTicketsContext.canEditExistingTickets === "true";
 const canViewBoardReport = supportTicketsContext.canViewBoardReport === true || supportTicketsContext.canViewBoardReport === "true";
+const canDeleteTickets = supportTicketsContext.canDeleteTickets === true || supportTicketsContext.canDeleteTickets === "true";
 const defaultTicketScope = String(supportTicketsContext.defaultTicketScope || "all");
 const isNastyaQueuePage = pageMode === "nastia" || ticketQueue === "nastia";
 const isAssignedTechnicianMode = ticketOperatorMode === "assigned_technician";
@@ -609,7 +610,7 @@ function renderTickets(tickets, users) {
         <span class="pill ${statusClass}">${escapeHtml(displayTicketStatus(ticket))}</span>
         <span class="pill ${priorityClass(ticket.priority || "Medium")}">${escapeHtml(ticket.priority || "Medium")}</span>
         <button class="copy-ticket-btn" type="button" data-ticket-id="${ticket.id}" title="Copy ticket details" aria-label="Copy ticket details"><i class="fa-regular fa-copy"></i></button>
-        ${isAdmin ? `<button class="delete-ticket-btn" type="button" data-ticket-id="${ticket.id}" title="Delete ticket"><i class="fa-solid fa-trash"></i></button>` : ""}
+        ${canDeleteTickets ? `<button class="delete-ticket-btn" type="button" data-ticket-id="${ticket.id}" title="Delete ticket"><i class="fa-solid fa-trash"></i></button>` : ""}
       </div>
     `;
     row.addEventListener("click", (event) => {
@@ -2475,7 +2476,7 @@ function renderTickets(tickets, users) {
         <span class="pill ${statusClass}">${escapeHtml(displayTicketStatus(ticket))}</span>
         <span class="pill ${priorityClass(ticket.priority || "Medium")}">${escapeHtml(ticket.priority || "Medium")}</span>
         <button class="copy-ticket-btn" type="button" data-ticket-id="${ticket.id}" title="Copy ticket details" aria-label="Copy ticket details"><i class="fa-regular fa-copy"></i></button>
-        ${isAdmin ? `<button class="delete-ticket-btn" type="button" data-ticket-id="${ticket.id}" title="Delete ticket"><i class="fa-solid fa-trash"></i></button>` : ""}
+        ${canDeleteTickets ? `<button class="delete-ticket-btn" type="button" data-ticket-id="${ticket.id}" title="Delete ticket"><i class="fa-solid fa-trash"></i></button>` : ""}
       </div>
     `;
     row.addEventListener("click", (event) => {
