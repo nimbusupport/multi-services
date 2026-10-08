@@ -5,6 +5,8 @@ let reportQuickFilter = "all";
 let leaderboardWorkerFilter = "";
 let ticketsLoading = false;
 let paisReportLoading = false;
+let ticketsAbortController = null;
+let paisReportAbortController = null;
 let autoRefreshTimer = null;
 let leaderboardWorkersVisible = false;
 let imagePreviewScale = 1;
@@ -1422,7 +1424,11 @@ function closeImagePreview() {
 }
 
 async function loadTickets() {
-  if (ticketsLoading) return;
+  if (ticketsAbortController) {
+    ticketsAbortController.abort();
+  }
+  const controller = new AbortController();
+  ticketsAbortController = controller;
   ticketsLoading = true;
   setTicketsLoading(true);
   const params = new URLSearchParams({
@@ -1438,15 +1444,22 @@ async function loadTickets() {
     worker: leaderboardWorkerFilter,
   });
   try {
-    const res = await fetch(`/support-tickets-data?${params.toString()}`);
+    const res = await fetch(`/support-tickets-data?${params.toString()}`, { signal: controller.signal });
     if (!res.ok) return;
     const data = normalizeLegacyHebrewData(await res.json());
     renderStats(data.stats);
     renderTickets(applyNastyaBoardFilter(applyReportQuickFilter(data.tickets)), data.users);
     document.getElementById("next-ticket-id").textContent = data.next_id || "#0001";
+  } catch (err) {
+    if (err?.name !== "AbortError") {
+      throw err;
+    }
   } finally {
-    ticketsLoading = false;
-    setTicketsLoading(false);
+    if (ticketsAbortController === controller) {
+      ticketsAbortController = null;
+      ticketsLoading = false;
+      setTicketsLoading(false);
+    }
   }
 }
 
@@ -1579,16 +1592,27 @@ function renderPaisReport(data) {
 
 async function loadPaisReport() {
   if (!boardSupportsReport(boardSlug)) return;
-  if (paisReportLoading) return;
+  if (paisReportAbortController) {
+    paisReportAbortController.abort();
+  }
+  const controller = new AbortController();
+  paisReportAbortController = controller;
   paisReportLoading = true;
   try {
-    const res = await fetch(`/pais-tickets-report-data?${paisReportParams().toString()}`);
+    const res = await fetch(`/pais-tickets-report-data?${paisReportParams().toString()}`, { signal: controller.signal });
     if (!res.ok) return;
     const data = normalizeLegacyHebrewData(await res.json());
     if (!data.ok) return;
     renderPaisReport(data);
+  } catch (err) {
+    if (err?.name !== "AbortError") {
+      throw err;
+    }
   } finally {
-    paisReportLoading = false;
+    if (paisReportAbortController === controller) {
+      paisReportAbortController = null;
+      paisReportLoading = false;
+    }
   }
 }
 
@@ -1928,9 +1952,11 @@ async function deleteDetailAttachment(ticketId, folder, savedName) {
 async function submitTicket(event) {
   event.preventDefault();
   const form = event.currentTarget;
+  if (form.dataset.submitting === "true") return;
   const message = document.getElementById("ticket-form-message");
   const submit = form.querySelector(".create-ticket-btn");
   message.textContent = "";
+  form.dataset.submitting = "true";
   submit.disabled = true;
 
   try {
@@ -1955,6 +1981,7 @@ async function submitTicket(event) {
   } catch (err) {
     message.textContent = err.message;
   } finally {
+    form.dataset.submitting = "false";
     submit.disabled = false;
   }
 }

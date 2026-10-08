@@ -2343,6 +2343,32 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertIn("Dana.C", users)
         self.assertNotIn("Inactive.U", users)
 
+    def test_support_ticket_create_avoids_duplicate_retry_submission(self):
+        self.login("admin@nimbusip.com")
+        payload = {
+            "board_slug": "support",
+            "service_type": "מצלמות",
+            "ticket_type": "תקלה",
+            "priority": "Medium",
+            "description": "Duplicate protection check",
+            "solution": "",
+            "assigned_to": "",
+        }
+
+        first_response = self.client.post("/support-tickets-create", data=payload)
+        second_response = self.client.post("/support-tickets-create", data=payload)
+
+        self.assertEqual(first_response.status_code, 200)
+        self.assertEqual(second_response.status_code, 200)
+        first_payload = first_response.get_json()
+        second_payload = second_response.get_json()
+        self.assertTrue(first_payload["ok"])
+        self.assertTrue(second_payload["ok"])
+        self.assertEqual(first_payload["ticket"]["id"], second_payload["ticket"]["id"])
+        self.assertTrue(second_payload.get("duplicate"))
+        tickets = [ticket for ticket in self.app_module.load_support_tickets("support") if ticket.get("description") == "Duplicate protection check"]
+        self.assertEqual(len(tickets), 1)
+
     def test_support_ticket_create_accepts_active_user_assignee_name(self):
         original_list_user_profiles = self.app_module.list_user_profiles
         try:

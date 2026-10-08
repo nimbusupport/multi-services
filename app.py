@@ -596,6 +596,7 @@ TECHNICIAN_REMINDER_UPDATE_FIELD = "system.technician_reminder_sent"
 TECHNICIAN_REMINDER_TARGET_HOUR = 8
 TECHNICIAN_REMINDER_TARGET_MINUTE = 30
 TECHNICIAN_REMINDER_WINDOW_MINUTES = 10
+SUPPORT_TICKET_DUPLICATE_WINDOW_SECONDS = 15
 RESEND_API_KEY = (os.environ.get("RESEND_API_KEY") or "").strip()
 RESEND_API_URL = (os.environ.get("RESEND_API_URL") or "https://api.resend.com/emails").strip()
 RESEND_FROM = (
@@ -980,6 +981,54 @@ def ticket_owner_name(ticket):
     if board_supports_coordination(ticket.get("board_slug")):
         return canonical_support_user_name(details.get("coordinated_worker"))
     return canonical_support_user_name(ticket.get("assigned_to"))
+
+
+def support_ticket_attachment_names(ticket=None, attachment_files=None):
+    names = []
+    if attachment_files is not None:
+        for file_storage in attachment_files or []:
+            filename = str(getattr(file_storage, "filename", "") or "").strip()
+            if filename:
+                names.append(filename.lower())
+    else:
+        for attachment in (ticket or {}).get("attachments") or []:
+            filename = str((attachment or {}).get("original_name") or "").strip()
+            if filename:
+                names.append(filename.lower())
+    return sorted(set(names))
+
+
+def support_ticket_duplicate_signature(ticket, attachment_files=None):
+    ticket = normalize_support_ticket(ticket or {})
+    return json.dumps({
+        "creator": str(ticket.get("creator") or "").strip(),
+        "board_slug": str(ticket.get("board_slug") or "").strip(),
+        "ticket_type": str(ticket.get("ticket_type") or "").strip(),
+        "service_type": str(ticket.get("service_type") or "").strip(),
+        "domain": str(ticket.get("domain") or "").strip(),
+        "priority": str(ticket.get("priority") or "").strip(),
+        "description": str(ticket.get("description") or "").strip(),
+        "solution": str(ticket.get("solution") or "").strip(),
+        "status": str(ticket.get("status") or "").strip(),
+        "assigned_to": canonical_support_user_name(ticket.get("assigned_to")),
+        "details": normalize_legacy_hebrew_data(ticket.get("details") or {}),
+        "attachments": support_ticket_attachment_names(ticket=ticket, attachment_files=attachment_files),
+    }, ensure_ascii=False, sort_keys=True)
+
+
+def find_recent_duplicate_support_ticket(ticket_payload, attachment_files=None, window_seconds=SUPPORT_TICKET_DUPLICATE_WINDOW_SECONDS):
+    candidate_created_at = parse_support_ticket_datetime(ticket_payload.get("created_at")) or israel_now()
+    signature = support_ticket_duplicate_signature(ticket_payload, attachment_files=attachment_files)
+    for ticket in load_support_tickets(ticket_payload.get("board_slug")):
+        existing_created_at = parse_support_ticket_datetime(ticket.get("created_at"))
+        if not existing_created_at:
+            continue
+        age_seconds = (candidate_created_at - existing_created_at).total_seconds()
+        if age_seconds < 0 or age_seconds > window_seconds:
+            continue
+        if support_ticket_duplicate_signature(ticket) == signature:
+            return ticket
+    return None
 
 
 def assigned_technician_can_access_ticket(ticket, actor_name=None):
@@ -8691,6 +8740,10 @@ def support_tickets_create():
         legacy_attachment = request.files.get("attachment")
         if legacy_attachment and legacy_attachment.filename:
             attachment_files.append(legacy_attachment)
+
+    duplicate_ticket = find_recent_duplicate_support_ticket(ticket_payload, attachment_files=attachment_files)
+    if duplicate_ticket:
+        return jsonify({"ok": True, "ticket": duplicate_ticket, "duplicate": True})
 
     try:
         ticket = create_support_ticket_record(ticket_payload, attachment_files=attachment_files)
