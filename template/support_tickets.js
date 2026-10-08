@@ -2,6 +2,7 @@ let currentScope = "all";
 let debounceTimer = null;
 let lastTickets = [];
 let reportQuickFilter = "all";
+let leaderboardWorkerFilter = "";
 let ticketsLoading = false;
 let paisReportLoading = false;
 let autoRefreshTimer = null;
@@ -1434,6 +1435,7 @@ async function loadTickets() {
     date_from: document.getElementById("date-from-filter").value,
     date_to: document.getElementById("date-to-filter").value,
     search: document.getElementById("ticket-search").value,
+    worker: leaderboardWorkerFilter,
   });
   try {
     const res = await fetch(`/support-tickets-data?${params.toString()}`);
@@ -1478,6 +1480,7 @@ function paisReportParams() {
     format: document.getElementById("pais-report-format")?.value || "csv",
     date_from: document.getElementById("pais-report-from")?.value || "",
     date_to: document.getElementById("pais-report-to")?.value || "",
+    worker: leaderboardWorkerFilter,
   });
 }
 
@@ -1522,8 +1525,9 @@ function renderPaisReport(data) {
   });
 
   const leaderboard = Array.isArray(data?.leaderboard) ? data.leaderboard : [];
+  const activeWorkerLabel = String(data?.worker || leaderboardWorkerFilter || "");
   const leaderboardCards = leaderboard.map((item, index) => `
-    <article class="leaderboard-card">
+    <article class="leaderboard-card ${item.active ? "active" : ""}" data-worker="${escapeHtml(item.user)}" role="button" tabindex="0" aria-pressed="${item.active ? "true" : "false"}" title="לחץ כדי לסנן לפי העובד הזה">
       ${leaderboardRankMarkup(index, item.done)}
       <div class="leaderboard-main">
         <h3>${escapeHtml(item.user)}</h3>
@@ -1540,8 +1544,9 @@ function renderPaisReport(data) {
   leaderboardHost.innerHTML = `
     <div class="leaderboard-toolbar">
       <div class="leaderboard-toolbar-copy">
-      <p>רשימת העובדים מוסתרת כברירת מחדל.</p>
+      <p>רשימת העובדים מוסתרת כברירת מחדל. לחץ על עובד כדי לסנן את הקריאות שלו.</p>
       <p class="leaderboard-period-total">בוצע בתקופה: ${escapeHtml(data?.period_done_total ?? summary.done ?? 0)}</p>
+      ${activeWorkerLabel ? `<p class="leaderboard-period-total">סינון עובד: ${escapeHtml(activeWorkerLabel)}</p>` : ""}
       </div>
       <button class="icon-btn leaderboard-toggle-btn" id="leaderboard-toggle-btn" type="button" aria-expanded="${leaderboardWorkersVisible ? "true" : "false"}" aria-label="${leaderboardWorkersVisible ? "הסתר עובדים" : "הצג עובדים"}">
         <i class="fa-solid ${leaderboardWorkersVisible ? "fa-eye-slash" : "fa-eye"}"></i>
@@ -1555,6 +1560,20 @@ function renderPaisReport(data) {
   document.getElementById("leaderboard-toggle-btn")?.addEventListener("click", () => {
     leaderboardWorkersVisible = !leaderboardWorkersVisible;
     renderPaisReport(data);
+  });
+  leaderboardHost.querySelectorAll(".leaderboard-card[data-worker]").forEach((card) => {
+    const applyWorkerFilter = async () => {
+      const workerName = String(card.dataset.worker || "").trim();
+      leaderboardWorkerFilter = leaderboardWorkerFilter === workerName ? "" : workerName;
+      await loadPaisReport();
+      await loadTickets();
+    };
+    card.addEventListener("click", applyWorkerFilter);
+    card.addEventListener("keydown", async (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      await applyWorkerFilter();
+    });
   });
 }
 

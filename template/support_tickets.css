@@ -665,6 +665,30 @@ body.dashboard-page {
   grid-template-columns: 64px minmax(0, 1fr) auto;
   gap: 12px;
   align-items: center;
+  cursor: pointer;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease, background 0.18s ease;
+}
+
+.leaderboard-card:hover {
+  border-color: #a9bddf;
+  box-shadow: 0 8px 18px rgba(40, 76, 138, 0.08);
+  transform: translateY(-1px);
+}
+
+.leaderboard-card:focus-visible {
+  outline: none;
+  border-color: #4f6ea8;
+  box-shadow: 0 0 0 3px rgba(79, 110, 168, 0.18);
+}
+
+.leaderboard-card.active {
+  border-color: #4f6ea8;
+  background: #edf3ff;
+  box-shadow: 0 0 0 3px rgba(79, 110, 168, 0.14);
+}
+
+.leaderboard-card.active .leaderboard-main h3 {
+  color: #1d4f91;
 }
 
 .leaderboard-rank {

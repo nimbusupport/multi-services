@@ -3275,15 +3275,19 @@ def pais_report_range(period, date_from_raw=None, date_to_raw=None):
     return start, end
 
 
-def build_ticket_board_report(tickets, status_filter="", period="daily", date_from_raw="", date_to_raw=""):
+def build_ticket_board_report(tickets, status_filter="", period="daily", date_from_raw="", date_to_raw="", worker_filter=""):
+    worker_filter = canonical_support_user_name(worker_filter)
     report_from, report_to = pais_report_range(period, date_from_raw, date_to_raw)
     period_filtered = filter_tickets_by_created_range(tickets, report_from, report_to)
     filtered = list(period_filtered)
     if status_filter:
         filtered = [ticket for ticket in filtered if ticket.get("status") == status_filter]
+    if worker_filter:
+        filtered = [ticket for ticket in filtered if ticket_owner_name(ticket) == worker_filter]
 
+    leaderboard_users = technician_support_user_choices(tickets)
     leaderboard = []
-    for user in TECHNICIAN_SUPPORT_USERS:
+    for user in leaderboard_users:
         user_tickets = [ticket for ticket in filtered if ticket_owner_name(ticket) == user]
         done_count = len([ticket for ticket in user_tickets if support_ticket_is_done(ticket)])
         waiting_count = len([ticket for ticket in user_tickets if support_ticket_is_open(ticket)])
@@ -3297,6 +3301,7 @@ def build_ticket_board_report(tickets, status_filter="", period="daily", date_fr
             "waiting": waiting_count,
             "coordination": coordination_count,
             "completion_rate": completion_rate,
+            "active": user == worker_filter,
         })
     leaderboard.sort(key=lambda item: (-item["done"], -item["total"], item["user"]))
 
@@ -3305,6 +3310,7 @@ def build_ticket_board_report(tickets, status_filter="", period="daily", date_fr
         "date_from": report_from.strftime("%Y-%m-%d") if report_from else "",
         "date_to": report_to.strftime("%Y-%m-%d") if report_to else "",
         "status": status_filter,
+        "worker": worker_filter,
         "tickets": filtered,
         "period_done_total": len([ticket for ticket in period_filtered if support_ticket_is_done(ticket)]),
         "summary": {
@@ -8296,6 +8302,7 @@ def support_tickets_data():
     scope = (request.args.get("scope") or "all").strip().lower()
     status_filter = (request.args.get("status") or "").strip()
     assignee_filter = (request.args.get("assignee") or "").strip()
+    worker_filter = canonical_support_user_name((request.args.get("worker") or "").strip())
     priority_filter = (request.args.get("priority") or "").strip()
     date_from = (request.args.get("date_from") or "").strip()
     date_to = (request.args.get("date_to") or "").strip()
@@ -8327,6 +8334,8 @@ def support_tickets_data():
         filtered = [t for t in filtered if t.get("status") == status_filter]
     if assignee_filter:
         filtered = [t for t in filtered if t.get("assigned_to") == assignee_filter]
+    if worker_filter:
+        filtered = [t for t in filtered if ticket_owner_name(t) == worker_filter]
     if priority_filter:
         filtered = [t for t in filtered if t.get("priority") == priority_filter]
     filtered = filter_tickets_by_created_range(
@@ -8392,6 +8401,7 @@ def pais_tickets_report_data():
     period = (request.args.get("period") or "monthly").strip().lower()
     date_from = (request.args.get("date_from") or "").strip()
     date_to = (request.args.get("date_to") or "").strip()
+    worker_filter = canonical_support_user_name((request.args.get("worker") or "").strip())
     if period not in {"all", "daily", "weekly", "monthly"}:
         period = "monthly"
 
@@ -8401,6 +8411,7 @@ def pais_tickets_report_data():
         period=period,
         date_from_raw=date_from,
         date_to_raw=date_to,
+        worker_filter=worker_filter,
     )
     return jsonify({"ok": True, "board": get_ticket_board(board_slug), **report})
 
@@ -8419,6 +8430,7 @@ def pais_tickets_report_export():
     export_format = (request.args.get("format") or "csv").strip().lower()
     date_from = (request.args.get("date_from") or "").strip()
     date_to = (request.args.get("date_to") or "").strip()
+    worker_filter = canonical_support_user_name((request.args.get("worker") or "").strip())
     if period not in {"all", "daily", "weekly", "monthly"}:
         period = "monthly"
     if export_format not in {"csv", "pdf"}:
@@ -8430,6 +8442,7 @@ def pais_tickets_report_export():
         period=period,
         date_from_raw=date_from,
         date_to_raw=date_to,
+        worker_filter=worker_filter,
     )
 
     board = get_ticket_board(board_slug)

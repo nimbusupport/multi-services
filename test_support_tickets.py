@@ -1400,6 +1400,133 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertEqual(payload["stats"]["board_waiting"]["pais"], 1)
         self.assertEqual(payload["stats"]["board_waiting"]["hot-kiryot"], 1)
 
+    def test_pais_report_includes_mustafa_workers_in_leaderboard(self):
+        self.login("admin@nimbusip.com")
+        response = self.client.get("/pais-tickets-report-data?period=all")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        users = [item["user"] for item in payload["leaderboard"]]
+        self.assertIn("מוסטפה.א", users)
+        self.assertIn("מוסטפה.ח", users)
+
+    def test_pais_report_can_filter_by_worker(self):
+        tickets = self.app_module.load_support_tickets()
+        tickets.extend([
+            {
+                "id": 2,
+                "board_slug": "pais",
+                "created_at": "2026-07-08T09:00:00+03:00",
+                "created_at_display": "08/07/2026 09:00",
+                "creator": "Admin",
+                "ticket_type": "שירות",
+                "service_type": "מפעל הפיס",
+                "domain": "",
+                "priority": "Medium",
+                "description": "",
+                "solution": "",
+                "status": "בוצע",
+                "assigned_to": "ניר",
+                "details": {
+                    "terminal_number": "2001",
+                    "address": "A",
+                    "customer_request": "R1",
+                    "actions_taken": "A1",
+                    "coordinated_worker": "מוסטפה.א",
+                },
+                "attachments": [],
+                "updates": [],
+            },
+            {
+                "id": 3,
+                "board_slug": "pais",
+                "created_at": "2026-07-08T10:00:00+03:00",
+                "created_at_display": "08/07/2026 10:00",
+                "creator": "Admin",
+                "ticket_type": "שירות",
+                "service_type": "מפעל הפיס",
+                "domain": "",
+                "priority": "Medium",
+                "description": "",
+                "solution": "",
+                "status": "ממתין לתיאום",
+                "assigned_to": "זורה",
+                "details": {
+                    "terminal_number": "2002",
+                    "address": "B",
+                    "customer_request": "R2",
+                    "actions_taken": "A2",
+                    "coordinated_worker": "מוסטפה.ח",
+                },
+                "attachments": [],
+                "updates": [],
+            },
+        ])
+        self.app_module.save_support_tickets(tickets)
+
+        self.login("admin@nimbusip.com")
+        response = self.client.get("/pais-tickets-report-data?period=all&worker=מוסטפה.א")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["worker"], "מוסטפה.א")
+        self.assertEqual(payload["summary"]["total"], 1)
+        self.assertEqual(len(payload["tickets"]), 1)
+        self.assertEqual(payload["tickets"][0]["details"]["coordinated_worker"], "מוסטפה.א")
+        active_users = [item["user"] for item in payload["leaderboard"] if item.get("active")]
+        self.assertEqual(active_users, ["מוסטפה.א"])
+
+    def test_support_tickets_data_can_filter_by_worker_owner(self):
+        tickets = self.app_module.load_support_tickets()
+        tickets.extend([
+            {
+                "id": 2,
+                "board_slug": "pais",
+                "created_at": "2026-07-08T09:00:00+03:00",
+                "created_at_display": "08/07/2026 09:00",
+                "creator": "Admin",
+                "ticket_type": "שירות",
+                "service_type": "מפעל הפיס",
+                "domain": "",
+                "priority": "Medium",
+                "description": "",
+                "solution": "",
+                "status": "בוצע",
+                "assigned_to": "ניר",
+                "details": {"terminal_number": "2001", "address": "A", "coordinated_worker": "מוסטפה.א"},
+                "attachments": [],
+                "updates": [],
+            },
+            {
+                "id": 3,
+                "board_slug": "pais",
+                "created_at": "2026-07-08T10:00:00+03:00",
+                "created_at_display": "08/07/2026 10:00",
+                "creator": "Admin",
+                "ticket_type": "שירות",
+                "service_type": "מפעל הפיס",
+                "domain": "",
+                "priority": "Medium",
+                "description": "",
+                "solution": "",
+                "status": "ממתין לתיאום",
+                "assigned_to": "זורה",
+                "details": {"terminal_number": "2002", "address": "B", "coordinated_worker": "מוסטפה.ח"},
+                "attachments": [],
+                "updates": [],
+            },
+        ])
+        self.app_module.save_support_tickets(tickets)
+
+        self.login("admin@nimbusip.com")
+        response = self.client.get("/support-tickets-data?board=pais&worker=מוסטפה.א")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(len(payload["tickets"]), 1)
+        self.assertEqual(payload["tickets"][0]["details"]["coordinated_worker"], "מוסטפה.א")
+
     def test_pais_report_filters_by_status_and_date(self):
         tickets = self.app_module.load_support_tickets()
         tickets.extend([
