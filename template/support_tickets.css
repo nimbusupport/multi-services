@@ -1994,7 +1994,8 @@ textarea {
 
 .image-card {
   position: relative;
-  width: min(1320px, calc(100vw - 40px));
+  width: auto;
+  max-width: calc(100vw - 40px);
   max-height: calc(100vh - 36px);
   padding: 14px;
   background: #171714;
@@ -2029,13 +2030,17 @@ textarea {
 }
 
 .image-stage {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: auto;
-  height: calc(100vh - 120px);
+  width: auto;
+  height: auto;
+  max-width: min(calc(100vw - 68px), 1280px);
   max-height: calc(100vh - 120px);
-  min-height: min(70vh, 760px);
+  min-height: 0;
+  min-width: 0;
   padding: 0;
   border-radius: 14px;
   background:
@@ -2045,19 +2050,46 @@ textarea {
   background-size: 28px 28px;
 }
 
+.image-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: rgba(23, 23, 20, 0.72);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 800;
+  z-index: 1;
+}
+
+.image-loading[hidden] {
+  display: none;
+}
+
+.image-stage.loading {
+  min-width: min(60vw, 640px);
+  min-height: min(45vh, 420px);
+}
+
 .image-card img {
   display: block;
-  width: 100%;
-  height: 100%;
-  max-width: 100%;
-  max-height: 100%;
+  width: auto;
+  height: auto;
+  max-width: min(calc(100vw - 68px), 1280px);
+  max-height: calc(100vh - 120px);
   margin: 0 auto;
   border-radius: 10px;
   object-fit: contain;
   transform-origin: center center;
-  transition: transform 0.18s ease;
+  transition: transform 0.18s ease, opacity 0.18s ease;
   cursor: zoom-in;
   box-shadow: 0 16px 50px rgba(0, 0, 0, 0.38);
+}
+
+.image-card img.loading {
+  opacity: 0;
 }
 
 .image-close {

@@ -1385,6 +1385,37 @@ function adjustImagePreviewScale(delta) {
   applyImagePreviewScale(imagePreviewScale + delta);
 }
 
+function setImagePreviewLoading(isLoading) {
+  const loader = document.getElementById("image-loading");
+  const preview = document.getElementById("image-preview");
+  const stage = document.getElementById("image-stage");
+  if (loader) loader.hidden = !isLoading;
+  if (preview) preview.classList.toggle("loading", isLoading);
+  if (stage) stage.classList.toggle("loading", isLoading);
+}
+
+function syncImagePreviewLayout() {
+  const modal = document.getElementById("image-modal");
+  const card = document.querySelector("#image-modal .image-card");
+  const stage = document.getElementById("image-stage");
+  const preview = document.getElementById("image-preview");
+  if (!modal || !card || !stage || !preview || !preview.naturalWidth || !preview.naturalHeight) return;
+  const maxStageWidth = Math.max(220, window.innerWidth - 68);
+  const maxStageHeight = Math.max(180, window.innerHeight - 120);
+  const fitRatio = Math.min(1, maxStageWidth / preview.naturalWidth, maxStageHeight / preview.naturalHeight);
+  const displayWidth = Math.max(1, Math.round(preview.naturalWidth * fitRatio));
+  const displayHeight = Math.max(1, Math.round(preview.naturalHeight * fitRatio));
+  stage.style.width = `${displayWidth}px`;
+  stage.style.height = `${displayHeight}px`;
+  stage.style.maxWidth = `${maxStageWidth}px`;
+  stage.style.maxHeight = `${maxStageHeight}px`;
+  preview.style.width = `${displayWidth}px`;
+  preview.style.height = `${displayHeight}px`;
+  preview.style.maxWidth = `${maxStageWidth}px`;
+  preview.style.maxHeight = `${maxStageHeight}px`;
+  card.style.width = `${Math.min(displayWidth + 28, window.innerWidth - 40)}px`;
+}
+
 function resetImagePreviewScale() {
   applyImagePreviewScale(1);
   const stage = document.getElementById("image-stage");
@@ -1394,6 +1425,7 @@ function resetImagePreviewScale() {
     stage.classList.remove("is-panning");
   }
   document.getElementById("image-preview")?.classList.remove("is-panning");
+  syncImagePreviewLayout();
 }
 
 function openImagePreview(url) {
@@ -1401,10 +1433,25 @@ function openImagePreview(url) {
   const modal = document.getElementById("image-modal");
   const preview = document.getElementById("image-preview");
   const downloadLink = document.getElementById("download-image-preview");
+  setImagePreviewLoading(true);
+  preview.onload = () => {
+    setImagePreviewLoading(false);
+    resetImagePreviewScale();
+  };
+  preview.onerror = () => {
+    setImagePreviewLoading(false);
+  };
+  const stage = document.getElementById("image-stage");
+  if (stage) {
+    stage.style.width = "";
+    stage.style.height = "";
+    stage.style.maxWidth = "";
+    stage.style.maxHeight = "";
+  }
+  document.querySelector("#image-modal .image-card")?.style.removeProperty("width");
   preview.src = url;
   downloadLink.href = url;
   downloadLink.setAttribute("download", decodeURIComponent(url.split("/").pop() || "attachment"));
-  resetImagePreviewScale();
   modal.classList.add("open");
   modal.setAttribute("aria-hidden", "false");
 }
@@ -1414,12 +1461,27 @@ function closeImagePreview() {
   modal.classList.remove("open");
   modal.setAttribute("aria-hidden", "true");
   const preview = document.getElementById("image-preview");
+  preview.onload = null;
+  preview.onerror = null;
   preview.src = "";
   preview.style.transform = "";
+  preview.style.width = "";
+  preview.style.height = "";
+  preview.style.maxWidth = "";
+  preview.style.maxHeight = "";
   preview.classList.remove("is-panning");
   document.getElementById("download-image-preview")?.setAttribute("href", "#");
   document.getElementById("download-image-preview")?.removeAttribute("download");
-  document.getElementById("image-stage")?.classList.remove("is-panning");
+  const stage = document.getElementById("image-stage");
+  stage?.classList.remove("is-panning");
+  if (stage) {
+    stage.style.width = "";
+    stage.style.height = "";
+    stage.style.maxWidth = "";
+    stage.style.maxHeight = "";
+  }
+  document.querySelector("#image-modal .image-card")?.style.removeProperty("width");
+  setImagePreviewLoading(false);
   imagePreviewScale = 1;
 }
 
@@ -3892,6 +3954,10 @@ document.addEventListener("DOMContentLoaded", () => {
     event.preventDefault();
     adjustImagePreviewScale(event.deltaY < 0 ? 0.2 : -0.2);
   }, { passive: false });
+  window.addEventListener("resize", () => {
+    if (!document.getElementById("image-modal")?.classList.contains("open")) return;
+    syncImagePreviewLayout();
+  });
 
   const serviceTypeInput = document.getElementById("service-type");
   if (serviceTypeInput) {
