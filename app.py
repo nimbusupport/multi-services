@@ -1135,6 +1135,26 @@ def allowed_pages_for_role(role):
     return sorted(FULL_ACCESS_PAGES)
 
 
+def persisted_user_role(role, allowed_pages=None):
+    normalized_role = (role or "user").strip().lower()
+    if normalized_role == "admin_no_user_management":
+        return "admin"
+    return normalized_role
+
+
+def effective_user_role(role, allowed_pages=None):
+    normalized_role = (role or "user").strip().lower()
+    normalized_allowed_pages = set(normalize_allowed_pages(allowed_pages))
+    limited_admin_pages = set(allowed_pages_for_role("admin_no_user_management"))
+    if (
+        normalized_role == "admin"
+        and "user_management" not in normalized_allowed_pages
+        and limited_admin_pages.issubset(normalized_allowed_pages)
+    ):
+        return "admin_no_user_management"
+    return normalized_role
+
+
 def current_session_email_local():
     raw = (session.get("username") or session.get("email") or "").strip().lower()
     return raw.split("@")[0] if raw else ""
@@ -1232,8 +1252,10 @@ def first_service_route(allowed_pages=None):
 def landing_page_options_for_allowed_pages(allowed_pages):
     allowed = set(normalize_allowed_pages(allowed_pages))
     options = []
+    if "home" in allowed:
+        options.append("/home")
     if can_access_home_dashboard_for_allowed_pages(allowed):
-        options.extend(["/home", "/dashboard-services", "/dashboard-service-tickets"])
+        options.extend(["/dashboard-services", "/dashboard-service-tickets"])
     if allowed.intersection(REPORT_ALLOWED_PAGES):
         options.append("/dashboard-reports")
     if "sms" in allowed:
@@ -2085,11 +2107,12 @@ def normalize_user_profile_row(row):
     row = dict(row or {})
     allowed_pages = normalize_allowed_pages(row.get("allowed_pages"))
     access_level = access_level_from_allowed_pages(row.get("allowed_pages"))
+    role = effective_user_role(row.get("role"), allowed_pages)
     return {
         "id": (row.get("id") or "").strip(),
         "email": (row.get("email") or "").strip().lower(),
         "full_name": (row.get("full_name") or "").strip(),
-        "role": (row.get("role") or "user").strip().lower(),
+        "role": role,
         "group_code": (row.get("group_code") or "").strip(),
         "allowed_pages": allowed_pages,
         "access_level": access_level,
@@ -2476,6 +2499,7 @@ def update_user_management_profile(user_id, email, full_name, role, group_code, 
     landing_page = normalize_landing_page(landing_page, allowed_pages)
     if role == "admin_no_user_management":
         allowed_pages = allowed_pages_for_role(role)
+    persisted_role = persisted_user_role(role, allowed_pages)
     if not allowed_pages:
         raise ValueError("יש לבחור לפחות עמוד מורשה אחד")
 
@@ -2503,7 +2527,7 @@ def update_user_management_profile(user_id, email, full_name, role, group_code, 
         json_body={
             "email": normalized_email,
             "full_name": full_name,
-            "role": role,
+            "role": persisted_role,
             "group_code": group_code,
             "allowed_pages": build_allowed_pages_payload(allowed_pages, access_level),
             "landing_page": landing_page,
@@ -2540,6 +2564,9 @@ def create_or_refresh_user_invite(email, full_name, role, group_code, allowed_pa
     allowed_pages = normalize_allowed_pages(allowed_pages)
     access_level = normalize_access_level(access_level)
     landing_page = normalize_landing_page(landing_page, allowed_pages)
+    if role == "admin_no_user_management":
+        allowed_pages = allowed_pages_for_role(role)
+    persisted_role = persisted_user_role(role, allowed_pages)
     if not full_name:
         raise ValueError("Full name is required")
     if not normalized_email:
@@ -2561,7 +2588,7 @@ def create_or_refresh_user_invite(email, full_name, role, group_code, allowed_pa
             params={"id": f"eq.{user_id}"},
             json_body={
                 "full_name": full_name,
-                "role": role,
+                "role": persisted_role,
                 "group_code": group_code,
                 "allowed_pages": build_allowed_pages_payload(allowed_pages, access_level),
                 "landing_page": landing_page,
@@ -2602,7 +2629,7 @@ def create_or_refresh_user_invite(email, full_name, role, group_code, allowed_pa
                 "id": user_id,
                 "email": normalized_email,
                 "full_name": full_name,
-                "role": role,
+                "role": persisted_role,
                 "group_code": group_code,
                 "allowed_pages": build_allowed_pages_payload(allowed_pages, access_level),
                 "landing_page": landing_page,
@@ -5694,11 +5721,13 @@ def _supabase_login_user(username):
     if not rows:
         return None
     row = rows[0]
+    allowed_pages = normalize_allowed_pages(row.get("allowed_pages"))
+    role = effective_user_role(row.get("role"), allowed_pages)
     return {
         "email": (row.get("email") or "").strip().lower(),
         "password_hash": (row.get("password_hash") or "").strip(),
-        "role": (row.get("role") or "user").strip().lower(),
-        "allowed_pages": normalize_allowed_pages(row.get("allowed_pages")),
+        "role": role,
+        "allowed_pages": allowed_pages,
     }
 
 

@@ -2200,6 +2200,37 @@ class SupportTicketsTestCase(unittest.TestCase):
         blocked_response = self.client.get("/user-management", follow_redirects=False)
         self.assertEqual(blocked_response.status_code, 302)
 
+    def test_effective_user_role_maps_legacy_admin_permissions_to_limited_admin(self):
+        pages = self.app_module.allowed_pages_for_role("admin_no_user_management")
+
+        role = self.app_module.effective_user_role("admin", pages)
+
+        self.assertEqual(role, "admin_no_user_management")
+
+    def test_persisted_user_role_maps_limited_admin_to_admin_for_legacy_constraint(self):
+        persisted_role = self.app_module.persisted_user_role("admin_no_user_management")
+
+        self.assertEqual(persisted_role, "admin")
+
+    def test_home_landing_option_is_available_without_dashboard_card_mix(self):
+        options = self.app_module.landing_page_options_for_allowed_pages(["home", "support_tickets"])
+
+        self.assertIn("/home", options)
+        self.assertNotIn("/dashboard-services", options)
+        self.assertNotIn("/dashboard-service-tickets", options)
+
+    def test_home_landing_falls_back_to_first_allowed_page_when_dashboard_is_unavailable(self):
+        with self.client.session_transaction() as session:
+            session["logged_in"] = True
+            session["username"] = "ticket-user@example.com"
+            session["role"] = "user"
+            session["allowed_pages"] = ["home", "support_tickets"]
+            session["landing_page"] = "/home"
+
+        response = self.client.get("/home", follow_redirects=False)
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response.headers["Location"].endswith("/support-tickets"))
+
     def test_nastia_route_renders_for_user_with_nastia_permission(self):
         with self.client.session_transaction() as session:
             session["logged_in"] = True

@@ -235,8 +235,10 @@ function landingOptionsForSelection(pageKeys) {
     }
   };
 
-  if (canUseHomeDashboard(selected)) {
+  if (selected.has("home")) {
     pushOption("/home");
+  }
+  if (canUseHomeDashboard(selected)) {
     if (hasAnyPage(selected, ["bot", "sms", "f2m", "recording_storage", "human_service", "record"])) {
       pushOption("/dashboard-services");
     }
@@ -498,7 +500,7 @@ function updateFormMode() {
     formModeBadge.textContent = isEditing ? "עריכה" : "יצירה";
   }
   if (submitLabel) {
-    submitLabel.textContent = isEditing ? "שמור שינויים" : "הוספת משתמש ושליחת הזמנה";
+    submitLabel.textContent = isEditing ? "שמור" : "שלח הזמנה";
   }
   if (form) {
     Array.from(form.elements).forEach((element) => {
