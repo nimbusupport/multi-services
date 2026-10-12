@@ -5040,13 +5040,32 @@ def send_support_ticket_email_to_address(ticket, to_address):
 
 def send_nastia_ticket_email(ticket):
     email_payload = build_support_ticket_email_message(ticket, app_link=NASTIA_APP_LOGIN_URL)
+    recipient = configured_nastia_notification_email()
     send_plain_email(
-        configured_nastia_notification_email(),
+        recipient,
         email_payload["subject"],
         email_payload["body"],
         from_address=default_notification_from_address(),
         html_body=email_payload["html_body"],
     )
+    return recipient
+
+
+def send_worker_ticket_email(ticket):
+    details = (ticket or {}).get("details") or {}
+    worker_name = canonical_support_user_name(details.get("coordinated_worker"))
+    to_address = technician_notification_email(worker_name)
+    if not to_address:
+        return ""
+    email_payload = build_support_ticket_email_message(ticket, app_link=NASTIA_APP_LOGIN_URL)
+    send_plain_email(
+        to_address,
+        email_payload["subject"],
+        email_payload["body"],
+        from_address=default_notification_from_address(),
+        html_body=email_payload["html_body"],
+    )
+    return to_address
 
 
 def send_nastia_waiting_alert_email(ticket):
@@ -5141,13 +5160,30 @@ def process_nastia_ticket_notification(previous_ticket, updated_ticket, actor=""
     attempted = should_notify_nastia(previous_ticket, updated_ticket, enabled=enabled)
     result["notification_attempted"] = attempted
     if attempted:
+        errors = []
+        recipients = []
         try:
-            send_nastia_ticket_email(updated_ticket)
-            result["notification_sent"] = True
+            nastya_recipient = send_nastia_ticket_email(updated_ticket)
+            if nastya_recipient and nastya_recipient not in recipients:
+                recipients.append(nastya_recipient)
+                result["notification_sent"] = True
         except Exception as exc:
             print(f"Nastia notification email warning for ticket {updated_ticket.get('id')}: {exc}")
-            result["notification_error"] = user_friendly_email_error(exc)
-            result["notification_error_detail"] = str(exc)
+            errors.append(exc)
+        try:
+            worker_recipient = send_worker_ticket_email(updated_ticket)
+            if worker_recipient and worker_recipient not in recipients:
+                recipients.append(worker_recipient)
+                result["notification_sent"] = True
+        except Exception as exc:
+            print(f"Worker notification email warning for ticket {updated_ticket.get('id')}: {exc}")
+            errors.append(exc)
+        result["notification_recipients"] = recipients
+        if recipients:
+            result["notification_message"] = f"מייל תיאום נשלח אל: {', '.join(recipients)}"
+        if errors:
+            result["notification_error"] = user_friendly_email_error(errors[0])
+            result["notification_error_detail"] = " | ".join(str(exc) for exc in errors)
     return result
 
 

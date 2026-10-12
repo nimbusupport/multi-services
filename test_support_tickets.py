@@ -5233,6 +5233,80 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("סטטוס בוצע", response.get_json()["message"])
 
+    def test_all_technician_workers_have_notification_emails(self):
+        expected_workers = {self.app_module.canonical_support_user_name(name) for name in self.app_module.TECHNICIAN_SUPPORT_USERS}
+        mapped_workers = {self.app_module.canonical_support_user_name(name) for name in self.app_module.TECHNICIAN_NOTIFICATION_EMAILS.keys()}
+
+        self.assertTrue(expected_workers.issubset(mapped_workers))
+        for worker_name in expected_workers:
+            self.assertTrue(self.app_module.technician_notification_email(worker_name))
+
+    def test_coordinated_status_emails_nastya_and_selected_worker(self):
+        tickets = self.app_module.load_support_tickets()
+        tickets.append({
+            "id": 2,
+            "board_slug": "pais",
+            "created_at": "2026-10-04T09:00:00+03:00",
+            "created_at_display": "04/10/2026 09:00",
+            "creator": "Admin",
+            "ticket_type": "שירות",
+            "service_type": "מפעל הפיס",
+            "domain": "",
+            "priority": "Medium",
+            "description": "",
+            "solution": "",
+            "status": "ממתין לתיאום",
+            "assigned_to": "נסטיה",
+            "details": {
+                "terminal_number": "7788",
+                "address": "Coordination street 8",
+                "customer_request": "Need technician visit",
+                "actions_taken": "",
+                "coordinated_worker": "",
+                "visit_date": "",
+                "visit_hour_from": "",
+                "visit_hour_to": "",
+            },
+            "attachments": [],
+            "updates": [],
+        })
+        self.app_module.save_support_tickets(tickets)
+
+        sent_to = []
+        def fake_send_plain_email(to_address, subject, body, from_address=None, html_body=None, attachments=None):
+            sent_to.append(to_address)
+
+        self.app_module.send_plain_email = fake_send_plain_email
+
+        self.login("admin@nimbusip.com")
+        response = self.client.post(
+            "/support-tickets-update",
+            json={
+                "ticket_id": 2,
+                "status": "תואם",
+                "details": {
+                    "coordinated_worker": "אסף",
+                    "visit_date": "2026-10-12",
+                    "visit_hour_from": "16:00",
+                    "visit_hour_to": "17:00",
+                },
+                "source_page_mode": "nastia",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["ticket"]["status"], "תואם")
+        self.assertEqual(payload["ticket"]["details"]["coordinated_worker"], "אסף")
+        self.assertTrue(payload["ticket"]["notification_attempted"])
+        self.assertTrue(payload["ticket"]["notification_sent"])
+        self.assertIn("nastya@nimbusip.com", sent_to)
+        self.assertIn("assafh@nimbusip.com", sent_to)
+        self.assertIn("nastya@nimbusip.com", payload["ticket"]["notification_recipients"])
+        self.assertIn("assafh@nimbusip.com", payload["ticket"]["notification_recipients"])
+        self.assertIn("nastya@nimbusip.com", payload["ticket"]["notification_message"])
+        self.assertIn("assafh@nimbusip.com", payload["ticket"]["notification_message"])
+
     def test_cancelled_status_clears_coordination_and_emails_nastya_and_worker(self):
         tickets = self.app_module.load_support_tickets()
         tickets.append({
