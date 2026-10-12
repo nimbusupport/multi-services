@@ -4597,6 +4597,7 @@ def coordination_ticket_email_context(ticket):
             ("תאריך ביקור", details.get("visit_date")),
             ("שעת ביקור מ", details.get("visit_hour_from")),
             ("שעת ביקור עד", details.get("visit_hour_to")),
+            ("סיכום לאחר ביקור", details.get("visit_summary")),
             ("הערות כשל", details.get("failure_notes")),
         ]
         calendar_description_lines = [
@@ -4608,6 +4609,7 @@ def coordination_ticket_email_context(ticket):
             f"כתובת: {calendar_address or '-'}",
             f"איש קשר: {calendar_contact or '-'}",
             f"טכנאי מתואם: {(details.get('coordinated_worker') or '').strip() or '-'}",
+            f"סיכום לאחר ביקור: {(details.get('visit_summary') or '').strip() or '-'}",
         ]
         calendar_summary = f"קריאת שירות נימבוס {ticket_label}"
         location = calendar_address or "נימבוס"
@@ -4634,6 +4636,7 @@ def coordination_ticket_email_context(ticket):
             ("תאריך ביקור", details.get("visit_date")),
             ("שעת ביקור מ", details.get("visit_hour_from")),
             ("שעת ביקור עד", details.get("visit_hour_to")),
+            ("סיכום לאחר ביקור", details.get("visit_summary")),
             ("הערות כשל", details.get("failure_notes")),
         ]
         calendar_description_lines = [
@@ -4644,6 +4647,7 @@ def coordination_ticket_email_context(ticket):
             f"כתובת: {calendar_address or '-'}",
             f"איש קשר: {calendar_contact or '-'}",
             f"טכנאי מתואם: {(details.get('coordinated_worker') or '').strip() or '-'}",
+            f"סיכום לאחר ביקור: {(details.get('visit_summary') or '').strip() or '-'}",
         ]
         calendar_summary = f"קריאת שירות הוט קריאות {ticket_label}"
         location = calendar_address or "הוט קריאות"
@@ -4664,6 +4668,7 @@ def coordination_ticket_email_context(ticket):
             ("תאריך ביקור", details.get("visit_date")),
             ("שעת ביקור מ", details.get("visit_hour_from")),
             ("שעת ביקור עד", details.get("visit_hour_to")),
+            ("סיכום לאחר ביקור", details.get("visit_summary")),
             ("הערות כשל", details.get("failure_notes")),
         ]
         calendar_description_lines = [
@@ -4675,6 +4680,7 @@ def coordination_ticket_email_context(ticket):
             f"כתובת: {calendar_address or '-'}",
             f"איש קשר: {calendar_contact or '-'}",
             f"טכנאי מתואם: {(details.get('coordinated_worker') or '').strip() or '-'}",
+            f"סיכום לאחר ביקור: {(details.get('visit_summary') or '').strip() or '-'}",
         ]
         calendar_summary = f"קריאת שירות מפעל הפיס {ticket_label}"
         location = calendar_address or "מפעל הפיס"
@@ -5222,7 +5228,7 @@ def nastia_notification_enabled(previous_ticket, updated_ticket, actor, changes)
     if bool((changes or {}).get("send_nastia_cancellation_notification", False)):
         return True
     if (
-        (updated_ticket.get("board_slug") or "").strip().lower() == "pais"
+        board_supports_coordination((updated_ticket.get("board_slug") or "").strip().lower())
         and coordination_ticket_status_changed(previous_ticket, updated_ticket)
         and canonical_support_user_name(actor) in TECHNICIAN_SUPPORT_USERS
     ):
@@ -5551,6 +5557,7 @@ def update_support_ticket_record(ticket_id, changes, actor):
             "visit_date",
             "visit_hour_from",
             "visit_hour_to",
+            "visit_summary",
             "failure_notes",
             "customer_type",
             "service_mode",
@@ -8692,6 +8699,7 @@ def support_tickets_create():
             "visit_date": "",
             "visit_hour_from": "",
             "visit_hour_to": "",
+            "visit_summary": "",
             "failure_notes": "",
         }
         service_type = board["name"]
@@ -8730,6 +8738,7 @@ def support_tickets_create():
             "visit_date": "",
             "visit_hour_from": "",
             "visit_hour_to": "",
+            "visit_summary": "",
             "failure_notes": "",
         }
     elif board["slug"] == "hot-kiryot":
@@ -8766,6 +8775,7 @@ def support_tickets_create():
             "visit_date": "",
             "visit_hour_from": "",
             "visit_hour_to": "",
+            "visit_summary": "",
             "failure_notes": "",
         }
         service_type = board["name"]
@@ -8851,7 +8861,7 @@ def support_tickets_update():
             details = payload.get("details")
             if not isinstance(details, dict):
                 return jsonify({"ok": False, "message": "Invalid details payload"}), 400
-            allowed_detail_fields = {"failure_notes"}
+            allowed_detail_fields = {"failure_notes", "visit_summary"}
             if (target_ticket.get("board_slug") or "").strip().lower() == "pais":
                 allowed_detail_fields.add("actions_taken")
             disallowed_fields = {
@@ -8864,7 +8874,10 @@ def support_tickets_update():
                 return jsonify({"ok": False, "message": "יש למלא סיבת כשל"}), 400
 
     if "details" in payload and isinstance(payload.get("details"), dict):
-        details = payload["details"]
+        target_ticket = target_ticket or find_support_ticket(load_support_tickets(), payload.get("ticket_id"))
+        details = dict((target_ticket or {}).get("details") or {})
+        details.update(payload["details"])
+        payload["details"] = details
         if all([
             (details.get("coordinated_worker") or "").strip(),
             (details.get("visit_date") or "").strip(),

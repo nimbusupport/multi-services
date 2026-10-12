@@ -1046,6 +1046,7 @@ function renderPaisDetailSections(ticket) {
       <h3>פעולות</h3>
       <textarea id="detail-actions-taken" rows="4">${escapeHtml(details.actions_taken || "")}</textarea>
     </section>
+    ${visitSummarySection(details.visit_summary, true, "כאן אפשר לכתוב מה טופל בביקור")}
     ${showCoordinatorStatus ? `
     <section class="detail-description detail-edit-card">
       <h3>סטטוס</h3>
@@ -1158,6 +1159,7 @@ async function savePaisDetail(ticketId) {
       visit_date: coordinationPayload.visit_date,
       visit_hour_from: coordinationPayload.visit_hour_from,
       visit_hour_to: coordinationPayload.visit_hour_to,
+      visit_summary: visitSummaryField?.value || "",
       failure_notes: document.getElementById("detail-failure-notes")?.value || "",
     },
   };
@@ -2726,6 +2728,7 @@ function renderHotDetailSections(ticket) {
       ${details.service_agreement ? detailSection("הסכם שירות ואיזה ציוד באחריות הוט", details.service_agreement) : ""}
       ${details.technical_notes ? detailSection("פרטים טכניים נוספים", details.technical_notes) : ""}
       ${details.field_report ? fieldReportSummaryCard(ticket, false) : ""}
+      ${visitSummarySection(details.visit_summary, false)}
       ${details.failure_notes ? detailSection("הערות", details.failure_notes) : ""}
     `;
   }
@@ -2746,6 +2749,7 @@ function renderHotDetailSections(ticket) {
           </button>
         </div>
       </section>`}
+      ${visitSummarySection(details.visit_summary, true, "כאן אפשר לכתוב מה טופל בביקור")}
       ${coordinationStatusEditor(ticket)}
       <section class="detail-description detail-edit-card ${showFailureNotes ? "" : "hidden"}" id="detail-failure-notes-wrap">
         <h3>הערות</h3>
@@ -2770,6 +2774,7 @@ function renderHotDetailSections(ticket) {
     ${details.field_report ? fieldReportSummaryCard(ticket, false) : ""}
     ${coordinationStatusEditor(ticket)}
     ${coordinationSchedulingEditor(ticket, details)}
+    ${visitSummarySection(details.visit_summary, true, "כאן אפשר לכתוב מה טופל בביקור")}
     <section class="detail-description detail-edit-card ${showFailureNotes ? "" : "hidden"}" id="detail-failure-notes-wrap">
       <h3>הערות</h3>
       <textarea id="detail-failure-notes" rows="4">${escapeHtml(details.failure_notes || "")}</textarea>
@@ -2936,6 +2941,7 @@ async function savePaisDetail(ticketId) {
   const statusSelect = document.getElementById("detail-status-select");
   const detailFieldName = isHotTicket(currentTicket) ? "technician_actions" : "actions_taken";
   const detailFieldElement = document.getElementById(isHotTicket(currentTicket) ? "detail-technician-actions" : "detail-actions-taken");
+  const visitSummaryField = document.getElementById("detail-visit-summary");
   const coordinationPayload = {
     coordinated_worker: coordinatedWorkerField?.value || "",
     visit_date: visitDateField?.value || "",
@@ -2959,6 +2965,7 @@ async function savePaisDetail(ticketId) {
   if (technicianMode) {
     payload.details = {
       ...(detailFieldName === "actions_taken" ? { actions_taken: detailFieldElement?.value || "" } : {}),
+      visit_summary: visitSummaryField?.value || "",
       failure_notes: document.getElementById("detail-failure-notes")?.value || "",
     };
   } else {
@@ -3129,6 +3136,21 @@ function coordinationCancelButton(ticket, details) {
       <button class="secondary-btn coordination-cancel-btn" id="detail-cancel-coordination-btn" type="button" data-ticket-id="${escapeHtml(ticket.id)}">בטל ביקור</button>
     </div>
   `;
+}
+
+function visitSummarySection(value = "", editable = false, placeholder = "") {
+  if (!editable && !String(value || "").trim()) {
+    return "";
+  }
+  if (editable) {
+    return `
+      <section class="detail-description detail-edit-card">
+        <h3>סיכום לאחר ביקור</h3>
+        <textarea id="detail-visit-summary" rows="4" placeholder="${escapeHtml(placeholder || "")}">${escapeHtml(value || "")}</textarea>
+      </section>
+    `;
+  }
+  return detailSection("סיכום לאחר ביקור", value || "-");
 }
 
 async function cancelTicketCoordination(ticketId) {
@@ -3680,6 +3702,7 @@ function renderPaisDetailSections(ticket) {
           </button>
         </div>
       </section>`}
+      ${visitSummarySection(details.visit_summary, true, "כאן אפשר לכתוב מה טופל בביקור")}
       <section class="detail-description detail-edit-card">
         <h3>סטטוס</h3>
         <select id="detail-status-select">

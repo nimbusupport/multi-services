@@ -5233,6 +5233,137 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("סטטוס בוצע", response.get_json()["message"])
 
+    def test_technician_can_save_visit_summary_on_support_ticket(self):
+        tickets = self.app_module.load_support_tickets()
+        tickets.append({
+            "id": 2,
+            "board_slug": "support",
+            "created_at": "2026-10-12T09:00:00+03:00",
+            "created_at_display": "12/10/2026 09:00",
+            "creator": "Admin",
+            "ticket_type": "שירות",
+            "service_type": "מרכזייה",
+            "domain": "example.com",
+            "priority": "Medium",
+            "description": "בעיה בקו",
+            "solution": "",
+            "status": "Waiting",
+            "assigned_to": "אסף",
+            "details": {
+                "customer_type": "לקוח נימבוס",
+                "service_mode": "",
+                "business_name": "",
+                "service_contact": "",
+                "service_address": "",
+                "coordinated_worker": "אסף",
+                "visit_date": "2026-10-12",
+                "visit_hour_from": "10:00",
+                "visit_hour_to": "11:00",
+                "visit_summary": "",
+                "failure_notes": "",
+            },
+            "attachments": [],
+            "updates": [],
+        })
+        self.app_module.save_support_tickets(tickets)
+
+        self.login("assafh@nimbusip.com", "0523111777!")
+        response = self.client.post(
+            "/support-tickets-update",
+            json={
+                "ticket_id": 2,
+                "status": "בוצע",
+                "details": {
+                    "visit_summary": "בוצע איפוס והקו חזר לעבוד",
+                    "failure_notes": "",
+                },
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["ticket"]["details"]["visit_summary"], "בוצע איפוס והקו חזר לעבוד")
+
+    def test_new_tickets_include_visit_summary_field(self):
+        self.login("admin@nimbusip.com")
+        response = self.client.post(
+            "/support-tickets-create",
+            data={
+                "board_slug": "pais",
+                "terminal_number": "5551",
+                "address": "רחוב הבדיקה 1",
+                "customer_request": "נדרש ביקור",
+                "actions_taken": "",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertIn("visit_summary", payload["ticket"]["details"])
+        self.assertEqual(payload["ticket"]["details"]["visit_summary"], "")
+
+    def test_assigned_technician_done_status_emails_nastya_on_support_ticket(self):
+        tickets = self.app_module.load_support_tickets()
+        tickets.append({
+            "id": 2,
+            "board_slug": "support",
+            "created_at": "2026-10-12T09:00:00+03:00",
+            "created_at_display": "12/10/2026 09:00",
+            "creator": "Admin",
+            "ticket_type": "שירות",
+            "service_type": "מרכזייה",
+            "domain": "example.com",
+            "priority": "Medium",
+            "description": "בעיה בקו",
+            "solution": "",
+            "status": "ממתין",
+            "assigned_to": "אסף",
+            "details": {
+                "customer_type": "לקוח נימבוס",
+                "service_mode": "",
+                "business_name": "",
+                "service_contact": "",
+                "service_address": "",
+                "coordinated_worker": "אסף",
+                "visit_date": "2026-10-12",
+                "visit_hour_from": "10:00",
+                "visit_hour_to": "11:00",
+                "visit_summary": "",
+                "failure_notes": "",
+            },
+            "attachments": [],
+            "updates": [],
+        })
+        self.app_module.save_support_tickets(tickets)
+
+        sent_to = []
+        def fake_send_plain_email(to_address, subject, body, from_address=None, html_body=None, attachments=None):
+            sent_to.append(to_address)
+
+        self.app_module.send_plain_email = fake_send_plain_email
+
+        self.login("assafh@nimbusip.com", "0523111777!")
+        response = self.client.post(
+            "/support-tickets-update",
+            json={
+                "ticket_id": 2,
+                "status": "בוצע",
+                "details": {
+                    "visit_summary": "טופל והקו חזר לעבוד",
+                    "failure_notes": "",
+                },
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertTrue(payload["ticket"]["notification_attempted"])
+        self.assertTrue(payload["ticket"]["notification_sent"])
+        self.assertIn("nastya@nimbusip.com", sent_to)
+        self.assertIn("assafh@nimbusip.com", sent_to)
+        self.assertIn("nastya@nimbusip.com", payload["ticket"]["notification_recipients"])
+        self.assertIn("assafh@nimbusip.com", payload["ticket"]["notification_recipients"])
+
     def test_all_technician_workers_have_notification_emails(self):
         expected_workers = {self.app_module.canonical_support_user_name(name) for name in self.app_module.TECHNICIAN_SUPPORT_USERS}
         mapped_workers = {self.app_module.canonical_support_user_name(name) for name in self.app_module.TECHNICIAN_NOTIFICATION_EMAILS.keys()}
