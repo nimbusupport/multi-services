@@ -1,4 +1,4 @@
-let currentScope = "all";
+﻿let currentScope = "all";
 let debounceTimer = null;
 let lastTickets = [];
 let reportQuickFilter = "all";
@@ -17,6 +17,8 @@ let nastyaBoardFilter = "all";
 let lastTicketUsers = [];
 let ticketLoadRequestId = 0;
 let ticketDetailRequestId = 0;
+let deleteTicketPendingId = "";
+let deleteTicketConfirmBusy = false;
 
 const OLDER_TICKETS_BATCH_SIZE = 200;
 
@@ -50,6 +52,11 @@ const isAssignedTechnicianMode = ticketOperatorMode === "assigned_technician";
 const ticketBoards = Array.isArray(supportTicketsContext.ticketBoards) ? supportTicketsContext.ticketBoards : [];
 const ticketBoardsBySlug = new Map(ticketBoards.map((board) => [String(board?.slug || ""), board || {}]));
 currentScope = defaultTicketScope;
+const ticketAlertsStorageKey = `support-ticket-alerts:${boardSlug}:${currentSupportUser || "guest"}`;
+const documentTitleBase = document.title;
+let ticketAlertsHydrated = false;
+let previousAssignedOpenTicketIds = new Set();
+let unreadAssignedOpenTicketIds = new Set();
 
 function boardConfig(boardSlugValue) {
   return ticketBoardsBySlug.get(String(boardSlugValue || "")) || {};
@@ -90,8 +97,141 @@ function normalizeLoadingMessage(message, fallbackMessage = boardLoadingMessage(
   return text;
 }
 
+function normalizeTicketIdList(values) {
+  return (Array.isArray(values) ? values : [])
+    .map((value) => String(parseInt(value, 10) || "").trim())
+    .filter(Boolean);
+}
+
+function readTicketAlertsState() {
+  try {
+    const raw = window.localStorage?.getItem(ticketAlertsStorageKey);
+    if (!raw) return { currentIds: [], unreadIds: [] };
+    const parsed = JSON.parse(raw);
+    return {
+      currentIds: normalizeTicketIdList(parsed?.currentIds),
+      unreadIds: normalizeTicketIdList(parsed?.unreadIds),
+    };
+  } catch (error) {
+    return { currentIds: [], unreadIds: [] };
+  }
+}
+
+function writeTicketAlertsState() {
+  try {
+    window.localStorage?.setItem(ticketAlertsStorageKey, JSON.stringify({
+      currentIds: Array.from(previousAssignedOpenTicketIds),
+      unreadIds: Array.from(unreadAssignedOpenTicketIds),
+    }));
+  } catch (error) {
+  }
+}
+
+function ticketAlertUnreadCount() {
+  if (!currentSupportUser) return 0;
+  try {
+    const prefix = `support-ticket-alerts:`;
+    let total = 0;
+    for (let index = 0; index < window.localStorage.length; index += 1) {
+      const key = window.localStorage.key(index);
+      if (!key || !key.startsWith(prefix) || !key.endsWith(`:${currentSupportUser}`)) continue;
+      const parsed = JSON.parse(window.localStorage.getItem(key) || "{}");
+      total += normalizeTicketIdList(parsed?.unreadIds).length;
+    }
+    return total;
+  } catch (error) {
+    return unreadAssignedOpenTicketIds.size;
+  }
+}
+
+function updateDocumentUnreadTitle() {
+  const unreadCount = ticketAlertUnreadCount();
+  document.title = unreadCount > 0 ? `(${unreadCount}) ${documentTitleBase}` : documentTitleBase;
+}
+
+async function updateAppBadge() {
+  const unreadCount = ticketAlertUnreadCount();
+  try {
+    if (typeof navigator.clearAppBadge === "function" && unreadCount <= 0) {
+      await navigator.clearAppBadge();
+      return;
+    }
+    if (typeof navigator.setAppBadge === "function") {
+      if (unreadCount > 0) {
+        await navigator.setAppBadge(unreadCount);
+      } else if (typeof navigator.clearAppBadge === "function") {
+        await navigator.clearAppBadge();
+      }
+    }
+  } catch (error) {
+  }
+}
+
+function refreshTicketAlertIndicators() {
+  updateDocumentUnreadTitle();
+  void updateAppBadge();
+}
+
+function showAssignedTicketNotification(newIds) {
+  if (!Array.isArray(newIds) || newIds.length === 0) return;
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  const totalUnread = ticketAlertUnreadCount();
+  const title = newIds.length === 1 ? "קריאה חדשה הוקצתה אליך" : `${newIds.length} קריאות חדשות הוקצו אליך`;
+  const body = totalUnread > 0
+    ? `בלוח ${boardLoadingLabel(boardSlug)} ממתינות לך ${totalUnread} קריאות שלא נקראו.`
+    : `בלוח ${boardLoadingLabel(boardSlug)} הוקצתה אליך קריאה חדשה.`;
+  try {
+    new Notification(title, { body, tag: `support-ticket-alerts-${boardSlug}` });
+  } catch (error) {
+  }
+}
+
+function syncAssignedTicketAlerts(stats) {
+  const currentIds = new Set(normalizeTicketIdList(stats?.my_open_ticket_ids));
+  if (!ticketAlertsHydrated) {
+    const stored = readTicketAlertsState();
+    previousAssignedOpenTicketIds = currentIds;
+    unreadAssignedOpenTicketIds = new Set(stored.unreadIds.filter((ticketId) => currentIds.has(ticketId)));
+    ticketAlertsHydrated = true;
+    writeTicketAlertsState();
+    refreshTicketAlertIndicators();
+    return;
+  }
+
+  const newIds = Array.from(currentIds).filter((ticketId) => !previousAssignedOpenTicketIds.has(ticketId));
+  unreadAssignedOpenTicketIds = new Set(Array.from(unreadAssignedOpenTicketIds).filter((ticketId) => currentIds.has(ticketId)));
+  newIds.forEach((ticketId) => unreadAssignedOpenTicketIds.add(ticketId));
+  previousAssignedOpenTicketIds = currentIds;
+  writeTicketAlertsState();
+  refreshTicketAlertIndicators();
+  if (newIds.length > 0 && document.hidden) {
+    showAssignedTicketNotification(newIds);
+  }
+}
+
+function markAssignedTicketAlertsRead(ticketIds = null) {
+  if (!ticketAlertsHydrated) return;
+  if (Array.isArray(ticketIds) && ticketIds.length > 0) {
+    ticketIds.map((ticketId) => String(parseInt(ticketId, 10) || "").trim()).filter(Boolean).forEach((ticketId) => unreadAssignedOpenTicketIds.delete(ticketId));
+  } else {
+    unreadAssignedOpenTicketIds = new Set();
+  }
+  writeTicketAlertsState();
+  refreshTicketAlertIndicators();
+}
+
+function requestBrowserNotificationPermission() {
+  if (!("Notification" in window)) return;
+  if (Notification.permission !== "default") return;
+  try {
+    Notification.requestPermission();
+  } catch (error) {
+  }
+}
+
 function boardSupportsCoordination(boardSlugValue) {
-  return String(boardConfig(boardSlugValue).workflow || "") === "coordination";
+  const normalized = String(boardSlugValue || "").trim().toLowerCase();
+  return normalized === "pais" || normalized === "hot-kiryot";
 }
 
 function boardSupportsReport(boardSlugValue) {
@@ -642,9 +782,11 @@ function setTicketsLoading(isLoading, options = {}) {
 
 function renderStats(stats) {
   const statAll = document.getElementById("stat-all");
+  const statMy = document.getElementById("stat-my");
   const statUnassigned = document.getElementById("stat-unassigned");
   const statWaiting = document.getElementById("stat-waiting");
   if (statAll) statAll.textContent = stats?.all ?? 0;
+  if (statMy) statMy.textContent = stats?.my ?? 0;
   if (statUnassigned) statUnassigned.textContent = stats?.unassigned ?? 0;
   if (statWaiting) statWaiting.textContent = `${stats?.waiting ?? 0} Open`;
   document.querySelectorAll("[data-board-counter]").forEach((chip) => {
@@ -653,6 +795,7 @@ function renderStats(stats) {
     const counter = chip.querySelector("strong");
     if (counter) counter.textContent = String(value);
   });
+  syncAssignedTicketAlerts(stats);
   syncNastyaBoardFilterButtons();
 }
 
@@ -1699,11 +1842,12 @@ function bindTicketsMenuNavigationLoading() {
 
 function submitTicketSearch() {
   clearTimeout(debounceTimer);
+  refreshTicketAlertIndicators();
   loadTickets();
 }
 
 function hasOpenModal() {
-  return ["ticket-modal", "ticket-detail-modal", "notification-error-modal", "image-modal"].some((id) => document.getElementById(id)?.classList.contains("open"));
+  return ["ticket-modal", "ticket-detail-modal", "delete-ticket-confirm-modal", "notification-error-modal", "image-modal"].some((id) => document.getElementById(id)?.classList.contains("open"));
 }
 
 async function runAutoRefresh() {
@@ -1913,27 +2057,90 @@ async function updateTicket(ticketId, changes) {
   await loadPaisReport();
 }
 
-async function deleteTicket(ticketId) {
+function deleteTicket(ticketId) {
+  openDeleteTicketConfirm(ticketId);
+}
+
+function deleteTicketLabel(ticketId) {
   const ticket = getTicket(ticketId);
-  const ticketLabel = ticket?.ticket_id || `#${String(ticketId).replace("#", "").padStart(4, "0")}`;
-  if (!window.confirm(`Delete ticket ${ticketLabel}?`)) {
-    return;
-  }
+  return ticket?.ticket_id || `#${String(ticketId).replace("#", "").padStart(4, "0")}`;
+}
 
-  const res = await fetch("/support-tickets-delete", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ticket_id: ticketId }),
-  });
-  const data = normalizeLegacyHebrewData(await res.json().catch(() => ({})));
-  if (!res.ok || !data.ok) {
-    alert(data.message || "Delete failed");
-    return;
+function setDeleteTicketConfirmState({ deleting = false, ticketId = deleteTicketPendingId } = {}) {
+  const title = document.getElementById("delete-ticket-confirm-title");
+  const message = document.getElementById("delete-ticket-confirm-message");
+  const confirmButton = document.getElementById("confirm-delete-ticket-btn");
+  const cancelButton = document.getElementById("cancel-delete-ticket-btn");
+  const closeButton = document.getElementById("close-delete-ticket-confirm-modal");
+  const ticketLabel = ticketId ? deleteTicketLabel(ticketId) : "";
+  if (title) {
+    title.textContent = ticketLabel ? `האם למחוק טיקט ${ticketLabel}?` : "האם למחוק טיקט?";
   }
+  if (message) {
+    message.textContent = deleting ? "מוחק את הטיקט..." : "הטיקט יימחק לצמיתות.";
+  }
+  if (confirmButton) {
+    confirmButton.disabled = deleting;
+    if (!confirmButton.dataset.defaultHtml) {
+      confirmButton.dataset.defaultHtml = confirmButton.innerHTML;
+    }
+    confirmButton.innerHTML = deleting
+      ? '<i class="fa-solid fa-spinner fa-spin"></i><span>מוחק את הטיקט...</span>'
+      : confirmButton.dataset.defaultHtml;
+  }
+  if (cancelButton) {
+    cancelButton.disabled = deleting;
+  }
+  if (closeButton) {
+    closeButton.disabled = deleting;
+  }
+}
 
-  closeTicketDetail();
-  await loadTickets();
-  await loadPaisReport();
+function openDeleteTicketConfirm(ticketId) {
+  deleteTicketPendingId = String(ticketId || "");
+  deleteTicketConfirmBusy = false;
+  setDeleteTicketConfirmState({ deleting: false, ticketId: deleteTicketPendingId });
+  const modal = document.getElementById("delete-ticket-confirm-modal");
+  modal?.classList.add("open");
+  modal?.setAttribute("aria-hidden", "false");
+}
+
+function closeDeleteTicketConfirm() {
+  if (deleteTicketConfirmBusy) return;
+  deleteTicketPendingId = "";
+  const modal = document.getElementById("delete-ticket-confirm-modal");
+  modal?.classList.remove("open");
+  modal?.setAttribute("aria-hidden", "true");
+  setDeleteTicketConfirmState({ deleting: false, ticketId: "" });
+}
+
+async function confirmDeleteTicket() {
+  if (deleteTicketConfirmBusy || !deleteTicketPendingId) return;
+  deleteTicketConfirmBusy = true;
+  setDeleteTicketConfirmState({ deleting: true, ticketId: deleteTicketPendingId });
+  try {
+    const res = await fetch("/support-tickets-delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ticket_id: deleteTicketPendingId }),
+    });
+    const data = normalizeLegacyHebrewData(await res.json().catch(() => ({})));
+    if (!res.ok || !data.ok) {
+      throw new Error(data.message || "מחיקת הטיקט נכשלה");
+    }
+    closeTicketDetail();
+    deleteTicketConfirmBusy = false;
+    closeDeleteTicketConfirm();
+    await loadTickets();
+    await loadPaisReport();
+  } catch (err) {
+    deleteTicketConfirmBusy = false;
+    setDeleteTicketConfirmState({ deleting: false, ticketId: deleteTicketPendingId });
+    const message = document.getElementById("delete-ticket-confirm-message");
+    if (message) {
+      message.textContent = err.message || "מחיקת הטיקט נכשלה";
+    }
+  }
 }
 
 function openModal() {
@@ -2189,9 +2396,10 @@ async function submitTicket(event) {
   if (form.dataset.submitting === "true") return;
   const message = document.getElementById("ticket-form-message");
   const submit = form.querySelector(".create-ticket-btn");
-  message.textContent = "";
+  setTicketFormMessageState(message);
   form.dataset.submitting = "true";
   submit.disabled = true;
+  setTicketFormMessageState(message, "שומר נתונים...", "saving");
 
   try {
     const res = await fetch("/support-tickets-create", {
@@ -2212,8 +2420,9 @@ async function submitTicket(event) {
     closeModal();
     await loadTickets();
     await loadPaisReport();
+    setTicketFormMessageState(message);
   } catch (err) {
-    message.textContent = err.message;
+    setTicketFormMessageState(message, err.message, "error");
   } finally {
     form.dataset.submitting = "false";
     submit.disabled = false;
@@ -2253,6 +2462,15 @@ function setFieldReportMessage(text, kind = "") {
   if (!message) return;
   message.textContent = text || "";
   message.classList.remove("success", "error");
+  if (kind) {
+    message.classList.add(kind);
+  }
+}
+
+function setTicketFormMessageState(message, text = "", kind = "") {
+  if (!message) return;
+  message.textContent = text || "";
+  message.classList.remove("saving", "success", "error");
   if (kind) {
     message.classList.add(kind);
   }
@@ -3738,6 +3956,7 @@ async function fetchTicketDetail(ticketId) {
 async function openTicketDetail(ticketId) {
   const modal = document.getElementById("ticket-detail-modal");
   if (!modal) return;
+  markAssignedTicketAlertsRead([ticketId]);
   const requestId = ++ticketDetailRequestId;
   modal.classList.add("open");
   modal.setAttribute("aria-hidden", "false");
@@ -4098,6 +4317,10 @@ document.addEventListener("DOMContentLoaded", () => {
       document.querySelectorAll(".ticket-tab").forEach((tab) => tab.classList.remove("active"));
       button.classList.add("active");
       currentScope = button.dataset.scope || "all";
+      if (currentScope === "my") {
+        requestBrowserNotificationPermission();
+        markAssignedTicketAlertsRead();
+      }
       loadTickets({ forceBlocking: true, message: "טוען נתונים..." });
     });
   });
@@ -4185,6 +4408,12 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("ticket-detail-modal").addEventListener("click", (event) => {
     if (event.target.id === "ticket-detail-modal") closeTicketDetail();
   });
+  document.getElementById("close-delete-ticket-confirm-modal")?.addEventListener("click", closeDeleteTicketConfirm);
+  document.getElementById("cancel-delete-ticket-btn")?.addEventListener("click", closeDeleteTicketConfirm);
+  document.getElementById("confirm-delete-ticket-btn")?.addEventListener("click", confirmDeleteTicket);
+  document.getElementById("delete-ticket-confirm-modal")?.addEventListener("click", (event) => {
+    if (event.target.id === "delete-ticket-confirm-modal") closeDeleteTicketConfirm();
+  });
   document.getElementById("close-notification-error-modal")?.addEventListener("click", closeNotificationErrorModal);
   document.getElementById("notification-error-close-btn")?.addEventListener("click", closeNotificationErrorModal);
   document.getElementById("notification-error-modal")?.addEventListener("click", (event) => {
@@ -4252,6 +4481,10 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
   document.addEventListener("keydown", (event) => {
+    if (document.getElementById("delete-ticket-confirm-modal")?.classList.contains("open") && event.key === "Escape") {
+      closeDeleteTicketConfirm();
+      return;
+    }
     if (document.getElementById("notification-error-modal")?.classList.contains("open") && event.key === "Escape") {
       closeNotificationErrorModal();
       return;
@@ -4285,6 +4518,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  refreshTicketAlertIndicators();
   loadTickets();
   if (boardSupportsReport(boardSlug)) {
     ["pais-report-period", "pais-report-status", "pais-report-from", "pais-report-to"].forEach((id) => {

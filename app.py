@@ -711,7 +711,7 @@ TICKET_BOARD_DEFAULTS = {
         "name": "נימבוס",
         "icon_path": "https://tel1.nimbusip.com/themes/default/images/logo.png",
         "route_path": "/support-tickets",
-        "workflow": "coordination",
+        "workflow": "standard",
         "paste_template": "",
         "report_enabled": True,
         "sort_order": 1,
@@ -1553,7 +1553,7 @@ def get_ticket_board(board_slug):
 
 
 def board_supports_coordination(board_slug):
-    return get_ticket_board(board_slug).get("workflow") == "coordination"
+    return (board_slug or "").strip().lower() in {"pais", "hot-kiryot"}
 
 
 def board_has_coordination_report(board_slug):
@@ -3300,7 +3300,7 @@ def next_support_ticket_id():
     return max([int(ticket.get("id") or 0) for ticket in tickets] or [0]) + 1
 
 
-def support_ticket_stats(tickets):
+def support_ticket_stats(tickets, current_support_user=""):
     board_waiting = {
         "pais": len([
             t for t in tickets
@@ -3313,12 +3313,25 @@ def support_ticket_stats(tickets):
             and status_is_coordination_pending(t.get("status"))
         ]),
     }
+    normalized_current_user = canonical_support_user_name(current_support_user)
+    my_tickets = [
+        ticket for ticket in tickets
+        if normalized_current_user and ticket_owner_name(ticket) == normalized_current_user
+    ]
+    my_open_tickets = [ticket for ticket in my_tickets if support_ticket_is_open(ticket)]
     return {
         "all": len(tickets),
         "waiting": len([t for t in tickets if support_ticket_is_open(t)]),
         "done": len([t for t in tickets if support_ticket_is_done(t)]),
         "coordination": len([t for t in tickets if status_is_coordination_pending(t.get("status"))]),
         "unassigned": len([t for t in tickets if not t.get("assigned_to")]),
+        "my": len(my_tickets),
+        "my_open": len(my_open_tickets),
+        "my_open_ticket_ids": [
+            int(ticket.get("id") or 0)
+            for ticket in my_open_tickets
+            if int(ticket.get("id") or 0) > 0
+        ],
         "board_waiting": board_waiting,
     }
 
@@ -8654,7 +8667,7 @@ def _build_support_tickets_meta_payload(
     )
 
     return {
-        "stats": support_ticket_stats(base_tickets),
+        "stats": support_ticket_stats(base_tickets, current_support_user),
         "next_id": f"#{next_support_ticket_id():04d}",
         "current_user": current_support_user,
         "board": get_ticket_board(board_slug),

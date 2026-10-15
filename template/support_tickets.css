@@ -2311,7 +2311,20 @@ body.tickets-page-loading {
 #ticket-form-message {
   min-height: 20px;
   color: #a43d35;
+  font-size: 13px;
   font-weight: 700;
+}
+
+#ticket-form-message.saving {
+  color: #7b5b17;
+}
+
+#ticket-form-message.success {
+  color: #1f8a5b;
+}
+
+#ticket-form-message.error {
+  color: #b0433e;
 }
 
 @media (max-width: 1120px) {

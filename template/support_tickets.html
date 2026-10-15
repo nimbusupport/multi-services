@@ -68,7 +68,7 @@
       <button class="ticket-tab active" type="button" data-scope="all"><i class="fa-solid fa-user-clock"></i><span>כל כרטיסי התאום</span><strong id="stat-all">0</strong></button>
       {% else %}
       <button class="ticket-tab active" type="button" data-scope="all"><i class="fa-solid fa-inbox"></i><span>כל הקריאות</span><strong id="stat-all">0</strong></button>
-      <button class="ticket-tab" type="button" data-scope="my"><i class="fa-solid fa-user-check"></i><span>הקריאות שלי</span></button>
+      <button class="ticket-tab" type="button" data-scope="my"><i class="fa-solid fa-user-check"></i><span>הקריאות שלי</span><strong id="stat-my">0</strong></button>
       <button class="ticket-tab" type="button" data-scope="unassigned"><i class="fa-regular fa-circle-question"></i><span>ללא שיוך</span><strong id="stat-unassigned">0</strong></button>
       {% endif %}
 
@@ -888,6 +888,23 @@
         <button class="secondary-btn" id="clear-signature-btn" type="button">נקה</button>
         <button class="secondary-btn" id="cancel-signature-btn" type="button">Cancel</button>
         <button class="create-ticket-btn" id="save-signature-btn" type="button">סיום</button>
+      </div>
+    </section>
+  </div>
+
+  <div class="ticket-modal" id="delete-ticket-confirm-modal" aria-hidden="true">
+    <section class="confirm-card">
+      <header>
+        <div>
+          <p>מחיקת טיקט</p>
+          <h2 id="delete-ticket-confirm-title">האם למחוק טיקט?</h2>
+        </div>
+        <button class="icon-btn" id="close-delete-ticket-confirm-modal" type="button" title="סגור" aria-label="סגור"><i class="fa-solid fa-xmark"></i></button>
+      </header>
+      <p class="confirm-copy" id="delete-ticket-confirm-message">הטיקט יימחק לצמיתות.</p>
+      <div class="confirm-actions">
+        <button class="secondary-btn" id="cancel-delete-ticket-btn" type="button">לא</button>
+        <button class="create-ticket-btn" id="confirm-delete-ticket-btn" type="button"><span>כן</span></button>
       </div>
     </section>
   </div>

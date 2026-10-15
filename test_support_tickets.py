@@ -1477,6 +1477,54 @@ class SupportTicketsTestCase(unittest.TestCase):
         active_users = [item["user"] for item in payload["leaderboard"] if item.get("active")]
         self.assertEqual(active_users, ["מוסטפה.א"])
 
+    def test_support_tickets_stats_include_my_ticket_counter(self):
+        tickets = [
+            {
+                "id": 2,
+                "board_slug": "support",
+                "created_at": "2026-10-12T18:04:00+03:00",
+                "created_at_display": "12/10/2026 18:04",
+                "creator": "Admin",
+                "ticket_type": "תקלה",
+                "service_type": "נימבוס",
+                "domain": "callcenter",
+                "priority": "High",
+                "description": "בדיקה",
+                "solution": "",
+                "status": "ממתין",
+                "assigned_to": "זורה תמיכה",
+                "details": {},
+                "attachments": [],
+                "updates": [],
+            },
+            {
+                "id": 3,
+                "board_slug": "support",
+                "created_at": "2026-10-11T10:00:00+03:00",
+                "created_at_display": "11/10/2026 10:00",
+                "creator": "Admin",
+                "ticket_type": "תקלה",
+                "service_type": "נימבוס",
+                "domain": "callcenter",
+                "priority": "Medium",
+                "description": "בדיקה נוספת",
+                "solution": "",
+                "status": "בוצע",
+                "assigned_to": "ניר",
+                "details": {},
+                "attachments": [],
+                "updates": [],
+            },
+        ]
+        normalized = [self.app_module.normalize_support_ticket(ticket) for ticket in tickets]
+
+        stats = self.app_module.support_ticket_stats(normalized, "זורה תמיכה")
+
+        self.assertEqual(stats["all"], 2)
+        self.assertEqual(stats["my"], 1)
+        self.assertEqual(stats["my_open"], 1)
+        self.assertEqual(stats["my_open_ticket_ids"], [2])
+
     def test_support_tickets_data_can_filter_by_worker_owner(self):
         tickets = self.app_module.load_support_tickets()
         tickets.extend([
