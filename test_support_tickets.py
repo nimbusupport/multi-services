@@ -5597,6 +5597,31 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertIn("nastya@nimbusip.com", payload["ticket"]["notification_message"])
         self.assertIn("assafh@nimbusip.com", payload["ticket"]["notification_message"])
 
+    def test_support_tickets_data_can_skip_meta_payload(self):
+        self.login("admin@nimbusip.com")
+
+        response = self.client.get("/support-tickets-data?board=support&include_meta=0")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertIn("tickets", payload)
+        self.assertIn("background", payload)
+        self.assertNotIn("stats", payload)
+        self.assertNotIn("next_id", payload)
+        self.assertNotIn("users", payload)
+
+    def test_support_tickets_meta_data_returns_meta_without_ticket_rows(self):
+        self.login("admin@nimbusip.com")
+
+        response = self.client.get("/support-tickets-meta-data?board=support")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertIn("stats", payload)
+        self.assertIn("next_id", payload)
+        self.assertIn("users", payload)
+        self.assertNotIn("tickets", payload)
+
     def test_support_tickets_data_can_stage_current_month_before_older_tickets(self):
         tickets = self.app_module.load_support_tickets()
         tickets.append({

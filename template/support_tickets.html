@@ -279,7 +279,11 @@
       </div>
 
       {% if show_pais_report %}
-      <section class="pais-report-panel">
+      <section class="pais-report-panel" id="pais-report-panel">
+        <div class="pais-report-loading" id="pais-report-loading" hidden>
+          <span class="pais-report-loading-spinner" aria-hidden="true"></span>
+          <strong id="pais-report-loading-text">טוען נתונים...</strong>
+        </div>
         <div class="pais-report-head">
           <div>
             <p>Report</p>

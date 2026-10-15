@@ -507,6 +507,7 @@ body.dashboard-page {
 }
 
 .pais-report-panel {
+  position: relative;
   margin-bottom: 16px;
   border: 1px solid #d9dfee;
   border-radius: 14px;
@@ -545,6 +546,36 @@ body.dashboard-page {
 
 .pais-report-summary {
   margin-top: 12px;
+}
+
+
+.pais-report-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  border-radius: 14px;
+  background: rgba(251, 250, 247, 0.88);
+  color: #1f2f46;
+  font-size: 18px;
+  font-weight: 900;
+  backdrop-filter: blur(2px);
+}
+
+.pais-report-loading[hidden] {
+  display: none;
+}
+
+.pais-report-loading-spinner {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  border: 3px solid rgba(31, 47, 70, 0.18);
+  border-top-color: #2f7b72;
+  animation: ticket-spin 0.85s linear infinite;
 }
 
 .report-stat-card,

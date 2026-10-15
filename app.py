@@ -8508,6 +8508,161 @@ def nastia_tickets_page():
     )
 
 
+def _support_tickets_base_visible_rows(tickets, queue_slug, current_support_user, assigned_technician_mode):
+    visible = list(tickets)
+    if queue_slug == "nastia":
+        visible = [ticket for ticket in visible if pais_ticket_is_coordination(ticket)]
+    if assigned_technician_mode:
+        visible = [
+            ticket for ticket in visible
+            if assigned_technician_can_access_ticket(ticket, current_support_user)
+        ]
+    return visible
+
+
+def _support_tickets_apply_filters(
+    tickets,
+    board_slug,
+    queue_slug,
+    scope,
+    status_filter,
+    assignee_filter,
+    worker_filter,
+    priority_filter,
+    date_from,
+    date_to,
+    search,
+    current_support_user,
+    assigned_technician_mode,
+):
+    filtered = _support_tickets_base_visible_rows(
+        tickets,
+        queue_slug,
+        current_support_user,
+        assigned_technician_mode,
+    )
+
+    effective_scope = "my" if assigned_technician_mode else scope
+    effective_assignee_filter = "" if assigned_technician_mode else assignee_filter
+
+    if effective_scope == "my":
+        if assigned_technician_mode:
+            filtered = [
+                ticket for ticket in filtered
+                if assigned_technician_can_access_ticket(ticket, current_support_user)
+            ]
+        else:
+            filtered = [ticket for ticket in filtered if ticket.get("assigned_to") == current_support_user]
+    elif effective_scope == "unassigned":
+        filtered = [ticket for ticket in filtered if not ticket.get("assigned_to")]
+
+    if status_filter:
+        filtered = [ticket for ticket in filtered if ticket.get("status") == status_filter]
+    if effective_assignee_filter:
+        filtered = [ticket for ticket in filtered if ticket.get("assigned_to") == effective_assignee_filter]
+    if worker_filter:
+        filtered = [ticket for ticket in filtered if ticket_owner_name(ticket) == worker_filter]
+    if priority_filter:
+        filtered = [ticket for ticket in filtered if ticket.get("priority") == priority_filter]
+
+    parsed_date_from = parse_date_filter(date_from, end_of_day=False)
+    parsed_date_to = parse_date_filter(date_to, end_of_day=True)
+    if parsed_date_from and not parsed_date_to:
+        parsed_date_to = israel_now().replace(hour=23, minute=59, second=59, microsecond=0)
+    filtered = filter_tickets_by_created_range(
+        filtered,
+        parsed_date_from,
+        parsed_date_to,
+    )
+
+    if search:
+        if board_slug == "pais":
+            filtered = [
+                ticket for ticket in filtered
+                if (
+                    search in str((ticket.get("details") or {}).get("terminal_number") or "").lower()
+                    or search in str((ticket.get("details") or {}).get("address") or "").lower()
+                )
+            ]
+        elif board_slug == "hot-kiryot":
+            filtered = [
+                ticket for ticket in filtered
+                if any(
+                    search in str((ticket.get("details") or {}).get(field_name) or "").lower()
+                    for field_name in ("call_number", "customer_name", "address", "line_code", "issue_summary")
+                )
+                or search in str(ticket.get("ticket_id") or "").lower()
+                or search in str(ticket.get("id") or "").lower()
+            ]
+        else:
+            filtered = [
+                ticket for ticket in filtered
+                if search in json.dumps(ticket, ensure_ascii=False).lower()
+            ]
+
+    return filtered
+
+
+def _sort_support_tickets_for_response(tickets, queue_slug):
+    if queue_slug == "nastia":
+        tickets.sort(
+            key=lambda item: (
+                0 if normalize_ticket_status(item.get("board_slug"), item.get("status")) in {"ממתין", COORDINATION_PENDING_STATUS} else 1,
+                -int(item.get("id") or 0),
+            )
+        )
+    else:
+        tickets.sort(key=lambda item: int(item.get("id") or 0), reverse=True)
+    return tickets
+
+
+def _build_support_tickets_meta_payload(
+    board_slug,
+    queue_slug,
+    scope,
+    status_filter,
+    assignee_filter,
+    worker_filter,
+    priority_filter,
+    date_from,
+    date_to,
+    search,
+    current_support_user,
+    assigned_technician_mode,
+):
+    meta_source_tickets = load_support_tickets(include_related=False) if queue_slug == "nastia" else load_support_tickets(board_slug, include_related=False)
+    base_tickets = _support_tickets_base_visible_rows(
+        meta_source_tickets,
+        queue_slug,
+        current_support_user,
+        assigned_technician_mode,
+    )
+    filtered_tickets = _support_tickets_apply_filters(
+        meta_source_tickets,
+        board_slug,
+        queue_slug,
+        scope,
+        status_filter,
+        assignee_filter,
+        worker_filter,
+        priority_filter,
+        date_from,
+        date_to,
+        search,
+        current_support_user,
+        assigned_technician_mode,
+    )
+
+    return {
+        "stats": support_ticket_stats(base_tickets),
+        "next_id": f"#{next_support_ticket_id():04d}",
+        "current_user": current_support_user,
+        "board": get_ticket_board(board_slug),
+        "users": support_ticket_assignee_choices(filtered_tickets),
+        "statuses": board_statuses(board_slug),
+    }
+
+
 @app.route("/support-tickets-data")
 def support_tickets_data():
     if not session.get("logged_in"):
@@ -8518,19 +8673,34 @@ def support_tickets_data():
     page_key = support_page_key(board_slug, queue_slug)
     if not user_can_access_page(page_key):
         return api_error("אין הרשאה לגשת לעמוד זה", 403, "access_denied")
+
     register_service_activity(page_key)
+
     batch_size_raw = (request.args.get("batch_size") or "200").strip()
     try:
         batch_size = max(50, min(int(batch_size_raw), 500))
     except ValueError:
         batch_size = 200
+
     before_id_raw = (request.args.get("before_id") or "").strip()
     try:
         before_id = int(before_id_raw) if before_id_raw else None
     except ValueError:
         before_id = None
+
     response_mode = (request.args.get("window") or "all").strip().lower()
     return_summaries = str(request.args.get("summaries") or "").strip().lower() in {"1", "true", "yes"}
+    include_meta = str(request.args.get("include_meta") or "1").strip().lower() in {"1", "true", "yes"}
+    scope = (request.args.get("scope") or "all").strip().lower()
+    status_filter = (request.args.get("status") or "").strip()
+    assignee_filter = (request.args.get("assignee") or "").strip()
+    worker_filter = canonical_support_user_name((request.args.get("worker") or "").strip())
+    priority_filter = (request.args.get("priority") or "").strip()
+    date_from = (request.args.get("date_from") or "").strip()
+    date_to = (request.args.get("date_to") or "").strip()
+    search = (request.args.get("search") or "").strip().lower()
+    current_support_user = support_user_name()
+    assigned_technician_mode = support_user_is_assigned_technician()
     current_month_start = israel_now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
     load_kwargs = {}
@@ -8548,95 +8718,22 @@ def support_tickets_data():
         load_kwargs["include_related"] = False
 
     tickets = load_support_tickets(**load_kwargs) if queue_slug == "nastia" else load_support_tickets(board_slug, **load_kwargs)
-    stats_load_kwargs = {"include_related": False} if response_mode in {"current_month", "older"} or return_summaries else load_kwargs
-    stats_source_tickets = load_support_tickets(**stats_load_kwargs) if queue_slug == "nastia" else load_support_tickets(board_slug, **stats_load_kwargs)
-    scope = (request.args.get("scope") or "all").strip().lower()
-    status_filter = (request.args.get("status") or "").strip()
-    assignee_filter = (request.args.get("assignee") or "").strip()
-    worker_filter = canonical_support_user_name((request.args.get("worker") or "").strip())
-    priority_filter = (request.args.get("priority") or "").strip()
-    date_from = (request.args.get("date_from") or "").strip()
-    date_to = (request.args.get("date_to") or "").strip()
-    search = (request.args.get("search") or "").strip().lower()
-    current_support_user = support_user_name()
-    assigned_technician_mode = support_user_is_assigned_technician()
-
-    base_tickets = list(stats_source_tickets)
-    filtered = list(tickets)
-    if queue_slug == "nastia":
-        base_tickets = [ticket for ticket in base_tickets if pais_ticket_is_coordination(ticket)]
-        filtered = [ticket for ticket in filtered if pais_ticket_is_coordination(ticket)]
-    if assigned_technician_mode:
-        base_tickets = [
-            ticket for ticket in base_tickets
-            if assigned_technician_can_access_ticket(ticket, current_support_user)
-        ]
-        filtered = [
-            ticket for ticket in filtered
-            if assigned_technician_can_access_ticket(ticket, current_support_user)
-        ]
-        scope = "my"
-        assignee_filter = ""
-
-    if scope == "my":
-        if assigned_technician_mode:
-            filtered = [t for t in filtered if assigned_technician_can_access_ticket(t, current_support_user)]
-        else:
-            filtered = [t for t in filtered if t.get("assigned_to") == current_support_user]
-    elif scope == "unassigned":
-        filtered = [t for t in filtered if not t.get("assigned_to")]
-
-    if status_filter:
-        filtered = [t for t in filtered if t.get("status") == status_filter]
-    if assignee_filter:
-        filtered = [t for t in filtered if t.get("assigned_to") == assignee_filter]
-    if worker_filter:
-        filtered = [t for t in filtered if ticket_owner_name(t) == worker_filter]
-    if priority_filter:
-        filtered = [t for t in filtered if t.get("priority") == priority_filter]
-    parsed_date_from = parse_date_filter(date_from, end_of_day=False)
-    parsed_date_to = parse_date_filter(date_to, end_of_day=True)
-    if parsed_date_from and not parsed_date_to:
-        parsed_date_to = israel_now().replace(hour=23, minute=59, second=59, microsecond=0)
-    filtered = filter_tickets_by_created_range(
-        filtered,
-        parsed_date_from,
-        parsed_date_to,
+    filtered = _support_tickets_apply_filters(
+        tickets,
+        board_slug,
+        queue_slug,
+        scope,
+        status_filter,
+        assignee_filter,
+        worker_filter,
+        priority_filter,
+        date_from,
+        date_to,
+        search,
+        current_support_user,
+        assigned_technician_mode,
     )
-    if search:
-        if board_slug == "pais":
-            filtered = [
-                t for t in filtered
-                if (
-                    search in str((t.get("details") or {}).get("terminal_number") or "").lower()
-                    or search in str((t.get("details") or {}).get("address") or "").lower()
-                )
-            ]
-        elif board_slug == "hot-kiryot":
-            filtered = [
-                t for t in filtered
-                if any(
-                    search in str((t.get("details") or {}).get(field_name) or "").lower()
-                    for field_name in ("call_number", "customer_name", "address", "line_code", "issue_summary")
-                )
-                or search in str(t.get("ticket_id") or "").lower()
-                or search in str(t.get("id") or "").lower()
-            ]
-        else:
-            filtered = [
-                t for t in filtered
-                if search in json.dumps(t, ensure_ascii=False).lower()
-            ]
-
-    if queue_slug == "nastia":
-        filtered.sort(
-            key=lambda item: (
-                0 if normalize_ticket_status(item.get("board_slug"), item.get("status")) in {"ממתין", COORDINATION_PENDING_STATUS} else 1,
-                -int(item.get("id") or 0),
-            )
-        )
-    else:
-        filtered.sort(key=lambda item: int(item.get("id") or 0), reverse=True)
+    filtered = _sort_support_tickets_for_response(filtered, queue_slug)
 
     has_more = False
     next_before_id = None
@@ -8661,24 +8758,73 @@ def support_tickets_data():
         if has_more:
             next_before_id = int(older_probe[0].get("id") or 0)
 
-    if return_summaries:
-        filtered = [build_support_ticket_summary(ticket) for ticket in filtered]
-
-    return jsonify({
-        "tickets": filtered,
-        "stats": support_ticket_stats(base_tickets),
-        "next_id": f"#{next_support_ticket_id():04d}",
-        "current_user": current_support_user,
-        "board": get_ticket_board(board_slug),
-        "users": support_ticket_assignee_choices(filtered),
-        "statuses": board_statuses(board_slug),
+    response_tickets = [build_support_ticket_summary(ticket) for ticket in filtered] if return_summaries else filtered
+    payload = {
+        "tickets": response_tickets,
         "background": {
             "mode": response_mode,
             "has_more": has_more,
             "next_before_id": next_before_id,
             "current_month_start": current_month_start.date().isoformat(),
         },
-    })
+    }
+    if include_meta:
+        payload.update(_build_support_tickets_meta_payload(
+            board_slug,
+            queue_slug,
+            scope,
+            status_filter,
+            assignee_filter,
+            worker_filter,
+            priority_filter,
+            date_from,
+            date_to,
+            search,
+            current_support_user,
+            assigned_technician_mode,
+        ))
+
+    return jsonify(payload)
+
+
+@app.route("/support-tickets-meta-data")
+def support_tickets_meta_data():
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    board_slug = (request.args.get("board") or "support").strip().lower()
+    queue_slug = (request.args.get("queue") or "").strip().lower()
+    page_key = support_page_key(board_slug, queue_slug)
+    if not user_can_access_page(page_key):
+        return api_error("אין הרשאה לגשת לעמוד זה", 403, "access_denied")
+
+    register_service_activity(page_key)
+
+    scope = (request.args.get("scope") or "all").strip().lower()
+    status_filter = (request.args.get("status") or "").strip()
+    assignee_filter = (request.args.get("assignee") or "").strip()
+    worker_filter = canonical_support_user_name((request.args.get("worker") or "").strip())
+    priority_filter = (request.args.get("priority") or "").strip()
+    date_from = (request.args.get("date_from") or "").strip()
+    date_to = (request.args.get("date_to") or "").strip()
+    search = (request.args.get("search") or "").strip().lower()
+    current_support_user = support_user_name()
+    assigned_technician_mode = support_user_is_assigned_technician()
+
+    return jsonify(_build_support_tickets_meta_payload(
+        board_slug,
+        queue_slug,
+        scope,
+        status_filter,
+        assignee_filter,
+        worker_filter,
+        priority_filter,
+        date_from,
+        date_to,
+        search,
+        current_support_user,
+        assigned_technician_mode,
+    ))
 
 
 @app.route("/support-ticket-detail-data/<ticket_id>")

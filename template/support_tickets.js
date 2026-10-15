@@ -59,6 +59,37 @@ function boardDisplayName(boardSlugValue) {
   return String(boardConfig(boardSlugValue).name || (boardSlugValue === "support" ? "נימבוס" : ""));
 }
 
+function boardLoadingLabel(boardSlugValue) {
+  const normalized = String(boardSlugValue || "").trim().toLowerCase();
+  if (normalized === "pais" || normalized === "nastia") return "פיס";
+  if (normalized === "hot-kiryot") return "הוט";
+  if (normalized === "support") return "נימבוס";
+  return boardDisplayName(normalized) || "הקריאות";
+}
+
+function boardSlugFromHref(href) {
+  try {
+    const pathname = new URL(href, window.location.origin).pathname.toLowerCase();
+    if (pathname.includes("/pais-tickets") || pathname.includes("/nastia-tickets")) return "pais";
+    if (pathname.includes("/hot-tickets")) return "hot-kiryot";
+    if (pathname.includes("/support-tickets")) return "support";
+  } catch (error) {
+  }
+  return boardSlug;
+}
+
+function boardLoadingMessage(boardSlugValue = boardSlug) {
+  return `טוען נתוני ${boardLoadingLabel(boardSlugValue)}...`;
+}
+
+function normalizeLoadingMessage(message, fallbackMessage = boardLoadingMessage()) {
+  const text = String(message || "").trim();
+  if (!text || text === "טוען נתונים..." || text === "טוען קריאות...") {
+    return fallbackMessage;
+  }
+  return text;
+}
+
 function boardSupportsCoordination(boardSlugValue) {
   return String(boardConfig(boardSlugValue).workflow || "") === "coordination";
 }
@@ -360,7 +391,7 @@ function applyTicketsResponse(data, { append = false, updateStats = true, resetU
 }
 
 function shouldStageTicketLoading(params) {
-  return !params.search && !params.date_from && !params.date_to;
+  return !params.date_from && !params.date_to;
 }
 
 async function fetchTicketsPayload(params, signal) {
@@ -589,7 +620,7 @@ function setTicketsLoading(isLoading, options = {}) {
   const empty = document.getElementById("tickets-empty");
   const refreshIndicator = document.getElementById("tickets-refresh-indicator");
   const loadingText = document.getElementById("tickets-loading-text");
-  const message = options?.message || "טוען קריאות...";
+  const message = normalizeLoadingMessage(options?.message, boardLoadingMessage());
   const forceBlocking = options?.forceBlocking === true;
   const showBlockingLoader = Boolean(isLoading) && (forceBlocking || lastTickets.length === 0);
   if (stage) {
@@ -1616,9 +1647,6 @@ async function loadTickets(options = {}) {
       ...data,
       tickets: applyNastyaBoardFilter(applyReportQuickFilter(data.tickets)),
     }, { resetUsers: true });
-    if (stagedLoad && data?.background?.has_more && data?.background?.next_before_id) {
-      void loadOlderTicketsInBackground(loadRequestId, baseParams, String(data.background.next_before_id));
-    }
   } catch (err) {
     if (err?.name !== "AbortError") {
       throw err;
@@ -1633,19 +1661,21 @@ async function loadTickets(options = {}) {
 }
 
 function setTicketsPageLoading(isLoading, message = "טוען נתונים...") {
+  const effectiveMessage = normalizeLoadingMessage(message, boardLoadingMessage());
   const overlay = document.getElementById("tickets-page-loading-overlay");
   const messageHost = document.getElementById("tickets-page-loading-text");
   if (!overlay) return;
   overlay.hidden = !isLoading;
   document.body.classList.toggle("tickets-page-loading", Boolean(isLoading));
   if (messageHost) {
-    messageHost.textContent = message;
+    messageHost.textContent = effectiveMessage;
   }
 }
 
 function navigateWithTicketsPageLoader(href, message = "טוען נתונים...") {
   if (!href) return;
-  setTicketsPageLoading(true, message);
+  const effectiveMessage = normalizeLoadingMessage(message, boardLoadingMessage(boardSlugFromHref(href)));
+  setTicketsPageLoading(true, effectiveMessage);
   window.setTimeout(() => {
     window.location.href = href;
   }, 24);
@@ -3671,6 +3701,7 @@ function showTicketDetail(ticket) {
 }
 
 function setTicketDetailLoading(isLoading, message = "טוען נתונים...") {
+  const effectiveMessage = normalizeLoadingMessage(message, boardLoadingMessage());
   const modal = document.getElementById("ticket-detail-modal");
   const overlay = document.getElementById("ticket-detail-loading");
   const messageHost = document.getElementById("ticket-detail-loading-text");
@@ -3681,7 +3712,7 @@ function setTicketDetailLoading(isLoading, message = "טוען נתונים...")
     overlay.hidden = !isLoading;
   }
   if (messageHost) {
-    messageHost.textContent = message;
+    messageHost.textContent = effectiveMessage;
   }
 }
 
