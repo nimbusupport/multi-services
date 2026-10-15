@@ -31,7 +31,7 @@
 
     <section class="card-grid">
       {% if can_access_support %}
-      <article class="service-card theme-tickets">
+      <article class="service-card theme-tickets" data-loading-href="/support-tickets" tabindex="0" role="link" aria-label="פתח קריאות שירות">
         <div class="card-hero">
           <div class="card-icon"><i class="fa-solid fa-ticket"></i></div>
         </div>
@@ -40,7 +40,7 @@
             <span class="badge tickets">קריאות</span>
           </div>
           <h2>קריאות שירות</h2>
-          <a class="connect-btn" href="/support-tickets">פתח קריאות</a>
+          <a class="connect-btn" href="/support-tickets" data-loading-link="true">פתח קריאות</a>
           <div class="active-users" id="support_tickets-users"></div>
           <div class="meter-row">
             <span>ממתינים</span>
@@ -52,7 +52,7 @@
       {% endif %}
 
       {% if can_access_pais %}
-      <article class="service-card theme-pais">
+      <article class="service-card theme-pais" data-loading-href="/pais-tickets" tabindex="0" role="link" aria-label="פתח תור מפעל הפיס">
         <div class="card-hero">
           <div class="card-icon card-icon-image">
             <img src="/picture/pais.png" alt="Pais">
@@ -63,7 +63,7 @@
             <span class="badge tickets">Pais</span>
           </div>
           <h2>מפעל הפיס</h2>
-          <a class="connect-btn" href="/pais-tickets">פתח תור</a>
+          <a class="connect-btn" href="/pais-tickets" data-loading-link="true">פתח תור</a>
           <div class="active-users" id="pais_tickets-users"></div>
           <div class="meter-row">
             <span>ממתינים</span>
@@ -75,7 +75,7 @@
       {% endif %}
 
       {% if can_access_hot %}
-      <article class="service-card theme-hot">
+      <article class="service-card theme-hot" data-loading-href="/hot-kiryot-tickets" tabindex="0" role="link" aria-label="פתח תור הוט קריאות">
         <div class="card-hero">
           <div class="card-icon card-icon-image">
             <img src="https://hot.nimbusip.com/themes/default/images/logo.png" alt="HOT">
@@ -86,7 +86,7 @@
             <span class="badge tickets">HOT</span>
           </div>
           <h2>הוט קריאות</h2>
-          <a class="connect-btn" href="/hot-kiryot-tickets">פתח תור</a>
+          <a class="connect-btn" href="/hot-kiryot-tickets" data-loading-link="true">פתח תור</a>
           <div class="active-users" id="hot_tickets-users"></div>
           <div class="meter-row">
             <span>ממתינים</span>
@@ -98,6 +98,13 @@
       {% endif %}
     </section>
   </main>
+
+  <div class="page-loading-overlay" id="page-loading-overlay" hidden aria-live="polite" aria-busy="true">
+    <div class="page-loading-card">
+      <span class="page-loading-spinner" aria-hidden="true"></span>
+      <strong id="page-loading-text">טוען נתונים...</strong>
+    </div>
+  </div>
 
   <script src="/nav.js"></script>
   <script src="/home.js"></script>

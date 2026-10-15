@@ -14,6 +14,11 @@ let sendSuccessToastTimer = null;
 let signaturePadDirty = false;
 let activeFieldReportSignatureTarget = "customer";
 let nastyaBoardFilter = "all";
+let lastTicketUsers = [];
+let ticketLoadRequestId = 0;
+let ticketDetailRequestId = 0;
+
+const OLDER_TICKETS_BATCH_SIZE = 200;
 
 const AUTO_REFRESH_INTERVAL_MS = 10000;
 const CANCELLED_STATUS = "בוטל";
@@ -310,6 +315,62 @@ function ticketListTimestamp(ticket) {
   return ticket?.list_timestamp_display || ticket?.last_edited_at_display || ticket?.created_at_display || "";
 }
 
+function ticketAttachmentCount(ticket) {
+  const count = Number(ticket?.attachment_count);
+  if (Number.isFinite(count) && count >= 0) {
+    return count;
+  }
+  return Array.isArray(ticket?.attachments) ? ticket.attachments.length : 0;
+}
+
+function firstTicketAttachment(ticket) {
+  return Array.isArray(ticket?.attachments) && ticket.attachments.length ? ticket.attachments[0] : null;
+}
+
+function mergeTicketsById(existingTickets, incomingTickets) {
+  const byId = new Map((Array.isArray(existingTickets) ? existingTickets : []).map((ticket) => [Number(ticket?.id || 0), ticket]));
+  (Array.isArray(incomingTickets) ? incomingTickets : []).forEach((ticket) => {
+    const ticketId = Number(ticket?.id || 0);
+    if (!ticketId) return;
+    const currentTicket = byId.get(ticketId) || {};
+    byId.set(ticketId, { ...currentTicket, ...ticket });
+  });
+  return Array.from(byId.values()).sort((left, right) => Number(right?.id || 0) - Number(left?.id || 0));
+}
+
+function syncTicketUsers(users, { reset = false } = {}) {
+  if (reset) {
+    lastTicketUsers = [];
+  }
+  lastTicketUsers = Array.from(new Set([...(lastTicketUsers || []), ...((Array.isArray(users) ? users : []).filter(Boolean))]));
+}
+
+function applyTicketsResponse(data, { append = false, updateStats = true, resetUsers = false } = {}) {
+  const tickets = Array.isArray(data?.tickets) ? data.tickets : [];
+  syncTicketUsers(data?.users, { reset: resetUsers });
+  lastTickets = append ? mergeTicketsById(lastTickets, tickets) : tickets;
+  if (updateStats && data?.stats) {
+    renderStats(data.stats);
+  }
+  renderTickets(lastTickets, lastTicketUsers);
+  const nextTicketId = document.getElementById("next-ticket-id");
+  if (nextTicketId && data?.next_id) {
+    nextTicketId.textContent = data.next_id;
+  }
+}
+
+function shouldStageTicketLoading(params) {
+  return !params.search && !params.date_from && !params.date_to;
+}
+
+async function fetchTicketsPayload(params, signal) {
+  const res = await fetch(`/support-tickets-data?${new URLSearchParams(params).toString()}`, { signal });
+  if (!res.ok) {
+    throw new Error("טעינת הקריאות נכשלה");
+  }
+  return normalizeLegacyHebrewData(await res.json());
+}
+
 function detailDisplayValue(value, fallback = "—") {
   const text = String(value ?? "").trim();
   return text || fallback;
@@ -522,17 +583,23 @@ function clearCoordinationValidation() {
   setFieldInvalid(document.getElementById("detail-visit-hour-to"), false);
 }
 
-function setTicketsLoading(isLoading) {
+function setTicketsLoading(isLoading, options = {}) {
   const stage = document.getElementById("ticket-list-stage");
   const loading = document.getElementById("tickets-loading");
   const empty = document.getElementById("tickets-empty");
   const refreshIndicator = document.getElementById("tickets-refresh-indicator");
-  const showBlockingLoader = Boolean(isLoading) && lastTickets.length === 0;
+  const loadingText = document.getElementById("tickets-loading-text");
+  const message = options?.message || "טוען קריאות...";
+  const forceBlocking = options?.forceBlocking === true;
+  const showBlockingLoader = Boolean(isLoading) && (forceBlocking || lastTickets.length === 0);
   if (stage) {
     stage.classList.toggle("is-loading", showBlockingLoader);
   }
   if (loading) {
     loading.hidden = !showBlockingLoader;
+  }
+  if (loadingText) {
+    loadingText.textContent = message;
   }
   if (refreshIndicator) {
     refreshIndicator.hidden = !isLoading;
@@ -577,8 +644,8 @@ function renderTickets(tickets, users) {
     const assigneeOptions = ['<option value="">Unassigned</option>']
       .concat((users || []).map((user) => `<option value="${escapeHtml(user)}" ${ticket.assigned_to === user ? "selected" : ""}>${escapeHtml(user)}</option>`))
       .join("");
-    const firstAttachment = Array.isArray(ticket.attachments) ? ticket.attachments[0] : null;
-    const attachmentCount = Array.isArray(ticket.attachments) ? ticket.attachments.length : 0;
+    const firstAttachment = firstTicketAttachment(ticket);
+    const attachmentCount = ticketAttachmentCount(ticket);
     const statusClass = statusClassName(ticket.status);
     const coordinationMarkup = coordinationMetaMarkup(ticket);
 
@@ -1230,8 +1297,7 @@ async function savePaisDetail(ticketId) {
   }
 }
 
-function openTicketDetail(ticketId) {
-  const ticket = getTicket(ticketId);
+function showTicketDetail(ticket) {
   if (!ticket) return;
 
   const details = ticketDetails(ticket);
@@ -1333,9 +1399,11 @@ function openTicketDetail(ticketId) {
 }
 
 function closeTicketDetail() {
+  ticketDetailRequestId += 1;
   const modal = document.getElementById("ticket-detail-modal");
   modal.classList.remove("open");
   modal.setAttribute("aria-hidden", "true");
+  setTicketDetailLoading(false);
 }
 
 function openNotificationErrorModal(message) {
@@ -1487,15 +1555,41 @@ function closeImagePreview() {
   imagePreviewScale = 1;
 }
 
-async function loadTickets() {
+async function loadOlderTicketsInBackground(loadRequestId, baseParams, nextBeforeId) {
+  let cursor = nextBeforeId;
+  while (cursor && loadRequestId === ticketLoadRequestId) {
+    const data = await fetchTicketsPayload({
+      ...baseParams,
+      window: "older",
+      summaries: "1",
+      before_id: String(cursor),
+      batch_size: String(OLDER_TICKETS_BATCH_SIZE),
+    });
+    if (loadRequestId !== ticketLoadRequestId) {
+      return;
+    }
+    applyTicketsResponse({
+      ...data,
+      tickets: applyNastyaBoardFilter(applyReportQuickFilter(data.tickets)),
+    }, { append: true, updateStats: false });
+    if (!data?.background?.has_more) {
+      return;
+    }
+    cursor = data?.background?.next_before_id ? String(data.background.next_before_id) : "";
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+  }
+}
+
+async function loadTickets(options = {}) {
   if (ticketsAbortController) {
     ticketsAbortController.abort();
   }
   const controller = new AbortController();
   ticketsAbortController = controller;
+  const loadRequestId = ++ticketLoadRequestId;
   ticketsLoading = true;
-  setTicketsLoading(true);
-  const params = new URLSearchParams({
+  setTicketsLoading(true, options);
+  const baseParams = {
     board: boardSlug,
     scope: currentScope,
     queue: ticketQueue,
@@ -1506,14 +1600,25 @@ async function loadTickets() {
     date_to: document.getElementById("date-to-filter").value,
     search: document.getElementById("ticket-search").value,
     worker: leaderboardWorkerFilter,
-  });
+  };
+  const stagedLoad = shouldStageTicketLoading(baseParams);
   try {
-    const res = await fetch(`/support-tickets-data?${params.toString()}`, { signal: controller.signal });
-    if (!res.ok) return;
-    const data = normalizeLegacyHebrewData(await res.json());
-    renderStats(data.stats);
-    renderTickets(applyNastyaBoardFilter(applyReportQuickFilter(data.tickets)), data.users);
-    document.getElementById("next-ticket-id").textContent = data.next_id || "#0001";
+    const data = await fetchTicketsPayload({
+      ...baseParams,
+      window: stagedLoad ? "current_month" : "all",
+      summaries: stagedLoad ? "1" : "0",
+      batch_size: String(OLDER_TICKETS_BATCH_SIZE),
+    }, controller.signal);
+    if (loadRequestId !== ticketLoadRequestId) {
+      return;
+    }
+    applyTicketsResponse({
+      ...data,
+      tickets: applyNastyaBoardFilter(applyReportQuickFilter(data.tickets)),
+    }, { resetUsers: true });
+    if (stagedLoad && data?.background?.has_more && data?.background?.next_before_id) {
+      void loadOlderTicketsInBackground(loadRequestId, baseParams, String(data.background.next_before_id));
+    }
   } catch (err) {
     if (err?.name !== "AbortError") {
       throw err;
@@ -1525,6 +1630,41 @@ async function loadTickets() {
       setTicketsLoading(false);
     }
   }
+}
+
+function setTicketsPageLoading(isLoading, message = "טוען נתונים...") {
+  const overlay = document.getElementById("tickets-page-loading-overlay");
+  const messageHost = document.getElementById("tickets-page-loading-text");
+  if (!overlay) return;
+  overlay.hidden = !isLoading;
+  document.body.classList.toggle("tickets-page-loading", Boolean(isLoading));
+  if (messageHost) {
+    messageHost.textContent = message;
+  }
+}
+
+function navigateWithTicketsPageLoader(href, message = "טוען נתונים...") {
+  if (!href) return;
+  setTicketsPageLoading(true, message);
+  window.setTimeout(() => {
+    window.location.href = href;
+  }, 24);
+}
+
+function bindTicketsMenuNavigationLoading() {
+  document.querySelectorAll(".ticket-board-link").forEach((link) => {
+    link.addEventListener("click", (event) => {
+      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+        return;
+      }
+      event.preventDefault();
+      navigateWithTicketsPageLoader(link.href);
+    });
+  });
+
+  window.addEventListener("pageshow", () => {
+    setTicketsPageLoading(false);
+  });
 }
 
 function submitTicketSearch() {
@@ -2558,8 +2698,8 @@ function renderTickets(tickets, users) {
     const assigneeOptions = ['<option value="">Unassigned</option>']
       .concat((users || []).map((user) => `<option value="${escapeHtml(user)}" ${ticket.assigned_to === user ? "selected" : ""}>${escapeHtml(user)}</option>`))
       .join("");
-    const firstAttachment = Array.isArray(ticket.attachments) ? ticket.attachments[0] : null;
-    const attachmentCount = Array.isArray(ticket.attachments) ? ticket.attachments.length : 0;
+    const firstAttachment = firstTicketAttachment(ticket);
+    const attachmentCount = ticketAttachmentCount(ticket);
     const statusClass = statusClassName(ticket.status);
     const coordinationMarkup = coordinationMetaMarkup(ticket);
 
@@ -3354,8 +3494,7 @@ async function saveTicketDetailWithFeedback(ticketId, options = {}) {
   }
 }
 
-function openTicketDetail(ticketId) {
-  const ticket = getTicket(ticketId);
+function showTicketDetail(ticket) {
   if (!ticket) return;
 
   const details = ticketDetails(ticket);
@@ -3529,6 +3668,70 @@ function openTicketDetail(ticketId) {
   document.querySelectorAll(".open-field-report-btn").forEach((button) => {
     button.addEventListener("click", () => openFieldReportModal(button.dataset.ticketId || ""));
   });
+}
+
+function setTicketDetailLoading(isLoading, message = "טוען נתונים...") {
+  const modal = document.getElementById("ticket-detail-modal");
+  const overlay = document.getElementById("ticket-detail-loading");
+  const messageHost = document.getElementById("ticket-detail-loading-text");
+  if (modal) {
+    modal.classList.toggle("is-loading", Boolean(isLoading));
+  }
+  if (overlay) {
+    overlay.hidden = !isLoading;
+  }
+  if (messageHost) {
+    messageHost.textContent = message;
+  }
+}
+
+function mergeTicketIntoCache(ticket) {
+  if (!ticket) return null;
+  lastTickets = mergeTicketsById(lastTickets, [ticket]);
+  return getTicket(ticket.id);
+}
+
+async function fetchTicketDetail(ticketId) {
+  const params = new URLSearchParams({
+    board: boardSlug,
+    queue: ticketQueue,
+  });
+  const res = await fetch(`/support-ticket-detail-data/${encodeURIComponent(String(ticketId).replace("#", ""))}?${params.toString()}`);
+  const payload = normalizeLegacyHebrewData(await res.json());
+  if (!res.ok || payload?.ok === false || !payload?.ticket) {
+    throw new Error(payload?.message || "טעינת הקריאה נכשלה");
+  }
+  return payload.ticket;
+}
+
+async function openTicketDetail(ticketId) {
+  const modal = document.getElementById("ticket-detail-modal");
+  if (!modal) return;
+  const requestId = ++ticketDetailRequestId;
+  modal.classList.add("open");
+  modal.setAttribute("aria-hidden", "false");
+  setTicketDetailLoading(true, "טוען נתונים...");
+  try {
+    let ticket = getTicket(ticketId);
+    if (!ticket?.has_full_details) {
+      ticket = await fetchTicketDetail(ticketId);
+      ticket = mergeTicketIntoCache(ticket);
+    }
+    if (requestId !== ticketDetailRequestId) {
+      return;
+    }
+    showTicketDetail(ticket);
+  } catch (err) {
+    if (requestId !== ticketDetailRequestId) {
+      return;
+    }
+    closeTicketDetail();
+    openNotificationErrorModal(err.message || "טעינת הקריאה נכשלה");
+  } finally {
+    if (requestId === ticketDetailRequestId) {
+      setTicketDetailLoading(false);
+    }
+  }
 }
 
 function normalizeHotPasteLine(line) {
@@ -3847,6 +4050,7 @@ async function submitFieldReport(event) {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  bindTicketsMenuNavigationLoading();
   const portalToggle = document.querySelector(".portal-toggle");
   if (portalToggle) {
     const portalMenu = portalToggle.closest(".portal-menu");
@@ -3863,7 +4067,7 @@ document.addEventListener("DOMContentLoaded", () => {
       document.querySelectorAll(".ticket-tab").forEach((tab) => tab.classList.remove("active"));
       button.classList.add("active");
       currentScope = button.dataset.scope || "all";
-      loadTickets();
+      loadTickets({ forceBlocking: true, message: "טוען נתונים..." });
     });
   });
 
@@ -3873,13 +4077,10 @@ document.addEventListener("DOMContentLoaded", () => {
       const selectedBoard = String(button.dataset.boardFilter || "all");
       nastyaBoardFilter = nastyaBoardFilter === selectedBoard ? "all" : selectedBoard;
       syncNastyaBoardFilterButtons();
-      loadTickets();
+      loadTickets({ forceBlocking: true, message: "טוען נתונים..." });
     });
   });
 
-  ["status-filter", "assignee-filter", "priority-filter", "date-from-filter", "date-to-filter"].forEach((id) => {
-    document.getElementById(id).addEventListener("change", loadTickets);
-  });
   document.getElementById("ticket-filters-form")?.addEventListener("submit", (event) => {
     event.preventDefault();
     submitTicketSearch();

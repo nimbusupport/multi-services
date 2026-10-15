@@ -1054,6 +1054,8 @@ def normalize_support_ticket(ticket):
         ticket["details"]["coordinated_worker"] = canonical_support_user_name(ticket["details"].get("coordinated_worker"))
     ticket.setdefault("attachments", [])
     ticket.setdefault("updates", [])
+    ticket["attachment_count"] = int(ticket.get("attachment_count") or len(ticket.get("attachments") or []))
+    ticket["has_full_details"] = bool(ticket.get("has_full_details", True))
     ticket["created_at_display"] = (ticket.get("created_at_display") or "").strip() or format_support_ticket_datetime(ticket.get("created_at"))
     latest_edit_at = latest_ticket_update_at(ticket)
     if latest_edit_at:
@@ -3110,18 +3112,29 @@ def _merge_supabase_ticket_rows(ticket_rows, attachments, updates):
     return merged
 
 
-def _load_supabase_tickets(board_slug=None):
+def _load_supabase_tickets(board_slug=None, *, created_from=None, created_before=None, before_id=None, limit=None, include_related=True):
     params = {
         "select": "id,board_slug,created_at,created_at_display,creator,ticket_type,service_type,domain,priority,description,solution,status,assigned_to,details",
         "order": "id.desc",
     }
     if board_slug:
         params["board_slug"] = f"eq.{board_slug}"
+    if created_from:
+        params["created_at"] = f"gte.{created_from.isoformat()}"
+    elif created_before:
+        params["created_at"] = f"lt.{created_before.isoformat()}"
+    if before_id:
+        params["id"] = f"lt.{int(before_id)}"
+    if limit:
+        params["limit"] = str(max(1, int(limit)))
 
     response = _supabase_request("GET", "support_tickets", params=params)
     ticket_rows = response.json()
     if not ticket_rows:
         return []
+
+    if not include_related:
+        return _merge_supabase_ticket_rows(ticket_rows, [], [])
 
     ticket_ids = [str(int(ticket.get("id") or 0)) for ticket in ticket_rows if int(ticket.get("id") or 0) > 0]
     id_filter = f"in.({','.join(ticket_ids)})"
@@ -3156,10 +3169,31 @@ def _load_supabase_tickets(board_slug=None):
     return _merge_supabase_ticket_rows(ticket_rows, attachments, updates)
 
 
-def load_support_tickets(board_slug=None):
+def build_support_ticket_summary(ticket):
+    normalized = normalize_support_ticket(ticket)
+    summary = dict(normalized)
+    attachments = list(summary.get("attachments") or [])
+    summary["attachment_count"] = len(attachments)
+    summary["attachments"] = attachments[:1]
+    details = dict(summary.get("details") or {})
+    details.pop("field_report", None)
+    summary["details"] = details
+    summary["updates"] = []
+    summary["has_full_details"] = False
+    return summary
+
+
+def load_support_tickets(board_slug=None, *, created_from=None, created_before=None, before_id=None, limit=None, include_related=True):
     if supabase_ticketing_enabled():
         try:
-            return _load_supabase_tickets(board_slug=board_slug)
+            return _load_supabase_tickets(
+                board_slug=board_slug,
+                created_from=created_from,
+                created_before=created_before,
+                before_id=before_id,
+                limit=limit,
+                include_related=include_related,
+            )
         except Exception as exc:
             print(f"Supabase ticket load warning for board {board_slug or 'all'}: {exc}")
 
@@ -3176,7 +3210,71 @@ def load_support_tickets(board_slug=None):
                 continue
     if board_slug:
         tickets = [ticket for ticket in tickets if ticket.get("board_slug") == board_slug]
+    if created_from:
+        tickets = [
+            ticket for ticket in tickets
+            if (parse_support_ticket_datetime(ticket.get("created_at")) or datetime.min.replace(tzinfo=ZoneInfo("Asia/Jerusalem"))) >= created_from
+        ]
+    if created_before:
+        tickets = [
+            ticket for ticket in tickets
+            if (parse_support_ticket_datetime(ticket.get("created_at")) or datetime.max.replace(tzinfo=ZoneInfo("Asia/Jerusalem"))) < created_before
+        ]
+    if before_id:
+        tickets = [ticket for ticket in tickets if int(ticket.get("id") or 0) < int(before_id)]
+    tickets.sort(key=lambda item: int(item.get("id") or 0), reverse=True)
+    if limit:
+        tickets = tickets[:max(1, int(limit))]
+    if not include_related:
+        tickets = [normalize_support_ticket({**ticket, "attachments": [], "updates": []}) for ticket in tickets]
     return tickets
+
+
+def load_support_ticket(ticket_id, board_slug=None, *, include_related=True):
+    try:
+        numeric_id = int(str(ticket_id).replace("#", ""))
+    except ValueError:
+        return None
+
+    if supabase_ticketing_enabled():
+        try:
+            params = {
+                "select": "id,board_slug,created_at,created_at_display,creator,ticket_type,service_type,domain,priority,description,solution,status,assigned_to,details",
+                "id": f"eq.{numeric_id}",
+                "limit": "1",
+            }
+            if board_slug:
+                params["board_slug"] = f"eq.{board_slug}"
+            rows = _supabase_request("GET", "support_tickets", params=params).json()
+            if not rows:
+                return None
+            if not include_related:
+                ticket = _merge_supabase_ticket_rows(rows, [], [])[0]
+                ticket["has_full_details"] = False
+                return ticket
+            attachments = _supabase_request(
+                "GET",
+                "ticket_attachments",
+                params={
+                    "select": "ticket_id,original_name,saved_name,folder,url",
+                    "ticket_id": f"eq.{numeric_id}",
+                    "order": "id.asc",
+                },
+            ).json()
+            updates = _supabase_request(
+                "GET",
+                "ticket_updates",
+                params={
+                    "select": "ticket_id,changed_at,actor,field_name,old_value,new_value",
+                    "ticket_id": f"eq.{numeric_id}",
+                    "order": "id.asc",
+                },
+            ).json()
+            return _merge_supabase_ticket_rows(rows, attachments, updates)[0]
+        except Exception as exc:
+            print(f"Supabase single ticket load warning for {numeric_id}: {exc}")
+
+    return find_support_ticket(load_support_tickets(board_slug=board_slug), numeric_id)
 
 
 def save_support_tickets(tickets):
@@ -3334,6 +3432,8 @@ def coordination_slot_conflicts(ticket_id, coordinated_worker, visit_date, visit
 def pais_report_range(period, date_from_raw=None, date_to_raw=None):
     custom_from = parse_date_filter(date_from_raw, end_of_day=False)
     custom_to = parse_date_filter(date_to_raw, end_of_day=True)
+    if custom_from and not custom_to:
+        custom_to = israel_now().replace(hour=23, minute=59, second=59, microsecond=0)
     if custom_from or custom_to:
         return custom_from, custom_to
 
@@ -8419,7 +8519,37 @@ def support_tickets_data():
     if not user_can_access_page(page_key):
         return api_error("אין הרשאה לגשת לעמוד זה", 403, "access_denied")
     register_service_activity(page_key)
-    tickets = load_support_tickets() if queue_slug == "nastia" else load_support_tickets(board_slug)
+    batch_size_raw = (request.args.get("batch_size") or "200").strip()
+    try:
+        batch_size = max(50, min(int(batch_size_raw), 500))
+    except ValueError:
+        batch_size = 200
+    before_id_raw = (request.args.get("before_id") or "").strip()
+    try:
+        before_id = int(before_id_raw) if before_id_raw else None
+    except ValueError:
+        before_id = None
+    response_mode = (request.args.get("window") or "all").strip().lower()
+    return_summaries = str(request.args.get("summaries") or "").strip().lower() in {"1", "true", "yes"}
+    current_month_start = israel_now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    load_kwargs = {}
+    if response_mode == "current_month":
+        load_kwargs["created_from"] = current_month_start
+    elif response_mode == "older":
+        load_kwargs["created_before"] = current_month_start
+        load_kwargs["limit"] = batch_size
+        if before_id:
+            load_kwargs["before_id"] = before_id
+    elif before_id:
+        load_kwargs["before_id"] = before_id
+        load_kwargs["limit"] = batch_size
+    if return_summaries:
+        load_kwargs["include_related"] = False
+
+    tickets = load_support_tickets(**load_kwargs) if queue_slug == "nastia" else load_support_tickets(board_slug, **load_kwargs)
+    stats_load_kwargs = {"include_related": False} if response_mode in {"current_month", "older"} or return_summaries else load_kwargs
+    stats_source_tickets = load_support_tickets(**stats_load_kwargs) if queue_slug == "nastia" else load_support_tickets(board_slug, **stats_load_kwargs)
     scope = (request.args.get("scope") or "all").strip().lower()
     status_filter = (request.args.get("status") or "").strip()
     assignee_filter = (request.args.get("assignee") or "").strip()
@@ -8431,18 +8561,23 @@ def support_tickets_data():
     current_support_user = support_user_name()
     assigned_technician_mode = support_user_is_assigned_technician()
 
-    base_tickets = list(tickets)
+    base_tickets = list(stats_source_tickets)
+    filtered = list(tickets)
     if queue_slug == "nastia":
         base_tickets = [ticket for ticket in base_tickets if pais_ticket_is_coordination(ticket)]
+        filtered = [ticket for ticket in filtered if pais_ticket_is_coordination(ticket)]
     if assigned_technician_mode:
         base_tickets = [
             ticket for ticket in base_tickets
             if assigned_technician_can_access_ticket(ticket, current_support_user)
         ]
+        filtered = [
+            ticket for ticket in filtered
+            if assigned_technician_can_access_ticket(ticket, current_support_user)
+        ]
         scope = "my"
         assignee_filter = ""
 
-    filtered = list(base_tickets)
     if scope == "my":
         if assigned_technician_mode:
             filtered = [t for t in filtered if assigned_technician_can_access_ticket(t, current_support_user)]
@@ -8459,10 +8594,14 @@ def support_tickets_data():
         filtered = [t for t in filtered if ticket_owner_name(t) == worker_filter]
     if priority_filter:
         filtered = [t for t in filtered if t.get("priority") == priority_filter]
+    parsed_date_from = parse_date_filter(date_from, end_of_day=False)
+    parsed_date_to = parse_date_filter(date_to, end_of_day=True)
+    if parsed_date_from and not parsed_date_to:
+        parsed_date_to = israel_now().replace(hour=23, minute=59, second=59, microsecond=0)
     filtered = filter_tickets_by_created_range(
         filtered,
-        parse_date_filter(date_from, end_of_day=False),
-        parse_date_filter(date_to, end_of_day=True),
+        parsed_date_from,
+        parsed_date_to,
     )
     if search:
         if board_slug == "pais":
@@ -8498,6 +8637,33 @@ def support_tickets_data():
         )
     else:
         filtered.sort(key=lambda item: int(item.get("id") or 0), reverse=True)
+
+    has_more = False
+    next_before_id = None
+    if response_mode == "older" and filtered:
+        next_before_id = min(int(item.get("id") or 0) for item in filtered)
+        older_probe_kwargs = {
+            "created_before": current_month_start,
+            "before_id": next_before_id,
+            "limit": 1,
+            "include_related": False,
+        }
+        older_probe = load_support_tickets(**older_probe_kwargs) if queue_slug == "nastia" else load_support_tickets(board_slug, **older_probe_kwargs)
+        has_more = bool(older_probe)
+    elif response_mode == "current_month":
+        older_probe_kwargs = {
+            "created_before": current_month_start,
+            "limit": 1,
+            "include_related": False,
+        }
+        older_probe = load_support_tickets(**older_probe_kwargs) if queue_slug == "nastia" else load_support_tickets(board_slug, **older_probe_kwargs)
+        has_more = bool(older_probe)
+        if has_more:
+            next_before_id = int(older_probe[0].get("id") or 0)
+
+    if return_summaries:
+        filtered = [build_support_ticket_summary(ticket) for ticket in filtered]
+
     return jsonify({
         "tickets": filtered,
         "stats": support_ticket_stats(base_tickets),
@@ -8506,7 +8672,37 @@ def support_tickets_data():
         "board": get_ticket_board(board_slug),
         "users": support_ticket_assignee_choices(filtered),
         "statuses": board_statuses(board_slug),
+        "background": {
+            "mode": response_mode,
+            "has_more": has_more,
+            "next_before_id": next_before_id,
+            "current_month_start": current_month_start.date().isoformat(),
+        },
     })
+
+
+@app.route("/support-ticket-detail-data/<ticket_id>")
+def support_ticket_detail_data(ticket_id):
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    board_slug = (request.args.get("board") or "support").strip().lower()
+    queue_slug = (request.args.get("queue") or "").strip().lower()
+    page_key = support_page_key(board_slug, queue_slug)
+    if not user_can_access_page(page_key):
+        return api_error("אין הרשאה לגשת לעמוד זה", 403, "access_denied")
+
+    register_service_activity(page_key)
+    ticket = load_support_ticket(ticket_id, None if queue_slug == "nastia" else board_slug)
+    if not ticket:
+        return api_error("הקריאה לא נמצאה", 404, "ticket_not_found")
+    if queue_slug == "nastia" and not pais_ticket_is_coordination(ticket):
+        return api_error("אין הרשאה לגשת לקריאה זו", 403, "access_denied")
+    current_support_user = support_user_name()
+    if support_user_is_assigned_technician() and not assigned_technician_can_access_ticket(ticket, current_support_user):
+        return api_error("אין הרשאה לגשת לקריאה זו", 403, "access_denied")
+    ticket["has_full_details"] = True
+    return jsonify({"ok": True, "ticket": ticket})
 
 
 @app.route("/pais-tickets-report-data")

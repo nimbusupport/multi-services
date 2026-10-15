@@ -303,6 +303,7 @@ body.dashboard-page .brand-word {
 
 .service-card {
   position: relative;
+  cursor: pointer;
   background: rgba(255, 255, 255, 0.92);
   border-radius: 20px;
   overflow: hidden;
@@ -315,6 +316,56 @@ body.dashboard-page .brand-word {
   transform: translateY(-4px);
   box-shadow: 0 16px 30px rgba(33, 76, 130, 0.14);
   border-color: rgba(52, 116, 206, 0.3);
+}
+
+
+.service-card:focus-visible {
+  outline: 3px solid rgba(56, 118, 212, 0.28);
+  outline-offset: 4px;
+}
+
+body.is-page-loading {
+  overflow: hidden;
+}
+
+.page-loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: rgba(47, 49, 45, 0.32);
+  backdrop-filter: blur(4px);
+}
+
+.page-loading-overlay[hidden] {
+  display: none;
+}
+
+.page-loading-card {
+  min-width: min(320px, calc(100vw - 36px));
+  min-height: 92px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  border-radius: 16px;
+  background: rgba(251, 250, 247, 0.96);
+  color: #1f2f46;
+  box-shadow: 0 22px 48px rgba(35, 32, 27, 0.22);
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.page-loading-spinner {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  border: 3px solid rgba(31, 47, 70, 0.18);
+  border-top-color: #2f7b72;
+  animation: ticket-spin 0.85s linear infinite;
 }
 
 .service-card-link {
@@ -785,3 +836,10 @@ body.dashboard-page .guide-panel {
 
 .theme-user-management .card-hero { background: linear-gradient(135deg, #51308c 0%, #7648c5 56%, #9b71ed 100%); }
 .theme-user-management .card-icon { color: #6a3fba; }
+
+
+@keyframes ticket-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

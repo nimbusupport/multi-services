@@ -263,11 +263,11 @@
           <input id="date-from-filter" type="date">
         </label>
         <label>
-          <span>To</span>
+          <span>עד תאריך</span>
           <input id="date-to-filter" type="date">
         </label>
         <label class="search-filter">
-          <span>Search</span>
+          <span>חיפוש</span>
           <div class="search-input-wrap">
             <input id="ticket-search" type="search" placeholder="{% if ticket_board.slug == 'pais' %}מסוף או כתובת{% elif ticket_board.slug == 'hot-kiryot' %}מספר קריאה, קוד קו, לקוח או כתובת{% else %}חפש כרטיס, לקוח, עסק או טקסט{% endif %}">
             <button class="icon-btn search-submit-btn" id="ticket-search-btn" type="submit" aria-label="Search tickets">
@@ -301,12 +301,12 @@
         </div>
         <div class="pais-report-controls">
           <label>
-            <span>Period</span>
+            <span>תקופה</span>
             <select id="pais-report-period">
-              <option value="all" selected>All periods</option>
-              <option value="daily">Daily</option>
-              <option value="weekly">Weekly</option>
-              <option value="monthly">Monthly</option>
+              <option value="all" selected>כל התקופות</option>
+              <option value="daily">יומי</option>
+              <option value="weekly">שבועי</option>
+              <option value="monthly">חודשי</option>
             </select>
           </label>
           <label>
@@ -326,7 +326,7 @@
             <input id="pais-report-from" type="date">
           </label>
           <label>
-            <span>To</span>
+            <span>עד תאריך</span>
             <input id="pais-report-to" type="date">
           </label>
         </div>
@@ -339,7 +339,7 @@
         <div class="tickets-loading" id="tickets-loading" hidden aria-live="polite" aria-busy="true">
           <div class="tickets-loading-copy">
             <span class="tickets-loading-spinner" aria-hidden="true"></span>
-            <strong>Loading tickets...</strong>
+            <strong id="tickets-loading-text">טוען קריאות...</strong>
           </div>
           <div class="tickets-loading-skeleton" aria-hidden="true">
             <div class="tickets-loading-row"></div>
@@ -352,6 +352,13 @@
       </div>
     </section>
   </main>
+
+  <div class="page-loading-overlay" id="tickets-page-loading-overlay" hidden aria-live="polite" aria-busy="true">
+    <div class="page-loading-card">
+      <span class="page-loading-spinner" aria-hidden="true"></span>
+      <strong id="tickets-page-loading-text">טוען נתונים...</strong>
+    </div>
+  </div>
 
   <div class="ticket-modal" id="ticket-modal" aria-hidden="true">
     <form class="ticket-form" id="ticket-form">
@@ -649,6 +656,10 @@
 
   <div class="ticket-modal" id="ticket-detail-modal" aria-hidden="true">
     <section class="ticket-detail-card">
+      <div class="ticket-detail-loading" id="ticket-detail-loading" hidden>
+        <span class="ticket-detail-loading-spinner" aria-hidden="true"></span>
+        <strong id="ticket-detail-loading-text">טוען נתונים...</strong>
+      </div>
       <header>
         <div>
           <p id="detail-kicker">Ticket</p>

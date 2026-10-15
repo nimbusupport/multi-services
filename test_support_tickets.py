@@ -1662,7 +1662,104 @@ class SupportTicketsTestCase(unittest.TestCase):
         response = self.client.get("/pais-tickets", follow_redirects=False)
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn('<option value="all" selected>All periods</option>'.encode("utf-8"), response.data)
+        self.assertIn('<option value="all" selected>כל התקופות</option>'.encode("utf-8"), response.data)
+
+    def test_support_tickets_data_date_from_without_date_to_filters_until_today(self):
+        self.app_module.israel_now = lambda: datetime(2026, 10, 15, 12, 0, tzinfo=ZoneInfo("Asia/Jerusalem"))
+        tickets = self.app_module.load_support_tickets()
+        tickets.extend([
+            {
+                "id": 2,
+                "created_at": "2026-10-10T11:00:00+03:00",
+                "created_at_display": "10/10/2026 11:00",
+                "creator": "Admin",
+                "ticket_type": "שאלה",
+                "service_type": "מרכזייה",
+                "domain": "inside.example",
+                "priority": "Medium",
+                "description": "Inside range",
+                "solution": "",
+                "status": "Waiting",
+                "assigned_to": "",
+                "attachments": [],
+                "updates": [],
+            },
+            {
+                "id": 3,
+                "created_at": "2026-10-20T11:00:00+03:00",
+                "created_at_display": "20/10/2026 11:00",
+                "creator": "Admin",
+                "ticket_type": "שאלה",
+                "service_type": "מרכזייה",
+                "domain": "future.example",
+                "priority": "Medium",
+                "description": "Future ticket",
+                "solution": "",
+                "status": "Waiting",
+                "assigned_to": "",
+                "attachments": [],
+                "updates": [],
+            },
+        ])
+        self.app_module.save_support_tickets(tickets)
+
+        self.login("admin@nimbusip.com")
+        response = self.client.get("/support-tickets-data?board=support&date_from=2026-10-01")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual([ticket["id"] for ticket in payload["tickets"]], [2])
+
+    def test_pais_report_date_from_without_date_to_filters_until_today(self):
+        self.app_module.israel_now = lambda: datetime(2026, 10, 15, 12, 0, tzinfo=ZoneInfo("Asia/Jerusalem"))
+        tickets = self.app_module.load_support_tickets()
+        tickets.extend([
+            {
+                "id": 2,
+                "board_slug": "pais",
+                "created_at": "2026-10-10T11:00:00+03:00",
+                "created_at_display": "10/10/2026 11:00",
+                "creator": "Admin",
+                "ticket_type": "שירות",
+                "service_type": "מפעל הפיס",
+                "domain": "",
+                "priority": "Medium",
+                "description": "",
+                "solution": "",
+                "status": "בוצע",
+                "assigned_to": "ניר",
+                "details": {"terminal_number": "2001", "address": "A"},
+                "attachments": [],
+                "updates": [],
+            },
+            {
+                "id": 3,
+                "board_slug": "pais",
+                "created_at": "2026-10-20T11:00:00+03:00",
+                "created_at_display": "20/10/2026 11:00",
+                "creator": "Admin",
+                "ticket_type": "שירות",
+                "service_type": "מפעל הפיס",
+                "domain": "",
+                "priority": "Medium",
+                "description": "",
+                "solution": "",
+                "status": "בוצע",
+                "assigned_to": "ניר",
+                "details": {"terminal_number": "2002", "address": "B"},
+                "attachments": [],
+                "updates": [],
+            },
+        ])
+        self.app_module.save_support_tickets(tickets)
+
+        self.login("admin@nimbusip.com")
+        response = self.client.get("/pais-tickets-report-data?date_from=2026-10-01")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual([ticket["id"] for ticket in payload["tickets"]], [2])
 
     def test_pais_csv_export_contains_counter_and_total(self):
         self.app_module.israel_now = lambda: datetime(2026, 7, 15, 10, 0, tzinfo=ZoneInfo("Asia/Jerusalem"))
@@ -5499,6 +5596,49 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertIn("assafh@nimbusip.com", payload["ticket"]["notification_recipients"])
         self.assertIn("nastya@nimbusip.com", payload["ticket"]["notification_message"])
         self.assertIn("assafh@nimbusip.com", payload["ticket"]["notification_message"])
+
+    def test_support_tickets_data_can_stage_current_month_before_older_tickets(self):
+        tickets = self.app_module.load_support_tickets()
+        tickets.append({
+            "id": 2,
+            "created_at": "2026-10-03T09:00:00+03:00",
+            "created_at_display": "03/10/2026 09:00",
+            "creator": "Admin",
+            "ticket_type": "שאלה",
+            "service_type": "מרכזייה",
+            "domain": "october.example",
+            "priority": "Medium",
+            "description": "Current month ticket",
+            "solution": "",
+            "status": "Waiting",
+            "assigned_to": "",
+            "attachments": [],
+            "updates": [],
+        })
+        self.app_module.save_support_tickets(tickets)
+        self.app_module.israel_now = lambda: datetime(2026, 10, 15, 12, 0, tzinfo=ZoneInfo("Asia/Jerusalem"))
+
+        self.login("admin@nimbusip.com")
+        response = self.client.get("/support-tickets-data?board=support&window=current_month&summaries=1")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual([ticket["id"] for ticket in payload["tickets"]], [2])
+        self.assertFalse(payload["tickets"][0]["has_full_details"])
+        self.assertEqual(payload["tickets"][0]["updates"], [])
+        self.assertTrue(payload["background"]["has_more"])
+        self.assertEqual(payload["background"]["next_before_id"], 1)
+
+    def test_support_ticket_detail_data_returns_full_ticket_payload(self):
+        self.login("admin@nimbusip.com")
+        response = self.client.get("/support-ticket-detail-data/1?board=support")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertTrue(payload["ok"])
+        self.assertTrue(payload["ticket"]["has_full_details"])
+        self.assertEqual(payload["ticket"]["id"], 1)
+        self.assertEqual(len(payload["ticket"]["attachments"]), 1)
 
 if __name__ == "__main__":
     unittest.main()

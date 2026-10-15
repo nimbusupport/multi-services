@@ -1,3 +1,57 @@
+
+function setPageLoadingOverlay(isLoading, message = "טוען נתונים...") {
+  const overlay = document.getElementById("page-loading-overlay");
+  const messageHost = document.getElementById("page-loading-text");
+  if (!overlay) return;
+  overlay.hidden = !isLoading;
+  document.body.classList.toggle("is-page-loading", Boolean(isLoading));
+  if (messageHost) {
+    messageHost.textContent = message;
+  }
+}
+
+function navigateWithPageLoader(href, message = "טוען נתונים...") {
+  if (!href) return;
+  setPageLoadingOverlay(true, message);
+  window.setTimeout(() => {
+    window.location.href = href;
+  }, 24);
+}
+
+function bindDashboardTicketCardLoading() {
+  document.querySelectorAll("[data-loading-link='true']").forEach((link) => {
+    link.addEventListener("click", (event) => {
+      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+        return;
+      }
+      event.preventDefault();
+      navigateWithPageLoader(link.href);
+    });
+  });
+
+  document.querySelectorAll("[data-loading-href]").forEach((card) => {
+    const href = card.dataset.loadingHref || "";
+    if (!href) return;
+    card.addEventListener("click", (event) => {
+      if (event.target.closest("a, button, input, select, textarea")) {
+        return;
+      }
+      navigateWithPageLoader(href);
+    });
+    card.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") {
+        return;
+      }
+      event.preventDefault();
+      navigateWithPageLoader(href);
+    });
+  });
+
+  window.addEventListener("pageshow", () => {
+    setPageLoadingOverlay(false);
+  });
+}
+
 function displayUserName(user) {
   const local = String(user || "").split("@")[0].toLowerCase();
   if (local === "nir") return "ניר";
@@ -97,6 +151,7 @@ async function loadDashboardData() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  bindDashboardTicketCardLoading();
   loadDashboardData();
   setInterval(loadDashboardData, 20000);
 });
