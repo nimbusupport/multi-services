@@ -46,6 +46,11 @@ from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+try:
+    from pywebpush import WebPushException, webpush
+except ImportError:
+    WebPushException = Exception
+    webpush = None
 
 load_dotenv()
 
@@ -613,6 +618,22 @@ SMTP_PASSWORD = (os.environ.get("SMTP_PASSWORD") or "").strip()
 SMTP_FROM = (os.environ.get("SMTP_FROM") or SMTP_USERNAME or f"no-reply@{ALLOWED_EMAIL_DOMAIN}").strip()
 SMTP_USE_TLS = env_flag("SMTP_USE_TLS", True)
 SMTP_USE_SSL = env_flag("SMTP_USE_SSL", False)
+WEB_PUSH_VAPID_PUBLIC_KEY = (os.environ.get("WEB_PUSH_VAPID_PUBLIC_KEY") or "").strip()
+WEB_PUSH_VAPID_PRIVATE_KEY = (os.environ.get("WEB_PUSH_VAPID_PRIVATE_KEY") or "").strip()
+WEB_PUSH_VAPID_SUBJECT = (os.environ.get("WEB_PUSH_VAPID_SUBJECT") or "mailto:support@nimbusip.com").strip()
+PUSH_SUBSCRIPTIONS_SHEET_NAME = "push_subscriptions"
+PUSH_SUBSCRIPTION_HEADERS = [
+    "endpoint",
+    "p256dh",
+    "auth",
+    "user_email",
+    "support_user",
+    "full_name",
+    "user_agent",
+    "active",
+    "created_at",
+    "updated_at",
+]
 
 
 def configured_nastia_notification_email():
@@ -705,6 +726,27 @@ def configured_smtp_use_ssl():
     if "SMTP_USE_SSL" in os.environ:
         return env_flag("SMTP_USE_SSL", False)
     return SMTP_USE_SSL
+
+
+def configured_web_push_vapid_public_key():
+    return (os.environ.get("WEB_PUSH_VAPID_PUBLIC_KEY") or WEB_PUSH_VAPID_PUBLIC_KEY or "").strip()
+
+
+def configured_web_push_vapid_private_key():
+    return (os.environ.get("WEB_PUSH_VAPID_PRIVATE_KEY") or WEB_PUSH_VAPID_PRIVATE_KEY or "").strip()
+
+
+def configured_web_push_vapid_subject():
+    return (os.environ.get("WEB_PUSH_VAPID_SUBJECT") or WEB_PUSH_VAPID_SUBJECT or "mailto:support@nimbusip.com").strip()
+
+
+def web_push_enabled():
+    return bool(
+        webpush
+        and configured_web_push_vapid_public_key()
+        and configured_web_push_vapid_private_key()
+        and configured_web_push_vapid_subject()
+    )
 TICKET_BOARD_DEFAULTS = {
     "support": {
         "slug": "support",
@@ -1421,6 +1463,9 @@ def route_page_key(path):
         return next(iter(sorted(allowed_page_keys))) if allowed_page_keys else None
     if normalized_path == "/support-tickets-data":
         return support_page_key(request.args.get("board"), request.args.get("queue"))
+    if normalized_path in {"/push-subscriptions/subscribe", "/push-subscriptions/unsubscribe"}:
+        ticket_pages = sorted(allowed_pages_for_current_user().intersection(TICKETS_ONLY_ALLOWED_PAGES))
+        return ticket_pages[0] if ticket_pages else None
     if normalized_path == "/support-tickets-create":
         return support_page_key(request.form.get("board_slug"))
     if normalized_path in {
@@ -6052,6 +6097,246 @@ def get_gspread_client():
     return gspread.authorize(creds)
 
 
+def get_push_subscriptions_worksheet():
+    client = get_gspread_client()
+    spreadsheet = client.open_by_key(SPREADSHEET_ID)
+    try:
+        worksheet = spreadsheet.worksheet(PUSH_SUBSCRIPTIONS_SHEET_NAME)
+    except gspread.WorksheetNotFound:
+        worksheet = spreadsheet.add_worksheet(
+            title=PUSH_SUBSCRIPTIONS_SHEET_NAME,
+            rows="200",
+            cols=str(max(len(PUSH_SUBSCRIPTION_HEADERS), 10)),
+        )
+    header_values = worksheet.row_values(1)
+    if header_values[:len(PUSH_SUBSCRIPTION_HEADERS)] != PUSH_SUBSCRIPTION_HEADERS:
+        worksheet.update(
+            f"A1:{gspread.utils.rowcol_to_a1(1, len(PUSH_SUBSCRIPTION_HEADERS))}",
+            [PUSH_SUBSCRIPTION_HEADERS],
+            value_input_option="RAW",
+        )
+    return worksheet
+
+
+def _load_push_subscription_rows():
+    worksheet = get_push_subscriptions_worksheet()
+    rows = worksheet.get_all_values()
+    items = []
+    for row_number, row in enumerate(rows[1:], start=2):
+        item = {
+            header: str(row[index]).strip() if index < len(row) else ""
+            for index, header in enumerate(PUSH_SUBSCRIPTION_HEADERS)
+        }
+        endpoint = item.get("endpoint", "")
+        if not endpoint:
+            continue
+        item["row_number"] = row_number
+        items.append(item)
+    return worksheet, items
+
+
+def normalize_push_subscription(subscription):
+    if not isinstance(subscription, dict):
+        return None
+    keys = subscription.get("keys") or {}
+    endpoint = str(subscription.get("endpoint") or "").strip()
+    p256dh = str(keys.get("p256dh") or "").strip()
+    auth = str(keys.get("auth") or "").strip()
+    if not endpoint or not p256dh or not auth:
+        return None
+    return {
+        "endpoint": endpoint,
+        "keys": {
+            "p256dh": p256dh,
+            "auth": auth,
+        },
+    }
+
+
+def list_push_subscriptions(support_user=""):
+    normalized_support_user = canonical_support_user_name(support_user)
+    _, rows = _load_push_subscription_rows()
+    subscriptions = []
+    for row in rows:
+        is_active = str(row.get("active") or "").strip().lower() in {"1", "true", "yes", "on"}
+        if not is_active:
+            continue
+        if normalized_support_user and canonical_support_user_name(row.get("support_user")) != normalized_support_user:
+            continue
+        subscription = normalize_push_subscription({
+            "endpoint": row.get("endpoint") or "",
+            "keys": {
+                "p256dh": row.get("p256dh") or "",
+                "auth": row.get("auth") or "",
+            },
+        })
+        if subscription:
+            subscriptions.append(subscription)
+    return subscriptions
+
+
+def upsert_push_subscription(subscription, user_email="", support_user="", full_name="", user_agent=""):
+    normalized_subscription = normalize_push_subscription(subscription)
+    if not normalized_subscription:
+        raise ValueError("Invalid push subscription")
+
+    worksheet, rows = _load_push_subscription_rows()
+    now_value = israel_now().isoformat(timespec="seconds")
+    existing_row = next((row for row in rows if row.get("endpoint") == normalized_subscription["endpoint"]), None)
+    record = {
+        "endpoint": normalized_subscription["endpoint"],
+        "p256dh": normalized_subscription["keys"]["p256dh"],
+        "auth": normalized_subscription["keys"]["auth"],
+        "user_email": str(user_email or "").strip().lower(),
+        "support_user": canonical_support_user_name(support_user),
+        "full_name": ticket_display_name(full_name),
+        "user_agent": str(user_agent or "").strip(),
+        "active": "true",
+        "created_at": (existing_row or {}).get("created_at") or now_value,
+        "updated_at": now_value,
+    }
+    row_values = [record.get(header, "") for header in PUSH_SUBSCRIPTION_HEADERS]
+    if existing_row:
+        row_number = int(existing_row["row_number"])
+        worksheet.update(
+            f"A{row_number}:{gspread.utils.rowcol_to_a1(row_number, len(PUSH_SUBSCRIPTION_HEADERS))}",
+            [row_values],
+            value_input_option="RAW",
+        )
+    else:
+        worksheet.append_row(row_values, value_input_option="RAW")
+    return normalized_subscription
+
+
+def deactivate_push_subscription(endpoint):
+    normalized_endpoint = str(endpoint or "").strip()
+    if not normalized_endpoint:
+        return False
+    worksheet, rows = _load_push_subscription_rows()
+    existing_row = next((row for row in rows if row.get("endpoint") == normalized_endpoint), None)
+    if not existing_row:
+        return False
+    row_number = int(existing_row["row_number"])
+    existing_row["active"] = "false"
+    existing_row["updated_at"] = israel_now().isoformat(timespec="seconds")
+    row_values = [existing_row.get(header, "") for header in PUSH_SUBSCRIPTION_HEADERS]
+    worksheet.update(
+        f"A{row_number}:{gspread.utils.rowcol_to_a1(row_number, len(PUSH_SUBSCRIPTION_HEADERS))}",
+        [row_values],
+        value_input_option="RAW",
+    )
+    return True
+
+
+def support_ticket_push_destination(ticket):
+    board = get_ticket_board(ticket.get("board_slug"))
+    route_path = board.get("route_path") or "/support-tickets"
+    base_url = configured_support_app_base_url()
+    ticket_id = int(ticket.get("id") or 0)
+    destination = f"{base_url}{route_path}" if base_url else route_path
+    if ticket_id > 0:
+        separator = "&" if "?" in destination else "?"
+        destination = f"{destination}{separator}open_ticket={ticket_id}"
+    return destination
+
+
+def support_ticket_push_body(ticket):
+    details = ticket.get("details") or {}
+    board_name = get_ticket_board(ticket.get("board_slug")).get("name") or "קריאות שירות"
+    customer_name = (
+        details.get("customer_name")
+        or details.get("contact_name")
+        or details.get("business_name")
+        or ticket.get("domain")
+        or ticket.get("service_type")
+        or ""
+    )
+    ticket_label = f"#{int(ticket.get('id') or 0):04d}" if int(ticket.get("id") or 0) > 0 else str(ticket.get("ticket_id") or "")
+    headline = str(ticket.get("description") or details.get("issue_summary") or details.get("customer_request") or "").strip()
+    parts = [part for part in [board_name, customer_name, ticket_label, headline] if str(part or "").strip()]
+    summary = " | ".join(parts[:3])
+    if headline and headline not in summary:
+        summary = f"{summary} ? {headline}" if summary else headline
+    return summary or f"קריאה חדשה הוקצתה אליך בלוח {board_name}"
+
+
+def _web_push_exception_status(exc):
+    response = getattr(exc, "response", None)
+    status_code = getattr(response, "status_code", None)
+    if status_code:
+        return int(status_code)
+    status = getattr(response, "status", None)
+    if status:
+        try:
+            return int(status)
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+def send_ticket_assignment_push(ticket, recipient_name, event_type="assigned"):
+    normalized_recipient = canonical_support_user_name(recipient_name)
+    if not normalized_recipient or not web_push_enabled():
+        return {"ok": False, "sent": 0, "reason": "disabled"}
+
+    subscriptions = list_push_subscriptions(normalized_recipient)
+    if not subscriptions:
+        return {"ok": False, "sent": 0, "reason": "no_subscriptions"}
+
+    board_name = get_ticket_board(ticket.get("board_slug")).get("name") or "קריאות שירות"
+    ticket_number = f"#{int(ticket.get('id') or 0):04d}" if int(ticket.get("id") or 0) > 0 else str(ticket.get("ticket_id") or "")
+    title = "קריאה חדשה הוקצתה אליך" if event_type == "created" else "קריאה הוקצתה אליך"
+    payload = {
+        "title": title,
+        "body": support_ticket_push_body(ticket),
+        "tag": f"support-ticket-{int(ticket.get('id') or 0) or ticket.get('ticket_id') or secrets.token_hex(4)}",
+        "icon": "/brand/nimbus-logo.png",
+        "badge": "/brand/nimbus-logo.png",
+        "url": support_ticket_push_destination(ticket),
+        "ticketId": str(int(ticket.get("id") or 0) or ""),
+        "ticketNumber": ticket_number,
+        "boardSlug": (ticket.get("board_slug") or "support").strip().lower(),
+        "boardName": board_name,
+        "supportUser": normalized_recipient,
+    }
+
+    sent = 0
+    for subscription in subscriptions:
+        try:
+            webpush(
+                subscription_info=subscription,
+                data=json.dumps(payload, ensure_ascii=False),
+                vapid_private_key=configured_web_push_vapid_private_key(),
+                vapid_claims={"sub": configured_web_push_vapid_subject()},
+                ttl=43200,
+            )
+            sent += 1
+        except WebPushException as exc:
+            status_code = _web_push_exception_status(exc)
+            if status_code in {404, 410}:
+                try:
+                    deactivate_push_subscription(subscription.get("endpoint"))
+                except Exception as deactivate_exc:
+                    print(f"Push deactivate warning for {normalized_recipient}: {deactivate_exc}")
+            print(f"Push send warning for {normalized_recipient}: {exc}")
+        except Exception as exc:
+            print(f"Push send warning for {normalized_recipient}: {exc}")
+    return {"ok": sent > 0, "sent": sent}
+
+
+def maybe_notify_ticket_assignment(previous_ticket, ticket):
+    try:
+        previous_owner = ticket_owner_name(previous_ticket) if previous_ticket else ""
+        current_owner = ticket_owner_name(ticket)
+        if not current_owner or current_owner == previous_owner:
+            return {"ok": False, "sent": 0, "reason": "unchanged"}
+        event_type = "created" if previous_ticket is None else "assigned"
+        return send_ticket_assignment_push(ticket, current_owner, event_type=event_type)
+    except Exception as exc:
+        print(f"Push notification warning: {exc}")
+        return {"ok": False, "sent": 0, "reason": "error"}
+
+
 def digits_only(s: str) -> str:
     return re.sub(r"\D+", "", (s or "").strip())
 
@@ -8404,6 +8689,10 @@ def render_ticket_board_page(board_slug):
         can_view_board_report=board_has_coordination_report(board["slug"]) and not assigned_technician_mode and not hot_submitter_mode,
         can_delete_tickets=current_session_email_local() in {"admin", "zura"},
         default_ticket_scope="my" if assigned_technician_mode else "all",
+        current_user_email=(session.get("username") or session.get("email") or ""),
+        current_user_full_name=(session.get("full_name") or ""),
+        push_enabled=web_push_enabled(),
+        push_public_key=configured_web_push_vapid_public_key(),
         access_level=current_user_access_level(),
         can_write_board=can_write_board,
         can_access_home=can_access_home_dashboard(),
@@ -8510,6 +8799,10 @@ def nastia_tickets_page():
         can_view_board_report=False,
         can_delete_tickets=current_session_email_local() in {"admin", "zura"},
         default_ticket_scope="all",
+        current_user_email=(session.get("username") or session.get("email") or ""),
+        current_user_full_name=(session.get("full_name") or ""),
+        push_enabled=web_push_enabled(),
+        push_public_key=configured_web_push_vapid_public_key(),
         access_level=current_user_access_level(),
         can_write_board=can_write_board,
         can_access_home=can_access_home_dashboard(),
@@ -9182,6 +9475,7 @@ def support_tickets_create():
     except RuntimeError as exc:
         return jsonify({"ok": False, "message": str(exc)}), 502
 
+    maybe_notify_ticket_assignment(None, ticket)
     return jsonify({"ok": True, "ticket": ticket})
 
 
@@ -9321,13 +9615,67 @@ def support_tickets_update():
             }), 400
         if (payload.get("status") or "").strip() == "נכשל" and not (details.get("failure_notes") or "").strip():
             return jsonify({"ok": False, "message": "יש למלא סיבת כשל"}), 400
+    previous_ticket = find_support_ticket(load_support_tickets(), payload.get("ticket_id"))
     try:
         ticket = update_support_ticket_record(payload.get("ticket_id"), payload, actor)
     except LookupError:
         return jsonify({"ok": False, "message": "Ticket not found"}), 404
     except RuntimeError as exc:
         return jsonify({"ok": False, "message": str(exc)}), 502
+    maybe_notify_ticket_assignment(previous_ticket, ticket)
     return jsonify({"ok": True, "ticket": ticket})
+
+
+@app.route("/push-subscriptions/subscribe", methods=["POST"])
+def push_subscriptions_subscribe():
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+    if not user_can_access_page("support_tickets"):
+        return api_error("אין הרשאה לגשת לעמוד זה", 403, "access_denied")
+    if not web_push_enabled():
+        return jsonify({"ok": False, "message": "Push notifications are not configured"}), 503
+
+    payload = request.get_json(silent=True) or {}
+    subscription = payload.get("subscription")
+    normalized_subscription = normalize_push_subscription(subscription)
+    if not normalized_subscription:
+        return jsonify({"ok": False, "message": "Invalid push subscription"}), 400
+
+    try:
+        upsert_push_subscription(
+            normalized_subscription,
+            user_email=(session.get("username") or session.get("email") or ""),
+            support_user=support_user_name(),
+            full_name=(session.get("full_name") or support_user_name() or ""),
+            user_agent=request.headers.get("User-Agent") or "",
+        )
+    except Exception as exc:
+        return jsonify({"ok": False, "message": str(exc)}), 502
+    return jsonify({"ok": True})
+
+
+@app.route("/push-subscriptions/unsubscribe", methods=["POST"])
+def push_subscriptions_unsubscribe():
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+    if not user_can_access_page("support_tickets"):
+        return api_error("אין הרשאה לגשת לעמוד זה", 403, "access_denied")
+
+    payload = request.get_json(silent=True) or {}
+    endpoint = ""
+    subscription = payload.get("subscription") if isinstance(payload, dict) else None
+    if isinstance(subscription, dict):
+        endpoint = str(subscription.get("endpoint") or "").strip()
+    if not endpoint:
+        endpoint = str(payload.get("endpoint") or "").strip()
+    if not endpoint:
+        return jsonify({"ok": False, "message": "Missing endpoint"}), 400
+
+    try:
+        deactivate_push_subscription(endpoint)
+    except Exception as exc:
+        return jsonify({"ok": False, "message": str(exc)}), 502
+    return jsonify({"ok": True})
 
 
 @app.route("/support-tickets-send-email", methods=["POST"])

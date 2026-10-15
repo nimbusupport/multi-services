@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{{ page_title }}</title>
   <link rel="icon" type="image/jpeg" href="/favicon/favicon.jpg">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0f2747">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
   <link rel="stylesheet" href="/home.css">
   {% if not can_access_home %}
@@ -974,7 +976,11 @@
       canEditExistingTickets: {{ can_edit_existing_tickets|tojson }},
       canViewBoardReport: {{ can_view_board_report|tojson }},
       canDeleteTickets: {{ can_delete_tickets|tojson }},
-      defaultTicketScope: {{ default_ticket_scope|tojson }}
+      defaultTicketScope: {{ default_ticket_scope|tojson }},
+      currentUserEmail: {{ current_user_email|tojson }},
+      currentUserFullName: {{ current_user_full_name|tojson }},
+      pushEnabled: {{ push_enabled|tojson }},
+      pushPublicKey: {{ push_public_key|tojson }}
     };
   </script>
 

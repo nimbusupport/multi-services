@@ -47,6 +47,9 @@ const canEditExistingTickets = supportTicketsContext.canEditExistingTickets === 
 const canViewBoardReport = supportTicketsContext.canViewBoardReport === true || supportTicketsContext.canViewBoardReport === "true";
 const canDeleteTickets = supportTicketsContext.canDeleteTickets === true || supportTicketsContext.canDeleteTickets === "true";
 const defaultTicketScope = String(supportTicketsContext.defaultTicketScope || "all");
+const currentUserEmail = String(supportTicketsContext.currentUserEmail || "");
+const pushEnabled = supportTicketsContext.pushEnabled === true || supportTicketsContext.pushEnabled === "true";
+const pushPublicKey = String(supportTicketsContext.pushPublicKey || "");
 const isNastyaQueuePage = pageMode === "nastia" || ticketQueue === "nastia";
 const isAssignedTechnicianMode = ticketOperatorMode === "assigned_technician";
 const ticketBoards = Array.isArray(supportTicketsContext.ticketBoards) ? supportTicketsContext.ticketBoards : [];
@@ -57,6 +60,9 @@ const documentTitleBase = document.title;
 let ticketAlertsHydrated = false;
 let previousAssignedOpenTicketIds = new Set();
 let unreadAssignedOpenTicketIds = new Set();
+let pushServiceWorkerReady = null;
+let pushSubscriptionSyncPromise = null;
+const pushSubscriptionSyncKey = `support-ticket-push-sync:${currentUserEmail || currentSupportUser || "guest"}`;
 
 function boardConfig(boardSlugValue) {
   return ticketBoardsBySlug.get(String(boardSlugValue || "")) || {};
@@ -218,13 +224,125 @@ function markAssignedTicketAlertsRead(ticketIds = null) {
   }
   writeTicketAlertsState();
   refreshTicketAlertIndicators();
+  void clearAssignedTicketPushNotifications(ticketIds);
 }
 
-function requestBrowserNotificationPermission() {
-  if (!("Notification" in window)) return;
-  if (Notification.permission !== "default") return;
+function pushNotificationsSupported() {
+  return pushEnabled && Boolean(pushPublicKey) && "serviceWorker" in navigator && "PushManager" in window;
+}
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = `${base64String}${padding}`.replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = window.atob(base64);
+  return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
+}
+
+async function registerPushServiceWorker() {
+  if (!pushNotificationsSupported()) return null;
+  if (!pushServiceWorkerReady) {
+    pushServiceWorkerReady = navigator.serviceWorker.register("/service-worker.js", { scope: "/" })
+      .then(() => navigator.serviceWorker.ready)
+      .catch(() => null);
+  }
+  return pushServiceWorkerReady;
+}
+
+async function syncPushSubscription(options = {}) {
+  if (!pushNotificationsSupported()) return null;
+  if (pushSubscriptionSyncPromise) return pushSubscriptionSyncPromise;
+
+  pushSubscriptionSyncPromise = (async () => {
+    const registration = await registerPushServiceWorker();
+    if (!registration) return null;
+
+    let subscription = await registration.pushManager.getSubscription();
+    if (!subscription && options.allowSubscribe && "Notification" in window && Notification.permission === "granted") {
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(pushPublicKey),
+      });
+    }
+    if (!subscription) return null;
+
+    const subscriptionJson = subscription.toJSON ? subscription.toJSON() : JSON.parse(JSON.stringify(subscription));
+    const serialized = JSON.stringify(subscriptionJson);
+    if (!options.force) {
+      try {
+        if (window.localStorage?.getItem(pushSubscriptionSyncKey) === serialized) {
+          return subscriptionJson;
+        }
+      } catch (error) {
+      }
+    }
+
+    const response = await fetch("/push-subscriptions/subscribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ subscription: subscriptionJson }),
+    });
+    if (!response.ok) {
+      throw new Error("שמירת התראות הדחיפה נכשלה");
+    }
+    try {
+      window.localStorage?.setItem(pushSubscriptionSyncKey, serialized);
+    } catch (error) {
+    }
+    return subscriptionJson;
+  })().finally(() => {
+    pushSubscriptionSyncPromise = null;
+  });
+
+  return pushSubscriptionSyncPromise;
+}
+
+async function clearAssignedTicketPushNotifications(ticketIds = null) {
+  if (!("serviceWorker" in navigator)) return;
+  const registration = await registerPushServiceWorker();
+  if (!registration?.active) return;
+  registration.active.postMessage({
+    type: "clear-ticket-notifications",
+    ticketIds: Array.isArray(ticketIds) ? normalizeTicketIdList(ticketIds) : [],
+  });
+}
+
+async function requestBrowserNotificationPermission() {
+  if (!("Notification" in window)) return "unsupported";
+  if (Notification.permission === "granted") {
+    await syncPushSubscription({ allowSubscribe: true });
+    return "granted";
+  }
+  if (Notification.permission !== "default") {
+    return Notification.permission;
+  }
   try {
-    Notification.requestPermission();
+    const permission = await Notification.requestPermission();
+    if (permission === "granted") {
+      await syncPushSubscription({ allowSubscribe: true, force: true });
+    }
+    return permission;
+  } catch (error) {
+    return Notification.permission;
+  }
+}
+
+function requestedTicketIdFromUrl() {
+  try {
+    return String(new URL(window.location.href).searchParams.get("open_ticket") || "").trim();
+  } catch (error) {
+    return "";
+  }
+}
+
+async function openTicketFromUrlIfNeeded() {
+  const requestedTicketId = requestedTicketIdFromUrl();
+  if (!requestedTicketId) return;
+  await openTicketDetail(requestedTicketId);
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("open_ticket");
+    const nextUrl = `${url.pathname}${url.search ? url.search : ""}${url.hash || ""}`;
+    window.history.replaceState({}, "", nextUrl);
   } catch (error) {
   }
 }
@@ -1845,6 +1963,7 @@ function submitTicketSearch() {
   refreshTicketAlertIndicators();
   loadTickets();
 }
+
 
 function hasOpenModal() {
   return ["ticket-modal", "ticket-detail-modal", "delete-ticket-confirm-modal", "notification-error-modal", "image-modal"].some((id) => document.getElementById(id)?.classList.contains("open"));
@@ -4519,7 +4638,12 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   refreshTicketAlertIndicators();
-  loadTickets();
+  void registerPushServiceWorker();
+  if (pushNotificationsSupported() && "Notification" in window && Notification.permission === "granted") {
+    void syncPushSubscription({ allowSubscribe: true });
+  }
+  const initialTicketsLoad = loadTickets();
+  initialTicketsLoad.then(() => openTicketFromUrlIfNeeded()).catch(() => {});
   if (boardSupportsReport(boardSlug)) {
     ["pais-report-period", "pais-report-status", "pais-report-from", "pais-report-to"].forEach((id) => {
       document.getElementById(id)?.addEventListener("change", loadPaisReport);
