@@ -4639,8 +4639,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
   refreshTicketAlertIndicators();
   void registerPushServiceWorker();
-  if (pushNotificationsSupported() && "Notification" in window && Notification.permission === "granted") {
-    void syncPushSubscription({ allowSubscribe: true });
+  const shouldForcePushResync = isAssignedTechnicianMode || defaultTicketScope === "my";
+  if (pushNotificationsSupported() && "Notification" in window) {
+    if (Notification.permission === "granted") {
+      void syncPushSubscription({ allowSubscribe: true, force: shouldForcePushResync });
+    } else if (shouldForcePushResync && Notification.permission === "default") {
+      void requestBrowserNotificationPermission();
+    }
   }
   const initialTicketsLoad = loadTickets();
   initialTicketsLoad.then(() => openTicketFromUrlIfNeeded()).catch(() => {});

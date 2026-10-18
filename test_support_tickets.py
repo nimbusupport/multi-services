@@ -8,6 +8,7 @@ import tempfile
 import time
 import types
 import unittest
+from unittest.mock import patch
 from datetime import datetime
 from urllib.parse import parse_qs, unquote, urlparse
 from zoneinfo import ZoneInfo
@@ -2696,6 +2697,47 @@ class SupportTicketsTestCase(unittest.TestCase):
 
             self.assertEqual(self.app_module.support_user_name(), "אסף")
 
+    def test_assigned_technician_support_user_name_normalizes_english_profile_name(self):
+        with self.app.test_request_context("/pais-tickets"):
+            from flask import session
+
+            session["logged_in"] = True
+            session["username"] = "golan@nimbusip.com"
+            session["role"] = "assigned_technician"
+            session["full_name"] = "Golan"
+
+            self.assertEqual(self.app_module.support_user_name(), "גולן")
+
+    def test_assigned_technician_support_user_name_normalizes_email_with_numeric_suffix(self):
+        with self.app.test_request_context("/pais-tickets"):
+            from flask import session
+
+            session["logged_in"] = True
+            session["username"] = "zura332@gmail.com"
+            session["role"] = "assigned_technician"
+
+            self.assertEqual(self.app_module.support_user_name(), "זורה")
+
+    def test_canonical_support_user_name_normalizes_hebrew_label_prefix(self):
+        self.assertEqual(self.app_module.canonical_support_user_name("זורה תמיכה"), "זורה")
+
+    def test_canonical_support_user_name_normalizes_multiple_worker_alias_patterns(self):
+        cases = {
+            "zura332@gmail.com": "זורה",
+            "zura support": "זורה",
+            "golan77@gmail.com": "גולן",
+            "golan support": "גולן",
+            "assafh22@gmail.com": "אסף",
+            "isaac77@nimbusip.com": "יצחק.ק",
+            "yossigorbov88@hotmail.com": "יוסף",
+            "mustafa.h999@gmail.com": "מוסטפה.ח",
+            "mostpc55123@gmail.com": "מוסטפה.א",
+        }
+
+        for raw_value, expected in cases.items():
+            with self.subTest(raw_value=raw_value):
+                self.assertEqual(self.app_module.canonical_support_user_name(raw_value), expected)
+
     def test_assigned_technician_only_sees_own_coordination_tickets(self):
         tickets = self.app_module.load_support_tickets()
         tickets.extend([
@@ -5292,6 +5334,18 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertEqual(users.count("זורה"), 1)
         self.assertIn("גולן", users)
 
+    def test_support_ticket_assignee_choices_include_workers_alongside_active_profiles(self):
+        with patch.object(self.app_module, "list_user_profiles", return_value=[
+            {"active": True, "full_name": "Admin"},
+            {"active": True, "full_name": "נסטיה"},
+        ]):
+            users = self.app_module.support_ticket_assignee_choices([])
+
+        self.assertIn("Admin", users)
+        self.assertIn("נסטיה", users)
+        self.assertIn("גולן", users)
+        self.assertEqual(users.count("גולן"), 1)
+
     def test_only_admin_or_nastya_can_set_cancelled_status(self):
         tickets = self.app_module.load_support_tickets()
         tickets.append({
@@ -5644,6 +5698,108 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertIn("assafh@nimbusip.com", payload["ticket"]["notification_recipients"])
         self.assertIn("nastya@nimbusip.com", payload["ticket"]["notification_message"])
         self.assertIn("assafh@nimbusip.com", payload["ticket"]["notification_message"])
+
+    def test_push_subscriptions_subscribe_allows_ticket_only_users(self):
+        captured = {}
+
+        def fake_upsert(subscription, user_email="", support_user="", full_name="", user_agent=""):
+            captured["subscription"] = subscription
+            captured["user_email"] = user_email
+            captured["support_user"] = support_user
+            captured["full_name"] = full_name
+            return subscription
+
+        with self.client.session_transaction() as session:
+            session["logged_in"] = True
+            session["username"] = "golan@nimbusip.com"
+            session["role"] = "assigned_technician"
+            session["full_name"] = "Golan"
+            session["allowed_pages"] = ["pais_tickets"]
+
+        subscription = {
+            "endpoint": "https://example.com/push/123",
+            "keys": {
+                "p256dh": "key-123",
+                "auth": "auth-123",
+            },
+        }
+
+        with patch.object(self.app_module, "web_push_enabled", return_value=True), patch.object(self.app_module, "upsert_push_subscription", side_effect=fake_upsert):
+            response = self.client.post("/push-subscriptions/subscribe", json={"subscription": subscription})
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(captured["user_email"], "golan@nimbusip.com")
+        self.assertEqual(captured["support_user"], "גולן")
+        self.assertEqual(captured["full_name"], "Golan")
+        self.assertEqual(captured["subscription"]["endpoint"], subscription["endpoint"])
+
+    def test_push_subscriptions_subscribe_normalizes_numeric_suffix_user(self):
+        captured = {}
+
+        def fake_upsert(subscription, user_email="", support_user="", full_name="", user_agent=""):
+            captured["support_user"] = support_user
+            captured["full_name"] = full_name
+            return subscription
+
+        with self.client.session_transaction() as session:
+            session["logged_in"] = True
+            session["username"] = "zura332@gmail.com"
+            session["role"] = "assigned_technician"
+            session["allowed_pages"] = ["pais_tickets"]
+
+        subscription = {
+            "endpoint": "https://example.com/push/zura332",
+            "keys": {
+                "p256dh": "key-zura332",
+                "auth": "auth-zura332",
+            },
+        }
+
+        with patch.object(self.app_module, "web_push_enabled", return_value=True), patch.object(self.app_module, "upsert_push_subscription", side_effect=fake_upsert):
+            response = self.client.post("/push-subscriptions/subscribe", json={"subscription": subscription})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(captured["support_user"], "זורה")
+        self.assertEqual(captured["full_name"], "זורה")
+
+    def test_support_users_send_test_push_returns_delivery_details(self):
+        self.login("admin@nimbusip.com")
+
+        with patch.object(self.app_module, "web_push_enabled", return_value=True), patch.object(
+            self.app_module,
+            "send_support_user_push_notification",
+            return_value={"ok": True, "sent": 1, "subscriptions": 2, "support_user": "זורה"},
+        ) as mocked_send:
+            response = self.client.post(
+                "/support-users-send-test-push",
+                json={"support_user": "זורה תמיכה", "title": "בדיקת Push", "body": "בדיקה ידנית"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["support_user"], "זורה")
+        self.assertEqual(payload["sent"], 1)
+        self.assertEqual(payload["subscriptions"], 2)
+        mocked_send.assert_called_once()
+
+    def test_support_users_send_test_push_returns_conflict_without_subscriptions(self):
+        self.login("admin@nimbusip.com")
+
+        with patch.object(self.app_module, "web_push_enabled", return_value=True), patch.object(
+            self.app_module,
+            "send_support_user_push_notification",
+            return_value={"ok": False, "sent": 0, "subscriptions": 0, "support_user": "זורה", "reason": "no_subscriptions"},
+        ):
+            response = self.client.post("/support-users-send-test-push", json={"support_user": "זורה תמיכה"})
+
+        self.assertEqual(response.status_code, 409)
+        payload = response.get_json()
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["reason"], "no_subscriptions")
+        self.assertEqual(payload["support_user"], "זורה")
 
     def test_support_tickets_data_can_skip_meta_payload(self):
         self.login("admin@nimbusip.com")

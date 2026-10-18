@@ -537,11 +537,82 @@ SUPPORT_USER_NAME_ALIASES = {
     "מוסטפא.א": "מוסטפה.א",
     "מוסטפה.א": "מוסטפה.א",
 }
+SUPPORT_USER_NAME_CASEFOLD_ALIASES = {
+    "admin": "Admin",
+    "eugeni": "יבגני",
+    "yevgeni": "יבגני",
+    "evgeni": "יבגני",
+    "nir": "ניר",
+    "golan": "גולן",
+    "asaf": "אסף",
+    "assafh": "אסף",
+    "zura": "זורה",
+    "zohara": "זורה",
+    "isaac": "יצחק.ק",
+    "yossi": "יוסף",
+    "yossigorbov": "יוסף",
+    "pelecom2016": "מוסטפה.ח",
+    "mustafa.h": "מוסטפה.ח",
+    "mostafa.h": "מוסטפה.ח",
+    "mostpc55": "מוסטפה.א",
+    "mustafa.a": "מוסטפה.א",
+    "mostafa.a": "מוסטפה.א",
+    "nastia": "נסטיה",
+    "nastya": "נסטיה",
+    "nastiya": "נסטיה",
+}
 
 
 def canonical_support_user_name(value):
     normalized = normalize_legacy_hebrew_text(value)
-    return SUPPORT_USER_NAME_ALIASES.get(normalized, normalized)
+    direct_match = SUPPORT_USER_NAME_ALIASES.get(normalized)
+    if direct_match is not None:
+        return direct_match
+
+    compact = " ".join(str(normalized or "").strip().split())
+    if not compact:
+        return ""
+
+    normalized_casefold = compact.casefold()
+    casefold_match = SUPPORT_USER_NAME_CASEFOLD_ALIASES.get(normalized_casefold)
+    if casefold_match is not None:
+        return casefold_match
+
+    local_part = normalized_casefold.split("@", 1)[0]
+    local_part_match = SUPPORT_USER_NAME_CASEFOLD_ALIASES.get(local_part)
+    if local_part_match is not None:
+        return local_part_match
+
+    trimmed_local_part = local_part
+    while trimmed_local_part and trimmed_local_part[-1].isdigit():
+        trimmed_local_part = trimmed_local_part[:-1]
+        trimmed_local_part_match = SUPPORT_USER_NAME_CASEFOLD_ALIASES.get(trimmed_local_part)
+        if trimmed_local_part_match is not None:
+            return trimmed_local_part_match
+
+    first_token = compact.split(" ", 1)[0]
+    first_token_direct_match = SUPPORT_USER_NAME_ALIASES.get(first_token)
+    if first_token_direct_match is not None:
+        return first_token_direct_match
+
+    first_token_casefold = first_token.casefold()
+    first_token_casefold_match = SUPPORT_USER_NAME_CASEFOLD_ALIASES.get(first_token_casefold)
+    if first_token_casefold_match is not None:
+        return first_token_casefold_match
+
+    alpha_prefix_match = re.match(r"^[A-Za-z]+", local_part)
+    if alpha_prefix_match:
+        alias = SUPPORT_USER_NAME_CASEFOLD_ALIASES.get(alpha_prefix_match.group(0).casefold())
+        if alias is not None:
+            return alias
+
+    hebrew_prefix_match = re.match(r"^[֐-׿]+", compact)
+    if hebrew_prefix_match:
+        alias = SUPPORT_USER_NAME_ALIASES.get(hebrew_prefix_match.group(0))
+        if alias is not None:
+            return alias
+
+    return compact
 
 
 def normalize_legacy_hebrew_data(value):
@@ -1644,18 +1715,15 @@ def support_ticket_assignee_choices(tickets=None):
         seen.add(key)
         choices.append(name)
 
-    profile_names_added = False
     try:
         for profile in list_user_profiles():
             if profile.get("active") and (profile.get("full_name") or "").strip():
                 add_name(profile.get("full_name"))
-                profile_names_added = True
     except Exception:
-        profile_names_added = False
+        pass
 
-    if not profile_names_added:
-        for legacy_name in SUPPORT_USERS:
-            add_name(legacy_name)
+    for legacy_name in SUPPORT_USERS:
+        add_name(legacy_name)
 
     if tickets is None:
         try:
@@ -6274,15 +6342,46 @@ def _web_push_exception_status(exc):
     return None
 
 
-def send_ticket_assignment_push(ticket, recipient_name, event_type="assigned"):
+def send_support_user_push_notification(recipient_name, payload, ttl=43200):
     normalized_recipient = canonical_support_user_name(recipient_name)
     if not normalized_recipient or not web_push_enabled():
-        return {"ok": False, "sent": 0, "reason": "disabled"}
+        return {"ok": False, "sent": 0, "reason": "disabled", "support_user": normalized_recipient}
 
     subscriptions = list_push_subscriptions(normalized_recipient)
     if not subscriptions:
-        return {"ok": False, "sent": 0, "reason": "no_subscriptions"}
+        return {"ok": False, "sent": 0, "reason": "no_subscriptions", "support_user": normalized_recipient}
 
+    sent = 0
+    for subscription in subscriptions:
+        try:
+            webpush(
+                subscription_info=subscription,
+                data=json.dumps(payload, ensure_ascii=False),
+                vapid_private_key=configured_web_push_vapid_private_key(),
+                vapid_claims={"sub": configured_web_push_vapid_subject()},
+                ttl=ttl,
+            )
+            sent += 1
+        except WebPushException as exc:
+            status_code = _web_push_exception_status(exc)
+            if status_code in {404, 410}:
+                try:
+                    deactivate_push_subscription(subscription.get("endpoint"))
+                except Exception as deactivate_exc:
+                    print(f"Push deactivate warning for {normalized_recipient}: {deactivate_exc}")
+            print(f"Push send warning for {normalized_recipient}: {exc}")
+        except Exception as exc:
+            print(f"Push send warning for {normalized_recipient}: {exc}")
+    return {
+        "ok": sent > 0,
+        "sent": sent,
+        "support_user": normalized_recipient,
+        "subscriptions": len(subscriptions),
+    }
+
+
+def send_ticket_assignment_push(ticket, recipient_name, event_type="assigned"):
+    normalized_recipient = canonical_support_user_name(recipient_name)
     board_name = get_ticket_board(ticket.get("board_slug")).get("name") or "קריאות שירות"
     ticket_number = f"#{int(ticket.get('id') or 0):04d}" if int(ticket.get("id") or 0) > 0 else str(ticket.get("ticket_id") or "")
     title = "קריאה חדשה הוקצתה אליך" if event_type == "created" else "קריאה הוקצתה אליך"
@@ -6299,29 +6398,7 @@ def send_ticket_assignment_push(ticket, recipient_name, event_type="assigned"):
         "boardName": board_name,
         "supportUser": normalized_recipient,
     }
-
-    sent = 0
-    for subscription in subscriptions:
-        try:
-            webpush(
-                subscription_info=subscription,
-                data=json.dumps(payload, ensure_ascii=False),
-                vapid_private_key=configured_web_push_vapid_private_key(),
-                vapid_claims={"sub": configured_web_push_vapid_subject()},
-                ttl=43200,
-            )
-            sent += 1
-        except WebPushException as exc:
-            status_code = _web_push_exception_status(exc)
-            if status_code in {404, 410}:
-                try:
-                    deactivate_push_subscription(subscription.get("endpoint"))
-                except Exception as deactivate_exc:
-                    print(f"Push deactivate warning for {normalized_recipient}: {deactivate_exc}")
-            print(f"Push send warning for {normalized_recipient}: {exc}")
-        except Exception as exc:
-            print(f"Push send warning for {normalized_recipient}: {exc}")
-    return {"ok": sent > 0, "sent": sent}
+    return send_support_user_push_notification(normalized_recipient, payload)
 
 
 def maybe_notify_ticket_assignment(previous_ticket, ticket):
@@ -9630,7 +9707,7 @@ def support_tickets_update():
 def push_subscriptions_subscribe():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
-    if not user_can_access_page("support_tickets"):
+    if not allowed_pages_for_current_user().intersection(TICKETS_ONLY_ALLOWED_PAGES):
         return api_error("אין הרשאה לגשת לעמוד זה", 403, "access_denied")
     if not web_push_enabled():
         return jsonify({"ok": False, "message": "Push notifications are not configured"}), 503
@@ -9658,7 +9735,7 @@ def push_subscriptions_subscribe():
 def push_subscriptions_unsubscribe():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
-    if not user_can_access_page("support_tickets"):
+    if not allowed_pages_for_current_user().intersection(TICKETS_ONLY_ALLOWED_PAGES):
         return api_error("אין הרשאה לגשת לעמוד זה", 403, "access_denied")
 
     payload = request.get_json(silent=True) or {}
@@ -9676,6 +9753,55 @@ def push_subscriptions_unsubscribe():
     except Exception as exc:
         return jsonify({"ok": False, "message": str(exc)}), 502
     return jsonify({"ok": True})
+
+
+@app.route("/support-users-send-test-push", methods=["POST"])
+def support_users_send_test_push():
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+    if not current_user_can_write():
+        return jsonify({"ok": False, "message": "למשתמש זה מוגדרת הרשאת קריאה בלבד"}), 403
+    if not support_user_is_admin():
+        return jsonify({"ok": False, "message": "Admin access required"}), 403
+    if not web_push_enabled():
+        return jsonify({"ok": False, "message": "Push notifications are not configured"}), 503
+
+    payload = request.get_json(silent=True) or {}
+    support_user = str(payload.get("support_user") or "").strip()
+    if not support_user:
+        return jsonify({"ok": False, "message": "Missing support_user"}), 400
+
+    normalized_support_user = canonical_support_user_name(support_user)
+    title = str(payload.get("title") or "בדיקת Push").strip() or "בדיקת Push"
+    body = str(payload.get("body") or f"בדיקת push עבור {normalized_support_user}").strip() or f"בדיקת push עבור {normalized_support_user}"
+    url = str(payload.get("url") or "/support-tickets").strip() or "/support-tickets"
+    notification_payload = {
+        "title": title,
+        "body": body,
+        "tag": f"support-test-{normalized_support_user or secrets.token_hex(4)}",
+        "icon": "/brand/nimbus-logo.png",
+        "badge": "/brand/nimbus-logo.png",
+        "url": url,
+        "ticketId": "",
+        "ticketNumber": "",
+        "boardSlug": "support",
+        "boardName": "בדיקה",
+        "supportUser": normalized_support_user,
+    }
+
+    try:
+        result = send_support_user_push_notification(normalized_support_user, notification_payload)
+    except Exception as exc:
+        return jsonify({"ok": False, "message": str(exc)}), 502
+
+    status_code = 200 if result.get("ok") else 409
+    return jsonify({
+        "ok": bool(result.get("ok")),
+        "support_user": normalized_support_user,
+        "sent": int(result.get("sent") or 0),
+        "subscriptions": int(result.get("subscriptions") or 0),
+        "reason": result.get("reason") or "",
+    }), status_code
 
 
 @app.route("/support-tickets-send-email", methods=["POST"])
