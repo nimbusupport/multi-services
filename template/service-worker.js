@@ -1,5 +1,6 @@
 const DEFAULT_ICON = "/brand/nimbus-logo.png";
 const SUPPORT_NOTIFICATION_TAG_PREFIX = "support-ticket-";
+const SUPPORT_SUMMARY_NOTIFICATION_TAG_PREFIX = "support-ticket-summary-";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(self.skipWaiting());
@@ -58,10 +59,49 @@ async function clearTicketNotifications(ticketIds = []) {
   });
 }
 
+async function syncTicketAlertSummary(payload = {}) {
+  const unreadCount = Number.parseInt(payload.unreadCount, 10) || 0;
+  const tag = String(payload.tag || `${SUPPORT_SUMMARY_NOTIFICATION_TAG_PREFIX}global`);
+  const url = String(payload.url || "/support-tickets?scope=my");
+  const title = String(payload.title || "קריאות שלא נקראו");
+  const body = unreadCount > 0
+    ? String(payload.body || `יש לך ${unreadCount} קריאות שלא נקראו.`)
+    : "";
+
+  const notifications = await self.registration.getNotifications({ tag });
+  notifications.forEach((notification) => notification.close());
+
+  if (unreadCount <= 0) {
+    return;
+  }
+
+  await self.registration.showNotification(title, {
+    body,
+    icon: String(payload.icon || DEFAULT_ICON),
+    badge: String(payload.badge || DEFAULT_ICON),
+    tag,
+    data: {
+      url,
+      supportUser: String(payload.supportUser || ""),
+      boardSlug: String(payload.boardSlug || "support"),
+      summary: true,
+    },
+    renotify: false,
+    requireInteraction: false,
+    silent: true,
+    dir: "rtl",
+    lang: "he",
+  });
+}
+
 self.addEventListener("message", (event) => {
   const payload = event.data || {};
   if (payload.type === "clear-ticket-notifications") {
     event.waitUntil(clearTicketNotifications(payload.ticketIds));
+    return;
+  }
+  if (payload.type === "sync-ticket-alert-summary") {
+    event.waitUntil(syncTicketAlertSummary(payload));
   }
 });
 

@@ -173,9 +173,33 @@ async function updateAppBadge() {
   }
 }
 
+async function syncTicketAlertSummaryNotification() {
+  if (!currentSupportUser || !("Notification" in window) || Notification.permission !== "granted") return;
+  const registration = await registerPushServiceWorker();
+  if (!registration?.active) return;
+  const unreadCount = ticketAlertUnreadCount();
+  const title = unreadCount > 0 ? "קריאות שלא נקראו" : "";
+  const body = unreadCount > 0
+    ? `יש לך ${unreadCount} קריאות שלא נקראו בלוחות השירות.`
+    : "";
+  registration.active.postMessage({
+    type: "sync-ticket-alert-summary",
+    unreadCount,
+    title,
+    body,
+    tag: `support-ticket-summary:${currentSupportUser || currentUserEmail || "guest"}`,
+    url: "/support-tickets?scope=my",
+    supportUser: currentSupportUser,
+    boardSlug,
+    icon: "/brand/nimbus-logo.png",
+    badge: "/brand/nimbus-logo.png",
+  });
+}
+
 function refreshTicketAlertIndicators() {
   updateDocumentUnreadTitle();
   void updateAppBadge();
+  void syncTicketAlertSummaryNotification();
 }
 
 function showAssignedTicketNotification(newIds) {
