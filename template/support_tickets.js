@@ -196,8 +196,18 @@ function syncAssignedTicketAlerts(stats) {
   const currentIds = new Set(normalizeTicketIdList(stats?.my_open_ticket_ids));
   if (!ticketAlertsHydrated) {
     const stored = readTicketAlertsState();
+    const storedCurrentIds = new Set(normalizeTicketIdList(stored?.currentIds));
+    const persistedUnreadIds = new Set(normalizeTicketIdList(stored?.unreadIds).filter((ticketId) => currentIds.has(ticketId)));
+    const unseenCurrentIds = Array.from(currentIds).filter((ticketId) => !storedCurrentIds.has(ticketId));
+
+    if (storedCurrentIds.size === 0 && persistedUnreadIds.size === 0) {
+      unreadAssignedOpenTicketIds = new Set(currentIds);
+    } else {
+      unreadAssignedOpenTicketIds = new Set(persistedUnreadIds);
+      unseenCurrentIds.forEach((ticketId) => unreadAssignedOpenTicketIds.add(ticketId));
+    }
+
     previousAssignedOpenTicketIds = currentIds;
-    unreadAssignedOpenTicketIds = new Set(stored.unreadIds.filter((ticketId) => currentIds.has(ticketId)));
     ticketAlertsHydrated = true;
     writeTicketAlertsState();
     refreshTicketAlertIndicators();
@@ -4438,7 +4448,6 @@ document.addEventListener("DOMContentLoaded", () => {
       currentScope = button.dataset.scope || "all";
       if (currentScope === "my") {
         requestBrowserNotificationPermission();
-        markAssignedTicketAlertsRead();
       }
       loadTickets({ forceBlocking: true, message: "טוען נתונים..." });
     });
