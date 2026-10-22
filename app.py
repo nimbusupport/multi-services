@@ -427,7 +427,7 @@ SUPPORT_SERVICE_TYPES = [
     "Provision ymcs",
     "אפליקציית Cloud Softphone",
 ]
-SUPPORT_ATTACHMENT_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+SUPPORT_ATTACHMENT_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".pdf"}
 SUPABASE_STORAGE_BUCKET = (os.environ.get("SUPABASE_STORAGE_BUCKET") or "").strip()
 SUPABASE_STORAGE_PREFIX = (
     os.environ.get("SUPABASE_STORAGE_PREFIX") or "ticket-attachments"
@@ -3868,7 +3868,7 @@ def save_support_attachment(file_storage, ticket_number, allowed_extensions=None
     ext = os.path.splitext(original)[1].lower()
     allowed_extensions = allowed_extensions or SUPPORT_ATTACHMENT_EXTENSIONS
     if ext not in allowed_extensions:
-        raise ValueError("Only image files (JPG, PNG, WEBP, GIF) are supported")
+        raise ValueError("Only image files (JPG, PNG, WEBP, GIF) and PDF files are supported")
 
     ticket_folder = f"TicketID{ticket_number:04d}"
     timestamp = israel_now().strftime("%Y%m%d%H%M%S%f")

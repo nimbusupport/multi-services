@@ -1012,7 +1012,7 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertEqual(payload["tickets"][0]["attachments"], [])
         self.assertEqual(payload["tickets"][0]["updates"], [])
 
-    def test_can_create_ticket_with_multiple_image_attachments(self):
+    def test_can_create_ticket_with_image_and_pdf_attachments(self):
         self.login("admin@nimbusip.com")
         response = self.client.post(
             "/support-tickets-create",
@@ -1027,29 +1027,7 @@ class SupportTicketsTestCase(unittest.TestCase):
                 "attachments": [
                     (io.BytesIO(b"image-one"), "first.jpg"),
                     (io.BytesIO(b"image-two"), "second.png"),
-                ],
-            },
-            content_type="multipart/form-data",
-        )
-
-        self.assertEqual(response.status_code, 200)
-        payload = response.get_json()
-        self.assertTrue(payload["ok"])
-        self.assertEqual(len(payload["ticket"]["attachments"]), 2)
-
-        ticket_folder = os.path.join(self.screens_dir, "TicketID0002")
-        self.assertTrue(os.path.isdir(ticket_folder))
-        self.assertEqual(len(os.listdir(ticket_folder)), 2)
-
-    def test_can_add_image_attachments_to_existing_ticket(self):
-        self.login("admin@nimbusip.com")
-        response = self.client.post(
-            "/support-tickets-attachments",
-            data={
-                "ticket_id": "1",
-                "attachments": [
-                    (io.BytesIO(b"image-three"), "third.jpg"),
-                    (io.BytesIO(b"image-four"), "fourth.png"),
+                    (io.BytesIO(b"%PDF-1.4\n%%EOF"), "report.PDF"),
                 ],
             },
             content_type="multipart/form-data",
@@ -1060,9 +1038,53 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertTrue(payload["ok"])
         self.assertEqual(len(payload["ticket"]["attachments"]), 3)
 
-        ticket_folder = os.path.join(self.screens_dir, "TicketID0001")
+        ticket_folder = os.path.join(self.screens_dir, "TicketID0002")
         self.assertTrue(os.path.isdir(ticket_folder))
         self.assertEqual(len(os.listdir(ticket_folder)), 3)
+
+    def test_can_add_image_and_pdf_attachments_to_existing_ticket(self):
+        self.login("admin@nimbusip.com")
+        response = self.client.post(
+            "/support-tickets-attachments",
+            data={
+                "ticket_id": "1",
+                "attachments": [
+                    (io.BytesIO(b"image-three"), "third.jpg"),
+                    (io.BytesIO(b"image-four"), "fourth.png"),
+                    (io.BytesIO(b"%PDF-1.4\n%%EOF"), "report.pdf"),
+                ],
+            },
+            content_type="multipart/form-data",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(len(payload["ticket"]["attachments"]), 4)
+
+        ticket_folder = os.path.join(self.screens_dir, "TicketID0001")
+        self.assertTrue(os.path.isdir(ticket_folder))
+        self.assertEqual(len(os.listdir(ticket_folder)), 4)
+
+        attachment = payload["ticket"]["attachments"][-1]
+        download = self.client.get(attachment["url"])
+        self.assertEqual(download.status_code, 200)
+        self.assertEqual(download.mimetype, "application/pdf")
+        self.assertEqual(download.data, b"%PDF-1.4\n%%EOF")
+        download.close()
+
+    def test_ticket_attachment_rejects_unsupported_file_type(self):
+        self.login("admin@nimbusip.com")
+        response = self.client.post(
+            "/support-tickets-attachments",
+            data={
+                "ticket_id": "1",
+                "attachments": (io.BytesIO(b"unsupported"), "script.exe"),
+            },
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("PDF", response.get_json()["message"])
 
     def test_can_delete_image_attachment_from_existing_ticket(self):
         self.login("admin@nimbusip.com")
@@ -5482,6 +5504,35 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.get_json()
         self.assertEqual(payload["ticket"]["details"]["visit_summary"], "בוצע איפוס והקו חזר לעבוד")
+
+    def test_hot_long_visit_summary_persists_after_reload(self):
+        tickets = self.app_module.load_support_tickets()
+        ticket = copy.deepcopy(tickets[0])
+        ticket.update({
+            "id": 2,
+            "board_slug": "hot-kiryot",
+            "status": "תואם",
+            "assigned_to": "גולן",
+            "details": {"visit_summary": ""},
+        })
+        tickets.append(ticket)
+        self.app_module.save_support_tickets(tickets)
+        summary = ("\u05e1\u05d9\u05db\u05d5\u05dd \u05d1\u05d9\u05e7\u05d5\u05e8: WIFI 100/100 MB; RJ45\n" * 100).strip()
+        for email, password in [
+            ("admin@nimbusip.com", "secret123"),
+            ("golan@nimbusip.com", "0503009456!"),
+        ]:
+            with self.subTest(email=email):
+                self.login(email, password)
+                for value in [summary, ""]:
+                    response = self.client.post(
+                        "/support-tickets-update",
+                        json={"ticket_id": 2, "status": "בוצע", "details": {"visit_summary": value}},
+                    )
+                    self.assertEqual(response.status_code, 200)
+                    self.assertEqual(response.get_json()["ticket"]["details"]["visit_summary"], value)
+                    saved = next(item for item in self.app_module.load_support_tickets() if item["id"] == 2)
+                    self.assertEqual(saved["details"]["visit_summary"], value)
 
     def test_new_tickets_include_visit_summary_field(self):
         self.login("admin@nimbusip.com")

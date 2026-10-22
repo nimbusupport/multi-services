@@ -1826,6 +1826,10 @@ function resetImagePreviewScale() {
 
 function openImagePreview(url) {
   if (!url) return;
+  if (/\.pdf(?:[?#]|$)/i.test(url)) {
+    window.open(url, "_blank", "noopener,noreferrer");
+    return;
+  }
   const modal = document.getElementById("image-modal");
   const preview = document.getElementById("image-preview");
   const downloadLink = document.getElementById("download-image-preview");
@@ -2460,12 +2464,12 @@ function syncAttachmentInputState() {
   if (!hint) return;
   const files = Array.from(input?.files || []);
   if (files.length === 0) {
-    hint.textContent = "Drag images here or click to choose JPG, PNG, WEBP, GIF";
+    hint.textContent = "Drag files here or click to choose JPG, PNG, WEBP, GIF, PDF";
     return;
   }
   hint.textContent = files.length === 1
     ? files[0].name
-    : `${files.length} images selected`;
+    : `${files.length} files selected`;
 }
 
 function syncDetailAttachmentInputState() {
@@ -2474,12 +2478,12 @@ function syncDetailAttachmentInputState() {
   if (!hint) return;
   const files = Array.from(input?.files || []);
   if (files.length === 0) {
-    hint.textContent = "Choose JPG, PNG, WEBP, GIF";
+    hint.textContent = "Choose JPG, PNG, WEBP, GIF, PDF";
     return;
   }
   hint.textContent = files.length === 1
     ? files[0].name
-    : `${files.length} images selected`;
+    : `${files.length} files selected`;
 }
 
 async function uploadDetailAttachments(event) {
@@ -2487,14 +2491,21 @@ async function uploadDetailAttachments(event) {
   const form = event.currentTarget;
   const message = document.getElementById("detail-upload-message");
   const button = document.getElementById("detail-upload-btn");
+  if (button?.disabled) return;
+  const originalButtonContent = button?.innerHTML || "";
   const input = document.getElementById("detail-attachment-input");
   const ticketId = document.getElementById("detail-upload-ticket-id")?.value || "";
   if (message) message.textContent = "";
   if (!input?.files?.length) {
-    if (message) message.textContent = "Please choose at least one image";
+    if (message) message.textContent = "Please choose at least one file";
     return;
   }
-  if (button) button.disabled = true;
+  if (button) {
+    button.disabled = true;
+    button.classList.add("is-saving");
+    button.setAttribute("aria-busy", "true");
+    button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i><span>Uploading...</span>';
+  }
 
   try {
     const formData = new FormData(form);
@@ -2510,11 +2521,16 @@ async function uploadDetailAttachments(event) {
     form.reset();
     syncDetailAttachmentInputState();
     await loadTickets();
-    openTicketDetail(ticketId);
+    await openTicketDetail(ticketId);
   } catch (err) {
     if (message) message.textContent = err.message;
   } finally {
-    if (button) button.disabled = false;
+    if (button) {
+      button.disabled = false;
+      button.classList.remove("is-saving");
+      button.removeAttribute("aria-busy");
+      button.innerHTML = originalButtonContent;
+    }
   }
 }
 
@@ -3799,6 +3815,11 @@ async function saveTicketDetailWithFeedback(ticketId, options = {}) {
     };
   }
 
+  const visitSummaryField = document.getElementById("detail-visit-summary");
+  if (visitSummaryField) {
+    payload.details.visit_summary = visitSummaryField.value;
+  }
+
   clearCoordinationValidation();
   setDetailSaveMessageState(message, "שומר נתונים...", "saving");
   if (button) {
@@ -3871,6 +3892,9 @@ async function saveTicketDetailWithFeedback(ticketId, options = {}) {
     const data = normalizeLegacyHebrewData(await res.json().catch(() => ({})));
     if (!res.ok || !data.ok) {
       throw new Error(data.message || "Save failed");
+    }
+    if (visitSummaryField && data?.ticket?.details?.visit_summary !== payload.details.visit_summary.trim()) {
+      throw new Error("The visit summary was not saved. Your text is still here; please try saving again.");
     }
     if (data?.ticket?.notification_error) {
       openNotificationErrorModal(data.ticket.notification_error);
@@ -3961,7 +3985,11 @@ function showTicketDetail(ticket) {
   }
 
   document.getElementById("detail-grid").innerHTML = gridItems.filter(Boolean).join("");
+  const detailSaveActions = document.getElementById("detail-save-actions");
+  detailSaveActions?.replaceChildren();
   document.getElementById("detail-sections").innerHTML = renderDetailSections(ticket);
+  const detailSaveRow = document.getElementById("detail-save-btn")?.closest(".detail-save-row");
+  if (detailSaveActions && detailSaveRow) detailSaveActions.append(detailSaveRow);
   const detailCopyButton = document.getElementById("detail-copy-btn");
   if (detailCopyButton) {
     detailCopyButton.dataset.ticketId = ticket.id;
@@ -3980,6 +4008,10 @@ function showTicketDetail(ticket) {
   if (detailUploadPanel) {
     detailUploadPanel.hidden = !canUploadTicketAttachments || !canManageExistingTicketAttachments;
   }
+  const hideUploadActions = !canUploadTicketAttachments || !canManageExistingTicketAttachments;
+  if (detailUploadMessage) detailUploadMessage.hidden = hideUploadActions;
+  const detailUploadButton = document.getElementById("detail-upload-btn");
+  if (detailUploadButton) detailUploadButton.hidden = hideUploadActions;
   const detailEmailPanel = document.getElementById("detail-email-panel");
   const detailEmailInput = document.getElementById("detail-email-input");
   const detailEmailMessage = document.getElementById("detail-email-message");

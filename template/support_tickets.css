@@ -1642,9 +1642,33 @@ body.tickets-page-loading {
   color: #b0433e;
 }
 
-#detail-save-btn.is-saving {
+#detail-save-btn.is-saving,
+#detail-upload-btn.is-saving {
   opacity: 0.92;
   cursor: wait;
+}
+
+.detail-ticket-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+#detail-save-actions,
+#detail-save-actions > .detail-save-row {
+  display: contents;
+}
+
+.detail-ticket-actions > #detail-upload-message,
+.detail-ticket-actions #detail-save-message {
+  flex: 1 1 180px;
+}
+
+.detail-ticket-actions .create-ticket-btn {
+  order: 1;
+}
+
+.detail-ticket-actions [hidden] {
+  display: none;
 }
 
 .detail-email-panel {

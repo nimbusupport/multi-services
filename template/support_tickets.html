@@ -12,7 +12,7 @@
   {% if not can_access_home %}
   <link rel="stylesheet" href="/nav.css">
   {% endif %}
-  <link rel="stylesheet" href="/support_tickets.css">
+  <link rel="stylesheet" href="/support_tickets.css?v=20261022-2">
 </head>
 <body{% if can_access_home %} class="dashboard-page"{% endif %}>
   {% if can_access_home %}
@@ -645,9 +645,9 @@
           <p>אפשר לצרף כמה תמונות לכל קריאה. הקבצים יישמרו ב-Supabase Storage אם הוגדר bucket, או באחסון המקומי כברירת מחדל.</p>
         </div>
         <label class="ticket-upload-dropzone" for="attachment-input">
-          <input id="attachment-input" name="attachments" type="file" accept="image/*" capture="environment" multiple hidden>
+          <input id="attachment-input" name="attachments" type="file" accept="image/*,application/pdf,.pdf" multiple hidden>
           <span class="ticket-upload-icon"><i class="fa-regular fa-images"></i></span>
-          <strong>Upload Images</strong>
+          <strong>Upload files (images or PDF)</strong>
           <small id="attachment-file-count">גררו תמונות, בחרו קבצים או צלמו מהמכשיר</small>
         </label>
       </section>
@@ -701,26 +701,29 @@
       {% if can_upload_ticket_attachments %}
       <section class="detail-upload-panel" id="detail-upload-panel">
         <div class="detail-upload-copy">
-          <h3>Add Images</h3>
-          <p>Attach more images to this ticket after it was created.</p>
+          <h3>Add file</h3>
+          <p>Attach images or PDF files to this ticket after it was created.</p>
         </div>
         <form class="detail-upload-form" id="detail-upload-form">
           <input type="hidden" id="detail-upload-ticket-id" name="ticket_id" value="">
           <label class="ticket-upload-dropzone detail-upload-dropzone" for="detail-attachment-input">
-            <input id="detail-attachment-input" name="attachments" type="file" accept="image/*" capture="environment" multiple hidden>
+            <input id="detail-attachment-input" name="attachments" type="file" accept="image/*,application/pdf,.pdf" multiple hidden>
             <span class="ticket-upload-icon"><i class="fa-regular fa-images"></i></span>
-            <strong>Upload Images</strong>
+            <strong>Upload files (images or PDF)</strong>
             <small id="detail-attachment-file-count">בחרו תמונה או צלמו מהמכשיר</small>
           </label>
-          <div class="detail-save-row">
-            <span id="detail-upload-message"></span>
-            <button class="create-ticket-btn" id="detail-upload-btn" type="submit">
-              <i class="fa-solid fa-upload"></i><span>Add Images</span>
-            </button>
-          </div>
         </form>
       </section>
       {% endif %}
+      <div class="detail-save-row detail-ticket-actions">
+        {% if can_upload_ticket_attachments %}
+        <span id="detail-upload-message" role="status" aria-live="polite"></span>
+        <button class="create-ticket-btn" id="detail-upload-btn" type="submit" form="detail-upload-form">
+          <i class="fa-solid fa-upload"></i><span>Add file</span>
+        </button>
+        {% endif %}
+        <div id="detail-save-actions"></div>
+      </div>
       <section class="detail-attachments" id="detail-attachments"></section>
     </section>
   </div>
@@ -984,6 +987,6 @@
     };
   </script>
 
-  <script src="/support_tickets.js"></script>
+  <script src="/support_tickets.js?v=20261022-2"></script>
 </body>
 </html>
