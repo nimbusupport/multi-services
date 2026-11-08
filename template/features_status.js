@@ -205,10 +205,13 @@ function renderStatusCounters(payload) {
 function renderTopSummary(payload) {
   const summary = payload.summary || {};
   summaryTotalCount.textContent = summary.total_entries || 0;
-  summaryMonthLabel.textContent = `חודש ${payload.month_display || "--/----"}`;
+  summaryMonthLabel.textContent = payload.all_months ? payload.month_display : `חודש ${payload.month_display || "--/----"}`;
+  document.querySelector('label[for="status-month-input"]').classList.toggle("hidden", Boolean(payload.all_months));
+  summaryTotalCount.previousElementSibling.textContent = payload.all_months ? 'סה"כ פיצ\'רים בחיפוש' : 'סה"כ פיצ\'רים בחודש';
   summaryDoneCount.textContent = summary.done_count || 0;
   summaryWaitingCount.textContent = summary.waiting_count || 0;
   summaryServicesCount.textContent = summary.services_count || 0;
+  document.getElementById("summary-services-scope").textContent = payload.all_months ? "שירותים עם תוצאות בחיפוש" : "שירותים עם תוצאות בחודש";
   resultsCountLabel.textContent = summary.total_entries || 0;
 
   const filterParts = [payload.status_filter || "כל הסטטוסים"];
@@ -254,6 +257,7 @@ function renderServiceEntry(entry) {
         <span>ח.פ: ${escapeHtml(entry.customer_id || "-")}</span>
         <span>מנהל פרויקט: ${escapeHtml(entry.project_manager || entry.project_manager_raw || "-")}</span>
         <span>תאריך: ${escapeHtml(entry.date_display || "-")}</span>
+        <span>מקור: ${escapeHtml(entry.sheet || "-")}</span>
       </div>
     </div>
   `;
@@ -291,7 +295,7 @@ function renderResults(services) {
             ${entries.map(renderServiceEntry).join("")}
           </div>
         ` : `
-          <p class="service-empty">לא נמצאו פיצ'רים תחת שירות זה בחודש הנבחר.</p>
+          <p class="service-empty">לא נמצאו פיצ'רים תחת שירות זה במסננים שנבחרו.</p>
         `}
       </article>
     `;
@@ -326,7 +330,7 @@ async function loadFeatureStatuses() {
     renderSummary(data);
     renderResults(Array.isArray(data.services) ? data.services : []);
     syncExportState(data);
-    setMessage("הנתונים נטענו בהצלחה.");
+    setMessage(data.all_months ? "תוצאות החיפוש מוצגות מכל החודשים." : "הנתונים נטענו בהצלחה.");
   } catch (err) {
     statusCounterGrid.innerHTML = "";
     summaryGrid.innerHTML = "";

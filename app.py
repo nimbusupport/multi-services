@@ -7353,11 +7353,13 @@ def feature_status_entry_matches(entry, query_text="", query_type="all", status_
         return canonicalize_feature_status_project_manager(entry.get("project_manager")) == canonicalize_feature_status_project_manager(normalized_query)
 
     text_query = normalized_query.lower()
+    customer_query = normalize_feature_status_customer_id(normalized_query)
+    order_query = normalize_feature_status_order_id(normalized_query)
     return any(
         text_query in str(entry.get(field_name) or "").lower()
         for field_name in ("business_name", "customer_id", "order_id", "status", "service_label", "project_manager")
-    ) or normalize_feature_status_customer_id(normalized_query) == normalize_feature_status_customer_id(entry.get("customer_id")) \
-        or normalize_feature_status_order_id(normalized_query) == normalize_feature_status_order_id(entry.get("order_id"))
+    ) or bool(customer_query and customer_query == normalize_feature_status_customer_id(entry.get("customer_id"))) \
+        or bool(order_query and order_query == normalize_feature_status_order_id(entry.get("order_id")))
 
 
 def sort_feature_status_project_managers(managers):
@@ -7376,6 +7378,7 @@ def sort_feature_status_project_managers(managers):
 
 def build_feature_status_dashboard(month_value="", query_text="", query_type="all", status_filter="", project_manager_filter=""):
     selected_month = feature_status_selected_month(month_value)
+    all_months = bool(str(query_text or "").strip()) and query_type in {"all", "customer_id", "order_id"}
     client = get_gspread_client()
     spreadsheet = client.open_by_key(SPREADSHEET_ID)
     services = []
@@ -7387,16 +7390,40 @@ def build_feature_status_dashboard(month_value="", query_text="", query_type="al
     for config in FEATURE_STATUS_SERVICES:
         ws = spreadsheet.worksheet(config["sheet"])
         rows = ws.get_all_values()
+        source_rows = [
+            (index, row, config["sheet"], config.get("date_order", "mdy"))
+            for index, row in enumerate(rows[1:], start=2)
+        ]
+        # The monthly SMS completion count comes from number allocations, just
+        # like FEATURE_REPORT_SERVICES. Identity/manager searches still use the
+        # order sheet, since allocations do not contain those customer details.
+        if config["key"] == "sms" and not str(query_text or "").strip() and not project_manager_filter:
+            source_rows = [
+                item for item in source_rows
+                if canonicalize_feature_status_label(resolve_feature_status_value(item[1], config)) != STATUS_DONE
+            ]
+            allocation_config = FEATURE_REPORT_SERVICES["sms"]
+            allocation_rows = spreadsheet.worksheet(allocation_config["sheet"]).get_all_values()
+            for index, allocation in enumerate(allocation_rows[1:], start=2):
+                used_col = allocation_config["status_col"]
+                if len(allocation) < used_col or not report_checkbox_marked(allocation[used_col - 1]):
+                    continue
+                row = [""] * max(config["status_col"], config["date_col"])
+                domain = allocation[CGR_COL_DOMAIN - 1].strip() if len(allocation) >= CGR_COL_DOMAIN else ""
+                row[config["business_col"] - 1] = domain or allocation[0]
+                row[config["status_col"] - 1] = STATUS_DONE
+                row[config["date_col"] - 1] = allocation[allocation_config["date_col"] - 1]
+                source_rows.append((index, row, allocation_config["sheet"], allocation_config.get("date_order", "mdy")))
         entries = []
         scoped_entries = []
 
-        for row_index, row in enumerate(rows[1:], start=2):
+        for row_index, row, source_sheet, date_order in source_rows:
             status_value = normalize_legacy_hebrew_text(resolve_feature_status_value(row, config))
             date_value = (row[config["date_col"] - 1] if len(row) >= config.get("date_col", 0) else "").strip()
-            entry_date = parse_report_date(date_value, config.get("date_order", "mdy"))
-            if not entry_date:
+            entry_date = parse_report_date(date_value, date_order)
+            if not entry_date and not all_months:
                 continue
-            if entry_date.year != selected_month.year or entry_date.month != selected_month.month:
+            if not all_months and (entry_date.year != selected_month.year or entry_date.month != selected_month.month):
                 continue
 
             business_name = normalize_legacy_hebrew_text((row[config.get("business_col", 1) - 1] if len(row) >= config.get("business_col", 1) else "").strip())
@@ -7417,11 +7444,11 @@ def build_feature_status_dashboard(month_value="", query_text="", query_type="al
                 "status": display_status,
                 "status_raw": status_value,
                 "status_category": canonical_status,
-                "date": entry_date.strftime("%Y-%m-%d"),
-                "date_display": entry_date.strftime("%d/%m/%Y"),
+                "date": entry_date.strftime("%Y-%m-%d") if entry_date else "",
+                "date_display": entry_date.strftime("%d/%m/%Y") if entry_date else "",
                 "service_key": config["key"],
                 "service_label": normalize_legacy_hebrew_text(config["label"]),
-                "sheet": normalize_legacy_hebrew_text(config["sheet"]),
+                "sheet": normalize_legacy_hebrew_text(source_sheet),
             }
             available_statuses.add(canonical_status)
             if canonical_project_manager or project_manager:
@@ -7450,7 +7477,7 @@ def build_feature_status_dashboard(month_value="", query_text="", query_type="al
         services.append({
             "key": config["key"],
             "label": config["label"],
-            "sheet": normalize_legacy_hebrew_text(config["sheet"]),
+            "sheet": " / ".join(dict.fromkeys(entry["sheet"] for entry in entries)) or normalize_legacy_hebrew_text(config["sheet"]),
             "found": bool(entries),
             "entry_count": len(entries),
             "done_count": len([entry for entry in entries if entry.get("status_category") == "בוצע"]),
@@ -7475,7 +7502,8 @@ def build_feature_status_dashboard(month_value="", query_text="", query_type="al
 
     return normalize_legacy_hebrew_data({
         "month": selected_month.strftime("%Y-%m"),
-        "month_display": selected_month.strftime("%m/%Y"),
+        "month_display": "כל החודשים" if all_months else selected_month.strftime("%m/%Y"),
+        "all_months": all_months,
         "query": str(query_text or "").strip(),
         "query_type": query_type if query_type in {"all", "customer_id", "order_id", "project_manager"} else "all",
         "status_filter": str(status_filter or "").strip(),

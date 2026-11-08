@@ -530,6 +530,75 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertEqual(ticket["last_edited_at_display"], "11/07/2026 09:20")
         self.assertEqual(ticket["list_timestamp_display"], "11/07/2026 09:20")
 
+    def _mock_feature_status_sheets(self, records, allocations=None):
+        worksheets = {self.app_module.CGR_SHEET_NAME: [["number", "", "domain", "date", "used"]] + (allocations or [])}
+        for config in self.app_module.FEATURE_STATUS_SERVICES:
+            rows = [["header"] * 17]
+            for business, customer, order, status, date_value in records.get(config["key"], []):
+                row = [""] * 17
+                for field, value in (("business_col", business), ("customer_col", customer),
+                                     ("order_col", order), ("status_col", status), ("date_col", date_value)):
+                    row[config[field] - 1] = value
+                rows.append(row)
+            worksheets[config["sheet"]] = rows
+        spreadsheet = types.SimpleNamespace(worksheet=lambda name: types.SimpleNamespace(get_all_values=lambda: worksheets[name]))
+        self.app_module.get_gspread_client = lambda: types.SimpleNamespace(open_by_key=lambda key: spreadsheet)
+        return spreadsheet
+
+    def test_features_status_sms_monthly_completions_match_category_report(self):
+        allocations = [[f"050000{index:04}", "", f"domain-{index}", "11/05/2026", "TRUE"] for index in range(21)]
+        allocations += [
+            ["1", "", "unused", "11/05/2026", "FALSE"],
+            ["2", "", "previous", "10/05/2026", "TRUE"],
+            ["3", "", "undated", "", "TRUE"],
+        ]
+        spreadsheet = self._mock_feature_status_sheets({"sms": [
+            ("Done one", "1", "101", "בוצע", "01/11/2026"),
+            ("Done two", "2", "102", "בוצע", "02/11/2026"),
+            ("Pending", "3", "103", "ממתין", "03/11/2026"),
+        ]}, allocations)
+        response = self.client.get("/features-status-data?month=2026-11")
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        sms = next(service for service in payload["services"] if service["key"] == "sms")
+        category_count = self.app_module.count_sheet_feature_by_month(
+            self.app_module.FEATURE_REPORT_SERVICES["sms"], datetime(2026, 11, 1), datetime(2026, 11, 1), spreadsheet)
+        self.assertEqual(sms["done_count"], category_count["2026-11"])
+        self.assertEqual(sms["done_count"], 21)
+        self.assertEqual(sms["waiting_count"], 1)
+        self.assertEqual(sms["entry_count"], 22)
+        completed = [entry for entry in sms["entries"] if entry["status_category"] == "בוצע"]
+        self.assertTrue(all(entry["sheet"] == self.app_module.CGR_SHEET_NAME for entry in completed))
+        self.assertTrue(all(entry["date"] == "2026-11-05" for entry in completed))
+        self.assertFalse(payload["all_months"])
+
+    def test_features_status_identity_search_covers_all_months_and_services(self):
+        records = {}
+        for config in self.app_module.FEATURE_STATUS_SERVICES:
+            records[config["key"]] = [
+                ("Historical Business", "514684125", "12345", "בוצע", "2025-01-20"),
+                ("Historical Business", "514684125", "12345", "ממתין", ""),
+                ("Unrelated", "", "", "ממתין", "2026-11-01"),
+            ]
+        self._mock_feature_status_sheets(records)
+        for query_type, query in (("customer_id", "051-4684125"), ("order_id", "0012345"),
+                                  ("all", "Historical Business"), ("all", "514684125"), ("all", "12345")):
+            with self.subTest(query_type=query_type, query=query):
+                response = self.client.get("/features-status-data", query_string={
+                    "month": "2026-11", "query_type": query_type, "query": query})
+                self.assertEqual(response.status_code, 200)
+                payload = response.get_json()
+                self.assertTrue(payload["all_months"])
+                self.assertEqual(payload["summary"]["total_entries"], 12)
+                self.assertEqual(payload["summary"]["services_count"], 6)
+                self.assertTrue(all(entry["business_name"] == "Historical Business" for entry in payload["entries"]))
+        filtered = self.client.get("/features-status-data", query_string={
+            "month": "2026-11", "query": "Historical Business", "status": "בוצע"}).get_json()
+        self.assertEqual(filtered["summary"]["total_entries"], 6)
+        monthly = self.client.get("/features-status-data?month=2026-11").get_json()
+        self.assertFalse(monthly["all_months"])
+        self.assertEqual(monthly["summary"]["total_entries"], 6)
+
     def test_features_status_lookup_aggregates_services_without_login(self):
         class FakeWorksheet:
             def __init__(self, rows):
