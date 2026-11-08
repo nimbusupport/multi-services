@@ -21,6 +21,7 @@ const STATIC_LINES = [
   "voice.handfree.spk_vol = 14",
   "security.user_password = admin:N2mbusIP",
   "security.user_password = user:N1mbusIP",
+  "phone_setting.phone_lock.enable = 0",
   "static.auto_provision.server.url = https://eu-resource.ymcs.yealink.com/hardware/autop/$MAC.boot",
   "static.auto_provision.server.username = admin",
 ];
