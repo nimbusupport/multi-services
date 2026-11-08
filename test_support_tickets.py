@@ -3704,6 +3704,26 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertEqual(payload["board"]["slug"], "support")
         self.assertEqual(payload["summary"]["total"], 1)
 
+    def test_visit_slots_require_two_hours_within_working_hours(self):
+        for start, end in (("09:00", "11:00"), ("16:00", "18:00")):
+            self.assertTrue(self.app_module.visit_slot_is_valid(start, end))
+        for start, end in (("09:00", "10:00"), ("09:00", "12:00"), ("17:00", "19:00"),
+                           ("08:00", "10:00"), ("09:30", "11:30"), ("", "")):
+            self.assertFalse(self.app_module.visit_slot_is_valid(start, end))
+
+    def test_two_hour_visit_conflicts_include_partial_overlap_but_allow_adjacent_slots(self):
+        ticket = {"id": 2, "board_slug": "pais", "details": {
+            "coordinated_worker": "worker", "visit_date": "2026-11-09",
+            "visit_hour_from": "10:00", "visit_hour_to": "12:00",
+        }}
+        with patch.object(self.app_module, "load_support_tickets", return_value=[ticket]):
+            check = self.app_module.coordination_slot_conflicts
+            self.assertEqual(check(3, "worker", "2026-11-09", "09:00", "11:00"), ticket)
+            self.assertEqual(check(3, "worker", "2026-11-09", "11:00", "13:00"), ticket)
+            self.assertIsNone(check(3, "worker", "2026-11-09", "12:00", "14:00"))
+            self.assertIsNone(check(3, "another", "2026-11-09", "10:00", "12:00"))
+            self.assertIsNone(check(2, "worker", "2026-11-09", "10:00", "12:00"))
+
     def test_slot_conflict_is_rejected(self):
         tickets = self.app_module.load_support_tickets()
         tickets.extend([
@@ -3729,7 +3749,7 @@ class SupportTicketsTestCase(unittest.TestCase):
                     "coordinated_worker": "אסף",
                     "visit_date": "2026-07-08",
                     "visit_hour_from": "09:00",
-                    "visit_hour_to": "10:00",
+                    "visit_hour_to": "11:00",
                 },
                 "attachments": [],
                 "updates": [],
@@ -3774,7 +3794,7 @@ class SupportTicketsTestCase(unittest.TestCase):
                     "coordinated_worker": "אסף",
                     "visit_date": "2026-07-08",
                     "visit_hour_from": "09:00",
-                    "visit_hour_to": "10:00",
+                    "visit_hour_to": "11:00",
                 },
             },
         )
@@ -3822,7 +3842,7 @@ class SupportTicketsTestCase(unittest.TestCase):
                     "coordinated_worker": "אסף",
                     "visit_date": "2026-07-09",
                     "visit_hour_from": "09:00",
-                    "visit_hour_to": "10:00",
+                    "visit_hour_to": "11:00",
                 },
             },
         )
@@ -3833,7 +3853,7 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertEqual(payload["ticket"]["details"]["coordinated_worker"], "אסף")
         self.assertEqual(payload["ticket"]["details"]["visit_date"], "2026-07-09")
         self.assertEqual(payload["ticket"]["details"]["visit_hour_from"], "09:00")
-        self.assertEqual(payload["ticket"]["details"]["visit_hour_to"], "10:00")
+        self.assertEqual(payload["ticket"]["details"]["visit_hour_to"], "11:00")
 
     def test_nastya_can_complete_a_coordinated_ticket(self):
         tickets = self.app_module.load_support_tickets()

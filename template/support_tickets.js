@@ -496,6 +496,11 @@ function timeLabel(hour) {
 
 function hourOptions(startHour, endHour, selectedValue) {
   const options = ['<option value=""></option>'];
+  // Keep previously saved one-hour visits visible when editing old tickets.
+  const selectedHour = Number(String(selectedValue || "").split(":")[0]);
+  if (selectedValue && selectedHour >= 9 && selectedHour <= 18 && (selectedHour < startHour || selectedHour > endHour)) {
+    options.push(`<option value="${timeLabel(selectedHour)}" selected>${timeLabel(selectedHour)}</option>`);
+  }
   for (let hour = startHour; hour <= endHour; hour += 1) {
     const value = timeLabel(hour);
     options.push(`<option value="${value}" ${selectedValue === value ? "selected" : ""}>${value}</option>`);
@@ -504,9 +509,10 @@ function hourOptions(startHour, endHour, selectedValue) {
 }
 
 function nextHourValue(value) {
+  if (!value) return "";
   const hour = Number(String(value || "").split(":")[0]);
   if (!Number.isInteger(hour)) return "";
-  return timeLabel(hour + 1);
+  return timeLabel(hour + 2);
 }
 
 function priorityClass(priority) {
@@ -1468,14 +1474,14 @@ function renderPaisDetailSections(ticket) {
         </label>
         <label>
           <span>משעה</span>
-          <select id="detail-visit-hour-from">${hourOptions(9, 17, details.visit_hour_from || "")}</select>
+          <select id="detail-visit-hour-from">${hourOptions(9, 16, details.visit_hour_from || "")}</select>
         </label>
         <label>
           <span>עד שעה</span>
-          <select id="detail-visit-hour-to">${hourOptions(10, 18, details.visit_hour_to || "")}</select>
+          <select id="detail-visit-hour-to">${hourOptions(11, 18, details.visit_hour_to || "")}</select>
         </label>
       </div>
-      <p class="detail-hint">חלונות התאום הם של שעה אחת, החל מ-09:00.</p>
+      <p class="detail-hint">חלונות התאום הם של שעתיים, החל מ-09:00.</p>
     </section>` : ""}
     <section class="detail-description detail-edit-card ${showFailureNotes ? "" : "hidden"}" id="detail-failure-notes-wrap">
       <h3>הערות</h3>
@@ -1509,14 +1515,12 @@ function syncPaisDetailStatusFields() {
   notesWrap.classList.toggle("hidden", statusSelect.value !== "נכשל");
 }
 
-function syncPaisDetailVisitRange() {
+function syncPaisDetailVisitRange(force = false) {
   const startSelect = document.getElementById("detail-visit-hour-from");
   const endSelect = document.getElementById("detail-visit-hour-to");
   if (!startSelect || !endSelect) return;
-  const nextValue = nextHourValue(startSelect.value);
-  if (nextValue) {
-    endSelect.value = nextValue;
-  }
+  if (!force && endSelect.value) return;
+  endSelect.value = nextHourValue(startSelect.value);
 }
 
 async function savePaisDetail(ticketId) {
@@ -3260,14 +3264,14 @@ function coordinationSchedulingEditor(ticket, details) {
         </label>
         <label>
           <span>משעה</span>
-          <select id="detail-visit-hour-from">${hourOptions(9, 17, details.visit_hour_from || "")}</select>
+          <select id="detail-visit-hour-from">${hourOptions(9, 16, details.visit_hour_from || "")}</select>
         </label>
         <label>
           <span>עד שעה</span>
-          <select id="detail-visit-hour-to">${hourOptions(10, 18, details.visit_hour_to || "")}</select>
+          <select id="detail-visit-hour-to">${hourOptions(11, 18, details.visit_hour_to || "")}</select>
         </label>
       </div>
-      <p class="detail-hint">חלונות התיאום הם של שעה אחת, החל מ-09:00.</p>
+      <p class="detail-hint">חלונות התיאום הם של שעתיים, החל מ-09:00.</p>
       ${coordinationCancelButton(ticket, details)}
     </section>`;
 }
@@ -4393,14 +4397,14 @@ function renderPaisDetailSections(ticket) {
         </label>
         <label>
           <span>משעה</span>
-          <select id="detail-visit-hour-from">${hourOptions(9, 17, details.visit_hour_from || "")}</select>
+          <select id="detail-visit-hour-from">${hourOptions(9, 16, details.visit_hour_from || "")}</select>
         </label>
         <label>
           <span>עד שעה</span>
-          <select id="detail-visit-hour-to">${hourOptions(10, 18, details.visit_hour_to || "")}</select>
+          <select id="detail-visit-hour-to">${hourOptions(11, 18, details.visit_hour_to || "")}</select>
         </label>
       </div>
-      <p class="detail-hint">חלונות התיאום הם של שעה אחת, החל מ-09:00.</p>
+      <p class="detail-hint">חלונות התיאום הם של שעתיים, החל מ-09:00.</p>
       ${coordinationCancelButton(ticket, details)}
     </section>` : ""}
     <section class="detail-description detail-edit-card ${showFailureNotes ? "" : "hidden"}" id="detail-failure-notes-wrap">

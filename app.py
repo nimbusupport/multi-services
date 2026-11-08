@@ -3531,7 +3531,7 @@ def visit_slot_is_valid(visit_hour_from, visit_hour_to):
         return False
     if start.hour < VISIT_SLOT_START_HOUR or end.hour > VISIT_SLOT_END_HOUR:
         return False
-    return (end - start) == timedelta(hours=1)
+    return (end - start) == timedelta(hours=2)
 
 
 def coordination_slot_conflicts(ticket_id, coordinated_worker, visit_date, visit_hour_from, visit_hour_to):
@@ -3547,9 +3547,13 @@ def coordination_slot_conflicts(ticket_id, coordinated_worker, visit_date, visit
             continue
         if (details.get("visit_date") or "").strip() != visit_date:
             continue
-        if (details.get("visit_hour_from") or "").strip() != visit_hour_from:
+        existing_start = parse_visit_hour(details.get("visit_hour_from"))
+        existing_end = parse_visit_hour(details.get("visit_hour_to"))
+        requested_start = parse_visit_hour(visit_hour_from)
+        requested_end = parse_visit_hour(visit_hour_to)
+        if not all((existing_start, existing_end, requested_start, requested_end)):
             continue
-        if (details.get("visit_hour_to") or "").strip() != visit_hour_to:
+        if requested_start >= existing_end or existing_start >= requested_end:
             continue
         return ticket
     return None
@@ -9716,8 +9720,13 @@ def support_tickets_update():
         if any([coordinated_worker, visit_date, visit_hour_from, visit_hour_to]) and not all([coordinated_worker, visit_date, visit_hour_from, visit_hour_to]):
             return jsonify({"ok": False, "message": "יש למלא עובד, תאריך ושעת ביקור מלאה"}), 400
         if visit_hour_from or visit_hour_to:
-            if not visit_slot_is_valid(visit_hour_from, visit_hour_to):
-                return jsonify({"ok": False, "message": "יש לבחור חלון תיאום של שעה אחת בין 09:00 ל-18:00"}), 400
+            previous_details = (target_ticket or {}).get("details") or {}
+            unchanged_slot = bool(target_ticket) and all(
+                (details.get(field) or "").strip() == (previous_details.get(field) or "").strip()
+                for field in ("coordinated_worker", "visit_date", "visit_hour_from", "visit_hour_to")
+            )
+            if not unchanged_slot and not visit_slot_is_valid(visit_hour_from, visit_hour_to):
+                return jsonify({"ok": False, "message": "יש לבחור חלון תיאום של שעתיים בין 09:00 ל-18:00"}), 400
         conflicting_ticket = coordination_slot_conflicts(
             payload.get("ticket_id"),
             coordinated_worker,
