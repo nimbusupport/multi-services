@@ -9,6 +9,18 @@ const start = source.indexOf('async function saveTicketDetailWithFeedback(');
 const saveHandler = source.slice(start, source.indexOf('\nfunction showTicketDetail(', start));
 const longSummary = ('\u05e1\u05d9\u05db\u05d5\u05dd \u05d1\u05d9\u05e7\u05d5\u05e8: WIFI 100/100 MB; RJ45\n').repeat(100).trim();
 
+test('ticket searches load all months while the default view loads the current month', () => {
+  const context = {};
+  vm.createContext(context);
+  const functionStart = source.indexOf('function shouldStageTicketLoading(');
+  vm.runInContext(source.slice(functionStart, source.indexOf('\nasync function fetchTicketsPayload(', functionStart)), context);
+  assert.equal(context.shouldStageTicketLoading({ search: 'terminal' }), false);
+  assert.equal(context.shouldStageTicketLoading({ search: '  terminal  ' }), false);
+  assert.equal(context.shouldStageTicketLoading({ search: '' }), true);
+  assert.equal(context.shouldStageTicketLoading({ search: '  ' }), true);
+  assert.equal(context.shouldStageTicketLoading({ date_from: '2026-10-01' }), false);
+});
+
 test('visit range selects two hours and preserves an existing visit until its start changes', () => {
   const startField = { value: '09:00' };
   const endField = { value: '' };

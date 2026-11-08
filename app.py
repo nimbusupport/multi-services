@@ -9114,6 +9114,8 @@ def support_tickets_data():
     date_from = (request.args.get("date_from") or "").strip()
     date_to = (request.args.get("date_to") or "").strip()
     search = (request.args.get("search") or "").strip().lower()
+    if search and response_mode == "current_month":
+        response_mode = "all"
     current_support_user = support_user_name()
     assigned_technician_mode = support_user_is_assigned_technician()
     current_month_start = israel_now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)

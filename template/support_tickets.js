@@ -689,7 +689,7 @@ function applyTicketsResponse(data, { append = false, updateStats = true, resetU
 }
 
 function shouldStageTicketLoading(params) {
-  return !params.date_from && !params.date_to;
+  return !String(params.search || "").trim() && !params.date_from && !params.date_to;
 }
 
 async function fetchTicketsPayload(params, signal) {

@@ -6002,6 +6002,37 @@ class SupportTicketsTestCase(unittest.TestCase):
         pais = self.client.get("/support-tickets-data?board=pais&window=current_month&summaries=1").get_json()
         self.assertEqual({ticket["id"] for ticket in pais["tickets"]}, {4, 6})
 
+    def test_ticket_search_finds_previous_months_using_each_boards_existing_fields(self):
+        self.app_module.israel_now = lambda: datetime(2026, 11, 8, 12, 0, tzinfo=ZoneInfo("Asia/Jerusalem"))
+        self.login("admin@nimbusip.com")
+        for board, search_field in (("pais", "terminal_number"), ("pais", "address"),
+                                    ("hot-kiryot", "call_number"), ("hot-kiryot", "customer_name"),
+                                    ("support", "business_name")):
+            with self.subTest(board=board, search_field=search_field):
+                tickets = []
+                for ticket_id, created_at, match in (
+                    (2, "2026-10-01T09:00:00+03:00", "find-me"),
+                    (3, "2026-11-02T09:00:00+02:00", "find-me"),
+                    (4, "2026-10-03T09:00:00+03:00", "unrelated"),
+                ):
+                    tickets.append({
+                        "id": ticket_id, "board_slug": board, "created_at": created_at,
+                        "creator": "Admin", "status": "ממתין", "assigned_to": "",
+                        "description": "find-me" if ticket_id == 4 and board != "support" else "",
+                        "details": {search_field: match}, "attachments": [], "updates": [],
+                    })
+                self.app_module.save_support_tickets(tickets)
+                params = {"board": board, "window": "current_month", "summaries": "1", "search": "find-me"}
+                response = self.client.get("/support-tickets-data", query_string=params)
+                self.assertEqual(response.status_code, 200)
+                payload = response.get_json()
+                self.assertEqual([ticket["id"] for ticket in payload["tickets"]], [3, 2])
+                self.assertEqual(payload["background"]["mode"], "all")
+                dated = self.client.get("/support-tickets-data", query_string={**params, "date_from": "2026-11-01"}).get_json()
+                self.assertEqual([ticket["id"] for ticket in dated["tickets"]], [3])
+                monthly = self.client.get("/support-tickets-data", query_string={**params, "search": "  "}).get_json()
+                self.assertEqual([ticket["id"] for ticket in monthly["tickets"]], [3])
+
     def test_support_tickets_data_can_stage_current_month_before_older_tickets(self):
         tickets = self.app_module.load_support_tickets()
         tickets.append({
