@@ -9116,7 +9116,8 @@ def support_tickets_data():
 
     load_kwargs = {}
     if response_mode == "current_month":
-        load_kwargs["created_from"] = current_month_start
+        if queue_slug != "nastia":
+            load_kwargs["created_from"] = current_month_start
     elif response_mode == "older":
         load_kwargs["created_before"] = current_month_start
         load_kwargs["limit"] = batch_size
@@ -9129,6 +9130,17 @@ def support_tickets_data():
         load_kwargs["include_related"] = False
 
     tickets = load_support_tickets(**load_kwargs) if queue_slug == "nastia" else load_support_tickets(board_slug, **load_kwargs)
+    if response_mode == "current_month" and queue_slug == "nastia":
+        # Pending coordination stays actionable until scheduled, regardless of
+        # the month in which the ticket was opened.
+        tickets = [
+            ticket for ticket in tickets
+            if status_is_coordination_pending(ticket.get("status"))
+            or (
+                parse_support_ticket_datetime(ticket.get("created_at"))
+                or datetime.min.replace(tzinfo=ZoneInfo("Asia/Jerusalem"))
+            ) >= current_month_start
+        ]
     filtered = _support_tickets_apply_filters(
         tickets,
         board_slug,

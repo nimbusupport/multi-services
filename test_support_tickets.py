@@ -5946,6 +5946,42 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertIn("users", payload)
         self.assertNotIn("tickets", payload)
 
+    def test_nastia_initial_load_includes_pending_coordination_from_previous_months(self):
+        self.app_module.israel_now = lambda: datetime(2026, 11, 8, 12, 0, tzinfo=ZoneInfo("Asia/Jerusalem"))
+        tickets = self.app_module.load_support_tickets()
+        for ticket_id, board, created_at, status in (
+            (2, "pais", "2026-10-31T09:00:00+03:00", "ממתין לתיאום"),
+            (3, "hot-kiryot", "2026-01-01T09:00:00+02:00", "ממתין לתאום"),
+            (4, "pais", "2026-11-02T09:00:00+02:00", "ממתין לתיאום"),
+            (5, "pais", "2026-10-30T09:00:00+02:00", "בוצע"),
+            (6, "pais", "2026-11-03T09:00:00+02:00", "בוצע"),
+        ):
+            tickets.append({
+                "id": ticket_id,
+                "board_slug": board,
+                "created_at": created_at,
+                "creator": "Admin",
+                "status": status,
+                "assigned_to": "",
+                "details": {"visit_date": "2026-10-30"} if status == "בוצע" else {},
+                "attachments": [],
+                "updates": [],
+            })
+        self.app_module.save_support_tickets(tickets)
+        self.login("admin@nimbusip.com")
+        response = self.client.get("/support-tickets-data?board=pais&queue=nastia&window=current_month&summaries=1")
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual([ticket["id"] for ticket in payload["tickets"]], [4, 3, 2, 6])
+        self.assertTrue(all(not ticket["has_full_details"] for ticket in payload["tickets"]))
+
+        # Explicit date filters still apply when the user chooses a range.
+        filtered = self.client.get("/support-tickets-data?board=pais&queue=nastia&window=current_month&summaries=1&date_from=2026-11-01").get_json()
+        self.assertEqual([ticket["id"] for ticket in filtered["tickets"]], [4, 6])
+        # Other boards retain their ordinary monthly loading behavior.
+        pais = self.client.get("/support-tickets-data?board=pais&window=current_month&summaries=1").get_json()
+        self.assertEqual({ticket["id"] for ticket in pais["tickets"]}, {4, 6})
+
     def test_support_tickets_data_can_stage_current_month_before_older_tickets(self):
         tickets = self.app_module.load_support_tickets()
         tickets.append({
