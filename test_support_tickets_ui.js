@@ -47,6 +47,49 @@ test('visit range selects two hours and preserves an existing visit until its st
   assert.match(context.hourOptions(11, 18, '10:00'), /value="10:00" selected/);
 });
 
+for (const board of ['pais', 'hot-kiryot']) {
+  for (const status of ['תואם', 'נכשל']) {
+    test(`${board}: Nastya replaces a technician directly and requests the new coordination email from ${status}`, async () => {
+      let sentPayload;
+      const ticket = { id: 2, board_slug: board, status, details: {
+        coordinated_worker: 'גולן', visit_date: '2026-11-08', visit_hour_from: '09:00', visit_hour_to: '10:00',
+      } };
+      const fields = {
+        'detail-coordinated-worker': { value: 'אסף' },
+        'detail-visit-date': { value: '2026-11-09' },
+        'detail-visit-hour-from': { value: '09:00' },
+        'detail-visit-hour-to': { value: '11:00' },
+        'detail-status-select': { value: status },
+      };
+      const context = {
+        document: { getElementById: id => fields[id] || null },
+        getTicket: () => ticket, ticketDetails: value => value.details,
+        canEditExistingTickets: true, canAssignedTechnicianEditTicket: () => false,
+        isHotTicket: value => value.board_slug === 'hot-kiryot',
+        COORDINATION_FINAL_STATUSES: ['נכשל', 'בוצע', 'בוטל'],
+        pageMode: 'nastia', ticketQueue: 'nastia', isNastyaQueuePage: true,
+        clearCoordinationValidation() {}, setDetailSaveMessageState() {},
+        normalizeLegacyHebrewData: value => value,
+        async fetch(url, options) {
+          sentPayload = JSON.parse(options.body);
+          return { ok: true, json: async () => ({ ok: true, ticket: { notification_sent: true } }) };
+        },
+        showSendSuccessToast() {}, async waitForUi() {}, closeTicketDetail() {},
+        async loadTickets() {}, async loadPaisReport() {},
+        openNotificationErrorModal(message) { throw new Error(message); },
+      };
+      vm.createContext(context);
+      vm.runInContext(saveHandler, context);
+      await context.saveTicketDetailWithFeedback(2);
+      assert.equal(sentPayload.status, 'תואם');
+      assert.equal(sentPayload.details.coordinated_worker, 'אסף');
+      assert.equal(sentPayload.details.visit_date, '2026-11-09');
+      assert.equal(sentPayload.send_nastia_notification, true);
+      assert.equal(sentPayload.send_nastia_cancellation_notification, undefined);
+    });
+  }
+}
+
 test('a response missing the saved summary keeps the editor open and preserves the text', async () => {
   let closed = false;
   let errorMessage = '';

@@ -9650,6 +9650,29 @@ def support_tickets_update():
         details = dict((target_ticket or {}).get("details") or {})
         details.update(payload["details"])
         payload["details"] = details
+        rescheduling_from_nastia = (
+            board_supports_coordination((target_ticket or {}).get("board_slug"))
+            and (request_targets_nastia_queue(payload) or actor_can_trigger_nastia_notification(actor))
+            and coordination_ticket_has_complete_details({"details": details})
+            and coordination_ticket_details_changed(target_ticket, {"details": details})
+            and not payload.get("send_nastia_cancellation_notification")
+        )
+        if rescheduling_from_nastia:
+            previous_details = (target_ticket or {}).get("details") or {}
+            old_start = parse_visit_hour(previous_details.get("visit_hour_from"))
+            old_end = parse_visit_hour(previous_details.get("visit_hour_to"))
+            # A legacy one-hour visit can be reassigned directly. Upgrade its
+            # unchanged hours to the current two-hour window on rescheduling.
+            if (
+                old_start and old_end and old_end - old_start == timedelta(hours=1)
+                and all(details.get(field) == previous_details.get(field)
+                        for field in ("visit_hour_from", "visit_hour_to"))
+            ):
+                details["visit_hour_to"] = (old_start + timedelta(hours=2)).strftime("%H:%M")
+            if not payload.get("status") or normalize_ticket_status(
+                (target_ticket or {}).get("board_slug"), payload.get("status")
+            ) == normalize_ticket_status((target_ticket or {}).get("board_slug"), (target_ticket or {}).get("status")):
+                payload["status"] = "תואם"
         if all([
             (details.get("coordinated_worker") or "").strip(),
             (details.get("visit_date") or "").strip(),
