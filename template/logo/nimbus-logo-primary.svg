@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
+  <title>Nimbus</title>
+  <defs>
+    <linearGradient id="nimbus-blue" x1="12" y1="4" x2="32" y2="46" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#56ACFF"/>
+      <stop offset=".5" stop-color="#0876F9"/>
+      <stop offset="1" stop-color="#10335F"/>
+    </linearGradient>
+  </defs>
+  <path d="M42 13C38 7 32 4 25 4C13 4 4 13 4 25S13 46 25 46C32 46 38 43 42 38C38 41 33 43 28 43C17 43 9 35 9 24S17 6 28 6C33 6 38 9 42 13Z" fill="url(#nimbus-blue)"/>
+  <path d="M14 35L20 14H26L33 27L37 14H43L37 35H31L24 22L20 35H14Z" fill="#10335F"/>
+</svg>

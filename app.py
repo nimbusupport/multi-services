@@ -1092,7 +1092,9 @@ def ticket_owner_name(ticket):
     ticket = ticket or {}
     details = ticket.get("details") or {}
     if board_supports_coordination(ticket.get("board_slug")):
-        return canonical_support_user_name(details.get("coordinated_worker"))
+        worker = canonical_support_user_name(details.get("coordinated_worker"))
+        if worker or ticket.get("board_slug") != "support":
+            return worker
     return canonical_support_user_name(ticket.get("assigned_to"))
 
 
@@ -1669,7 +1671,7 @@ def get_ticket_board(board_slug):
 
 
 def board_supports_coordination(board_slug):
-    return (board_slug or "").strip().lower() in {"pais", "hot-kiryot"}
+    return (board_slug or "").strip().lower() in {"support", "pais", "hot-kiryot"}
 
 
 def board_has_coordination_report(board_slug):
@@ -5030,7 +5032,7 @@ def build_pais_email_html(ticket, calendar_link=None, app_link=None):
 
 def should_send_nastia_waiting_alert(previous_ticket, updated_ticket, actor):
     board_slug = (updated_ticket.get("board_slug") or "").strip().lower()
-    if board_slug not in {"pais", "hot-kiryot"}:
+    if not board_supports_coordination(board_slug):
         return False
     if (actor or "").strip() in COORDINATION_USERS:
         return False
@@ -5049,7 +5051,13 @@ def nastia_waiting_alert_rows(ticket):
     rows = [
         ("סטטוס", normalize_ticket_status(ticket.get("board_slug"), ticket.get("status"))),
     ]
-    if board_slug == "hot-kiryot":
+    if board_slug == "support":
+        rows.extend([
+            ("שם העסק", details.get("business_name")),
+            ("איש קשר", details.get("service_contact")),
+            ("כתובת", coordination_ticket_calendar_address(ticket)),
+        ])
+    elif board_slug == "hot-kiryot":
         rows.extend([
             ("מספר קריאה", details.get("call_number")),
             ("שם לקוח", details.get("customer_name")),
@@ -9650,6 +9658,29 @@ def support_tickets_update():
         details = dict((target_ticket or {}).get("details") or {})
         details.update(payload["details"])
         payload["details"] = details
+        rescheduling_from_nastia = (
+            board_supports_coordination((target_ticket or {}).get("board_slug"))
+            and (request_targets_nastia_queue(payload) or actor_can_trigger_nastia_notification(actor))
+            and coordination_ticket_has_complete_details({"details": details})
+            and coordination_ticket_details_changed(target_ticket, {"details": details})
+            and not payload.get("send_nastia_cancellation_notification")
+        )
+        if rescheduling_from_nastia:
+            previous_details = (target_ticket or {}).get("details") or {}
+            old_start = parse_visit_hour(previous_details.get("visit_hour_from"))
+            old_end = parse_visit_hour(previous_details.get("visit_hour_to"))
+            # A legacy one-hour visit can be reassigned directly. Upgrade its
+            # unchanged hours to the current two-hour window on rescheduling.
+            if (
+                old_start and old_end and old_end - old_start == timedelta(hours=1)
+                and all(details.get(field) == previous_details.get(field)
+                        for field in ("visit_hour_from", "visit_hour_to"))
+            ):
+                details["visit_hour_to"] = (old_start + timedelta(hours=2)).strftime("%H:%M")
+            if not payload.get("status") or normalize_ticket_status(
+                (target_ticket or {}).get("board_slug"), payload.get("status")
+            ) == normalize_ticket_status((target_ticket or {}).get("board_slug"), (target_ticket or {}).get("status")):
+                payload["status"] = "תואם"
         if all([
             (details.get("coordinated_worker") or "").strip(),
             (details.get("visit_date") or "").strip(),

@@ -383,7 +383,7 @@ async function openTicketFromUrlIfNeeded() {
 
 function boardSupportsCoordination(boardSlugValue) {
   const normalized = String(boardSlugValue || "").trim().toLowerCase();
-  return normalized === "pais" || normalized === "hot-kiryot";
+  return normalized === "support" || normalized === "pais" || normalized === "hot-kiryot";
 }
 
 function boardSupportsReport(boardSlugValue) {
@@ -3768,11 +3768,15 @@ async function saveTicketDetailWithFeedback(ticketId, options = {}) {
   };
   const selectedStatus = statusSelect?.value || "";
   const shouldMarkCoordinated = Object.values(coordinationPayload).every(Boolean);
+  const coordinationChanged = ["coordinated_worker", "visit_date", "visit_hour_from", "visit_hour_to"]
+    .some((fieldName) => String(currentDetails?.[fieldName] || "") !== String(coordinationPayload[fieldName] || ""));
+  const rescheduling = isNastyaQueuePage && !technicianMode && shouldMarkCoordinated && coordinationChanged
+    && (!selectedStatus || selectedStatus === currentTicket.status);
   let nextStatus = cancelCoordination ? "ממתין לתיאום" : selectedStatus;
-  if (!cancelCoordination && shouldMarkCoordinated && (!selectedStatus || selectedStatus === "ממתין לתיאום" || selectedStatus === "תואם")) {
+  if (!cancelCoordination && shouldMarkCoordinated && (rescheduling || !selectedStatus || selectedStatus === "ממתין לתיאום" || selectedStatus === "תואם")) {
     nextStatus = "תואם";
   }
-  const isFinalStatus = COORDINATION_FINAL_STATUSES.includes(selectedStatus);
+  const isFinalStatus = COORDINATION_FINAL_STATUSES.includes(nextStatus);
   const payload = {
     ticket_id: ticketId,
     source_page_mode: pageMode,
@@ -3879,8 +3883,6 @@ async function saveTicketDetailWithFeedback(ticketId, options = {}) {
     }
   }
 
-  const coordinationChanged = ["coordinated_worker", "visit_date", "visit_hour_from", "visit_hour_to"]
-    .some((fieldName) => String(currentDetails?.[fieldName] || "") !== String(coordinationPayload[fieldName] || ""));
   if (isNastyaQueuePage && !technicianMode && cancelCoordination && coordinationChanged) {
     payload.send_nastia_cancellation_notification = true;
   } else if (isNastyaQueuePage && !technicianMode && shouldMarkCoordinated && coordinationChanged) {
@@ -4044,6 +4046,8 @@ function showTicketDetail(ticket) {
     const detailSections = document.getElementById("detail-sections");
     setupServiceModeSelectors(detailSections || document);
     document.getElementById("detail-visit-hour-from")?.addEventListener("change", syncPaisDetailVisitRange);
+    document.getElementById("detail-coordinated-worker")?.addEventListener("change", syncPaisDetailVisitRange);
+    document.getElementById("detail-visit-date")?.addEventListener("change", syncPaisDetailVisitRange);
     document.getElementById("detail-coordinated-worker")?.addEventListener("change", () => setFieldInvalid(document.getElementById("detail-coordinated-worker"), false));
     document.getElementById("detail-visit-date")?.addEventListener("input", () => setFieldInvalid(document.getElementById("detail-visit-date"), false));
     document.getElementById("detail-visit-hour-from")?.addEventListener("change", () => setFieldInvalid(document.getElementById("detail-visit-hour-from"), false));
