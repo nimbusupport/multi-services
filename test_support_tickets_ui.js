@@ -118,7 +118,7 @@ test('Nimbus dashboard offers coordination statuses and its card wires up saving
     boardDisplayName: () => 'נימבוס', escapeHtml: value => String(value),
     detailItem: () => '', detailItemHtml: () => '', renderAddressValue: value => value,
     supportServiceModeEditor: () => '', coordinationCancelButton: () => '', hourOptions: () => '',
-    clearCoordinationValidation() {}, setupServiceModeSelectors() {},
+    clearCoordinationValidation() {}, setupServiceModeSelectors() {}, setupInlineContactEditors() {},
     syncPaisDetailStatusFields() {}, syncPaisDetailVisitRange() {},
     toggleSupportServiceDetails() {}, syncDetailAttachmentInputState() {},
     setInlineMessageState() {}, saveTicketDetailWithFeedback: id => { savedId = id; },
@@ -178,6 +178,117 @@ test('a response missing the saved summary keeps the editor open and preserves t
   assert.match(errorMessage, /visit summary was not saved/);
 });
 
+test('Nastya can save contact edits before scheduling a visit', async () => {
+  let sentPayload;
+  const fields = {
+    'detail-status-select': { value: 'ממתין לתיאום' },
+    'detail-contact-name': { value: 'דני כהן' },
+    'detail-contact-phone': { value: '0501234567' },
+    'detail-address': { value: 'רחוב השלום 7' },
+  };
+  const context = {
+    document: { getElementById: id => fields[id] || null },
+    getTicket: () => ({ id: 2, board_slug: 'pais', status: 'ממתין לתיאום', details: {} }),
+    canEditExistingTickets: true, canAssignedTechnicianEditTicket: () => false,
+    ticketDetails: ticket => ticket.details, isHotTicket: () => false,
+    COORDINATION_FINAL_STATUSES: ['בוצע', 'נכשל', 'בוטל'],
+    pageMode: 'nastia', ticketQueue: 'nastia', isNastyaQueuePage: true,
+    clearCoordinationValidation() {}, setDetailSaveMessageState() {},
+    normalizeLegacyHebrewData: value => value,
+    async fetch(url, options) {
+      sentPayload = JSON.parse(options.body);
+      return { ok: true, json: async () => ({ ok: true, ticket: {} }) };
+    },
+    async waitForUi() {}, closeTicketDetail() {}, async loadTickets() {}, async loadPaisReport() {},
+    openNotificationErrorModal(message) { throw new Error(message); },
+  };
+  vm.createContext(context);
+  vm.runInContext(saveHandler, context);
+  await context.saveTicketDetailWithFeedback(2);
+  assert.equal(sentPayload.status, 'ממתין לתיאום');
+  assert.equal(sentPayload.details.contact_name, 'דני כהן');
+  assert.equal(sentPayload.details.address, 'רחוב השלום 7');
+  assert.equal(sentPayload.send_nastia_notification, undefined);
+});
+
+test('contact cards show inline editors for Pais and HOT and respect editing permissions', () => {
+  const context = {
+    canEditExistingTickets: true, isAssignedTechnicianMode: false,
+    ticketDetails: ticket => ticket.details,
+    escapeHtml: value => String(value).replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;'),
+  };
+  vm.createContext(context);
+  vm.runInContext(source.slice(source.indexOf('function detailItemHtml('), source.indexOf('\nfunction renderPhoneValue(')), context);
+  const begin = source.indexOf('function ticketContactEditor(');
+  vm.runInContext(source.slice(begin, source.indexOf('\nfunction renderHotDetailSections(', begin)), context);
+  for (const [board, contact, address] of [
+    ['support', 'service_contact', 'service_address'],
+    ['pais', 'contact_name', 'address'],
+    ['hot-kiryot', 'on_site_contact', 'address'],
+  ]) {
+    const ticket = { board_slug: board, details: { [contact]: 'דני "כהן"', [address]: 'רחוב השלום 7' } };
+    const html = board === 'support'
+      ? context.ticketContactEditor(ticket)
+      : context.editableContactDetailItem(ticket, 'כתובת', contact, context.escapeHtml(ticket.details[contact]))
+        + context.editableContactDetailItem(ticket, 'כתובת', address, context.escapeHtml(ticket.details[address]));
+    if (board !== 'support') {
+      assert.equal(context.ticketContactEditor(ticket), '');
+      assert.match(html, /class="detail-pencil-btn"/);
+      assert.match(html, / hidden>/);
+    }
+    assert.ok(html.includes(`id="detail-${contact.replaceAll('_', '-')}"`));
+    assert.ok(html.includes('דני &quot;כהן&quot;'));
+    assert.ok(html.includes('רחוב השלום 7'));
+    context.canEditExistingTickets = false;
+    assert.equal(context.ticketContactEditor(ticket), '');
+    assert.doesNotMatch(context.editableContactDetailItem(ticket, 'כתובת', address, 'saved'), /<input|<button/);
+    context.canEditExistingTickets = true;
+    context.isAssignedTechnicianMode = true;
+    assert.equal(context.ticketContactEditor(ticket), '');
+    assert.doesNotMatch(context.editableContactDetailItem(ticket, 'כתובת', address, 'saved'), /<input|<button/);
+    context.isAssignedTechnicianMode = false;
+  }
+});
+
+test('pencil reveals and focuses its card input without changing the saved value', () => {
+  let click;
+  let focused = false;
+  const input = { hidden: true, value: 'רחוב השלום 7', focus() { focused = true; } };
+  const value = { hidden: false };
+  const card = { querySelector: selector => selector === 'input' ? input : value };
+  const attributes = {};
+  const button = {
+    addEventListener(event, handler) { assert.equal(event, 'click'); click = handler; },
+    closest: () => card, setAttribute: (key, value) => { attributes[key] = value; },
+  };
+  const context = {};
+  vm.createContext(context);
+  const begin = source.indexOf('function setupInlineContactEditors(');
+  vm.runInContext(source.slice(begin, source.indexOf('\nfunction renderPhoneValue(', begin)), context);
+  context.setupInlineContactEditors({ querySelectorAll: () => [button] });
+  click();
+  assert.equal(input.hidden, false);
+  assert.equal(value.hidden, true);
+  assert.equal(focused, true);
+  assert.equal(attributes['aria-expanded'], 'true');
+  assert.equal(input.value, 'רחוב השלום 7');
+});
+
+test('navigation and contact hyperlinks use updated Hebrew details and escape markup', () => {
+  const context = { escapeHtml: value => String(value).replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;') };
+  vm.createContext(context);
+  vm.runInContext(source.slice(source.indexOf('function phoneHref('), source.indexOf('\nfunction selectedSupportServiceMode(')), context);
+  const begin = source.indexOf('function renderAddressValue(');
+  vm.runInContext(source.slice(begin, source.indexOf('\nfunction detailSection(', begin)), context);
+  const address = 'הרצל 12, חיפה';
+  const html = context.renderAddressValue(address);
+  assert.match(html, /Google Maps/);
+  assert.match(html, /Waze/);
+  assert.ok(html.includes(encodeURIComponent(address)));
+  const contact = context.renderContactWithPhone('דני <כהן> 0501234567');
+  assert.match(contact, /href="tel:0501234567">דני &lt;כהן> 0501234567<\/a>/);
+});
+
 for (const board of ['hot-kiryot', 'pais', 'support']) {
   for (const technicianMode of [false, true]) {
     for (const summary of [longSummary, '']) {
@@ -188,6 +299,14 @@ for (const board of ['hot-kiryot', 'pais', 'support']) {
           'detail-visit-summary': { value: summary },
           'detail-status-select': { value: 'done' },
         };
+        const contacts = board === 'support'
+          ? { service_contact: 'דני 0501234567', service_address: 'רחוב השלום 7' }
+          : board === 'pais'
+            ? { contact_name: 'דני', contact_phone: '0501234567', address: 'רחוב השלום 7' }
+            : { on_site_contact: 'דני 0501234567', technical_contact: 'משה 0507654321', address: 'רחוב השלום 7' };
+        for (const [name, value] of Object.entries(contacts)) {
+          fields[`detail-${name.replaceAll('_', '-')}`] = { value };
+        }
         const context = {
           document: { getElementById: id => fields[id] || null },
           getTicket: () => ticket,
@@ -212,6 +331,9 @@ for (const board of ['hot-kiryot', 'pais', 'support']) {
         vm.runInContext(saveHandler, context);
         await context.saveTicketDetailWithFeedback(2);
         assert.equal(sentPayload.details.visit_summary, summary);
+        for (const [name, value] of Object.entries(contacts)) {
+          assert.equal(sentPayload.details[name], technicianMode ? undefined : value);
+        }
       });
     }
   }

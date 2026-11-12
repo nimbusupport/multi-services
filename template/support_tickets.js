@@ -1085,6 +1085,35 @@ function phoneHref(phone) {
   return `tel:${normalized}`;
 }
 
+function editableContactDetailItem(ticket, label, field, html) {
+  if (!canEditExistingTickets || isAssignedTechnicianMode) return detailItemHtml(label, html);
+  const inputId = `detail-${field.replaceAll("_", "-")}`;
+  return `
+    <div class="detail-item detail-inline-edit">
+      <div class="detail-inline-edit-heading">
+        <label for="${inputId}">${escapeHtml(label)}</label>
+        <button class="detail-pencil-btn" type="button" aria-label="${escapeHtml(label)}: עריכה" aria-controls="${inputId}" aria-expanded="false">
+          <i class="fa-solid fa-pencil" aria-hidden="true"></i>
+        </button>
+      </div>
+      <strong class="detail-inline-edit-value">${html || "-"}</strong>
+      <input id="${inputId}" class="detail-inline-edit-input" type="${field === "contact_phone" ? "tel" : "text"}" aria-label="${escapeHtml(label)}" value="${escapeHtml(ticketDetails(ticket)[field] || "")}" hidden>
+    </div>`;
+}
+
+function setupInlineContactEditors(root) {
+  root.querySelectorAll(".detail-pencil-btn").forEach((button) => {
+    button.addEventListener("click", () => {
+      const card = button.closest(".detail-inline-edit");
+      const input = card.querySelector("input");
+      card.querySelector(".detail-inline-edit-value").hidden = true;
+      input.hidden = false;
+      button.setAttribute("aria-expanded", "true");
+      input.focus();
+    });
+  });
+}
+
 function renderPhoneValue(phone) {
   const safePhone = escapeHtml(phone || "-");
   const href = phoneHref(phone);
@@ -1104,9 +1133,8 @@ function renderContactWithPhone(text) {
   if (!phone) return escapeHtml(safeText);
   const href = phoneHref(phone);
   if (!href) return escapeHtml(safeText);
-  const safePhone = escapeHtml(phone);
   const safeFullText = escapeHtml(safeText);
-  return safeFullText.replace(safePhone, `<a class="detail-link" href="${escapeHtml(href)}">${safePhone}</a>`);
+  return `<a class="detail-link" href="${escapeHtml(href)}">${safeFullText}</a>`;
 }
 
 function selectedSupportServiceMode(root = document) {
@@ -3276,6 +3304,29 @@ function coordinationSchedulingEditor(ticket, details) {
     </section>`;
 }
 
+function ticketContactEditor(ticket) {
+  if (!canEditExistingTickets || isAssignedTechnicianMode) return "";
+  if (ticket.board_slug === "pais" || ticket.board_slug === "hot-kiryot") return "";
+  const details = ticketDetails(ticket);
+  const fields = ticket.board_slug === "support"
+    ? [["service_contact", "איש קשר"], ["service_address", "כתובת"]]
+    : ticket.board_slug === "hot-kiryot"
+      ? [["on_site_contact", "איש קשר במקום"], ["technical_contact", "איש קשר טכני"], ["address", "כתובת"]]
+      : [["contact_name", "איש קשר - שם"], ["contact_phone", "איש קשר - מספר"], ["address", "כתובת"]];
+  return `
+    <section class="detail-description detail-edit-card">
+      <h3>פרטי קשר וכתובת</h3>
+      <div class="detail-form-grid">
+        ${fields.map(([field, label]) => `
+          <label>
+            <span>${label}</span>
+            <input id="detail-${field.replaceAll("_", "-")}" type="${field === "contact_phone" ? "tel" : "text"}" value="${escapeHtml(details[field] || "")}">
+          </label>
+        `).join("")}
+      </div>
+    </section>`;
+}
+
 function renderHotDetailSections(ticket) {
   const details = ticketDetails(ticket);
   const technicianMode = canAssignedTechnicianEditTicket(ticket);
@@ -3323,6 +3374,7 @@ function renderHotDetailSections(ticket) {
     `;
   }
   return `
+    ${ticketContactEditor(ticket)}
     ${detailSection("מהות התקלה", details.issue_summary)}
     ${detailSection("בדיקות שבוצעו מרחוק", details.remote_checks)}
     <section class="detail-description detail-edit-card">
@@ -3382,14 +3434,6 @@ function supportServiceModeEditor(details) {
         <span>שם העסק</span>
         <input id="detail-business-name" type="text" value="${escapeHtml(details.business_name || "")}">
       </label>
-      <label>
-        <span>איש קשר</span>
-        <input id="detail-service-contact" type="text" value="${escapeHtml(details.service_contact || "")}">
-      </label>
-      <label>
-        <span>כתובת</span>
-        <input id="detail-service-address" type="text" value="${escapeHtml(details.service_address || "")}">
-      </label>
     </div>
   `;
 }
@@ -3440,6 +3484,7 @@ function renderSupportDetailSections(ticket) {
       <textarea id="detail-support-solution" rows="4">${escapeHtml(ticket.solution || "")}</textarea>
     </section>
     ${supportServiceModeEditor(details)}
+    ${ticketContactEditor(ticket)}
     ${coordinationStatusEditor(ticket)}
     ${coordinationSchedulingEditor(ticket, details)}
     <section class="detail-description detail-edit-card ${showFailureNotes ? "" : "hidden"}" id="detail-failure-notes-wrap">
@@ -3823,6 +3868,13 @@ async function saveTicketDetailWithFeedback(ticketId, options = {}) {
     };
   }
 
+  if (!technicianMode) {
+    for (const field of ["service_contact", "service_address", "contact_name", "contact_phone", "on_site_contact", "technical_contact", "address"]) {
+      const input = document.getElementById(`detail-${field.replaceAll("_", "-")}`);
+      if (input) payload.details[field] = input.value;
+    }
+  }
+
   const visitSummaryField = document.getElementById("detail-visit-summary");
   if (visitSummaryField) {
     payload.details.visit_summary = visitSummaryField.value;
@@ -3856,7 +3908,8 @@ async function saveTicketDetailWithFeedback(ticketId, options = {}) {
       return;
     }
   }
-  if (isNastyaQueuePage && !technicianMode && !isFinalStatus && !cancelCoordination) {
+  if (isNastyaQueuePage && !technicianMode && !isFinalStatus && !cancelCoordination
+    && (Object.values(coordinationPayload).some(Boolean) || nextStatus === "תואם")) {
     if (!coordinationPayload.coordinated_worker) {
       setFieldInvalid(coordinatedWorkerField, true);
       setDetailSaveMessageState(message, "לא נבחר טכנאי מטפל", "error");
@@ -3945,7 +3998,7 @@ function showTicketDetail(ticket) {
   if (isPaisTicket(ticket)) {
     gridItems.splice(1, 0,
       detailItem("מספר מסוף", details.terminal_number),
-      detailItemHtml("כתובת", renderAddressValue(details.address)),
+      editableContactDetailItem(ticket, "כתובת", "address", renderAddressValue(details.address)),
       detailItem("כתובת IP סטטית", details.static_ip),
       detailItem("אלטורה", details.altura),
       detailItem("loop back", details.look_back),
@@ -3953,8 +4006,8 @@ function showTicketDetail(ticket) {
       detailItem("טכנאי מתואם", details.coordinated_worker || "—"),
       detailItem("תאריך ביקור", details.visit_date || "—"),
       detailItem("שעות ביקור", [details.visit_hour_from, details.visit_hour_to].filter(Boolean).join(" - ") || "—"),
-      detailItem("איש קשר - שם", details.contact_name),
-      detailItemHtml("איש קשר - מספר", renderPhoneValue(details.contact_phone)),
+      editableContactDetailItem(ticket, "איש קשר - שם", "contact_name", escapeHtml(details.contact_name || "-")),
+      editableContactDetailItem(ticket, "איש קשר - מספר", "contact_phone", renderPhoneValue(details.contact_phone)),
     );
   } else if (isHotTicket(ticket)) {
     gridItems.splice(1, 0,
@@ -3962,12 +4015,12 @@ function showTicketDetail(ticket) {
       detailItem("שם לקוח", details.customer_name),
       detailItem("ח.פ. / מס לקוח", details.customer_id),
       detailItem("קוד קו / ID-LINK", details.line_code),
-      detailItemHtml("כתובת", renderAddressValue(details.address)),
+      editableContactDetailItem(ticket, "כתובת", "address", renderAddressValue(details.address)),
       detailItem("שעת פתיחת תקלה", details.opened_at),
       detailItem("נציג מטפל", ticket.assigned_to || "—"),
       detailItem("תומך במוקד", details.opened_by),
-      detailItemHtml("איש קשר במקום", renderContactWithPhone(details.on_site_contact)),
-      detailItem("איש קשר טכני", details.technical_contact),
+      editableContactDetailItem(ticket, "איש קשר במקום", "on_site_contact", renderContactWithPhone(details.on_site_contact)),
+      editableContactDetailItem(ticket, "איש קשר טכני", "technical_contact", renderContactWithPhone(details.technical_contact)),
       detailItem("זמינות לקוח", details.availability_hours),
       detailItem("טכנאי מתואם", details.coordinated_worker || "—"),
       detailItem("תאריך ביקור", details.visit_date || "—"),
@@ -3991,6 +4044,7 @@ function showTicketDetail(ticket) {
   }
 
   document.getElementById("detail-grid").innerHTML = gridItems.filter(Boolean).join("");
+  setupInlineContactEditors(document.getElementById("detail-grid"));
   const detailSaveActions = document.getElementById("detail-save-actions");
   detailSaveActions?.replaceChildren();
   document.getElementById("detail-sections").innerHTML = renderDetailSections(ticket);
@@ -4367,6 +4421,7 @@ function renderPaisDetailSections(ticket) {
   }
 
   return `
+    ${ticketContactEditor(ticket)}
     ${detailSection("פניית לקוח", details.customer_request)}
     <section class="detail-description detail-edit-card">
       <h3>פעולות</h3>

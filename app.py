@@ -5790,6 +5790,11 @@ def update_support_ticket_record(ticket_id, changes, actor):
     if "details" in changes and isinstance(changes.get("details"), dict):
         detail_fields = {
             "actions_taken",
+            "contact_name",
+            "contact_phone",
+            "on_site_contact",
+            "technical_contact",
+            "address",
             "technician_actions",
             "coordinated_worker",
             "visit_date",

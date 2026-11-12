@@ -3556,6 +3556,30 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertEqual(payload["ticket"]["details"]["service_mode"], "ביקור טכנאי בתשלום")
         self.assertEqual(payload["ticket"]["details"]["business_name"], "עסק בדיקה")
 
+    def test_contact_and_address_edits_are_saved_for_all_ticket_boards(self):
+        self.login("admin@nimbusip.com")
+        for board, fields in (
+            ("support", {"service_contact": "דני 0501234567", "service_address": "רחוב השלום 7"}),
+            ("pais", {"contact_name": "דני כהן", "contact_phone": "0501234567", "address": "רחוב השלום 7"}),
+            ("hot-kiryot", {"on_site_contact": "דני 0501234567", "technical_contact": "משה 0507654321", "address": "רחוב השלום 7"}),
+        ):
+            with self.subTest(board=board):
+                tickets = self.app_module.load_support_tickets()
+                ticket_id = max(ticket["id"] for ticket in tickets) + 1
+                ticket = copy.deepcopy(tickets[0])
+                ticket.update({"id": ticket_id, "board_slug": board, "status": "ממתין",
+                               "details": {"untouched": "נתון קיים", **{name: "ערך קודם" for name in fields}},
+                               "updates": [], "attachments": []})
+                tickets.append(ticket)
+                self.app_module.save_support_tickets(tickets)
+                response = self.client.post("/support-tickets-update", json={"ticket_id": ticket_id, "details": fields})
+                self.assertEqual(response.status_code, 200, response.get_json())
+                saved = self.app_module.find_support_ticket(self.app_module.load_support_tickets(), ticket_id)
+                for name, value in fields.items():
+                    self.assertEqual(saved["details"][name], value)
+                    self.assertTrue(any(update["field"] == f"details.{name}" for update in saved["updates"]))
+                self.assertEqual(saved["details"]["untouched"], "נתון קיים")
+
     def test_support_ticket_edit_waiting_alert_and_nastya_coordination(self):
         sent = []
         self.app_module.send_plain_email = lambda to_address, subject, body, **kwargs: sent.append(

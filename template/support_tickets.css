@@ -1399,6 +1399,53 @@ body.tickets-page-loading {
   font-weight: 800;
 }
 
+.detail-inline-edit-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 5px;
+}
+
+.detail-inline-edit-heading label {
+  color: #776f63;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.detail-pencil-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border: 1px solid #ded5c9;
+  border-radius: 6px;
+  background: #f6f2ec;
+  color: #1d5fbf;
+  cursor: pointer;
+}
+
+.detail-pencil-btn:hover {
+  background: #eee6da;
+}
+
+.detail-inline-edit-input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid #ded5c9;
+  border-radius: 6px;
+  font: inherit;
+  color: inherit;
+}
+
+.detail-inline-edit [hidden] {
+  display: none;
+}
+
 .detail-link:hover {
   text-decoration: underline;
 }
