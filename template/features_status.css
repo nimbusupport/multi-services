@@ -262,7 +262,7 @@ body.features-status-page {
 }
 
 #status-month-input::-webkit-calendar-picker-indicator {
-  filter: invert(1) brightness(2);
+  filter: brightness(0) invert(1);
   opacity: 1;
   cursor: pointer;
 }

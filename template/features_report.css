@@ -232,7 +232,7 @@ body.features-report-page {
   padding: 0 14px;
   border-radius: 14px;
   border: 1px solid rgba(150, 193, 242, 0.22);
-  background: rgba(242, 243, 245, 0.72);
+  background: transparent;
   color: #f1f7ff;
   font: inherit;
 }
@@ -242,7 +242,7 @@ body.features-report-page {
 }
 
 #month-filter::-webkit-calendar-picker-indicator {
-  filter: invert(1) brightness(2);
+  filter: brightness(0) invert(1);
   opacity: 1;
   cursor: pointer;
 }
