@@ -567,9 +567,17 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertEqual(sms["done_count"], 21)
         self.assertEqual(sms["waiting_count"], 1)
         self.assertEqual(sms["entry_count"], 22)
-        completed = [entry for entry in sms["entries"] if entry["status_category"] == "בוצע"]
-        self.assertTrue(all(entry["sheet"] == self.app_module.CGR_SHEET_NAME for entry in completed))
-        self.assertTrue(all(entry["date"] == "2026-11-05" for entry in completed))
+        self.assertEqual([entry["business_name"] for entry in sms["entries"]], ["Pending"])
+        self.assertEqual(payload["visible_entry_count"], 1)
+        self.assertEqual(len(payload["entries"]), 1)
+        self.assertFalse(any(entry["sheet"] == self.app_module.CGR_SHEET_NAME for entry in payload["entries"]))
+        done_counter = next(item for item in payload["status_counts"] if item["label"] == "בוצע")
+        self.assertEqual(done_counter["count"], 21)
+        completed_payload = self.client.get("/features-status-data?month=2026-11&status=בוצע").get_json()
+        completed_sms = next(service for service in completed_payload["services"] if service["key"] == "sms")
+        self.assertEqual(completed_sms["done_count"], 21)
+        self.assertEqual(completed_sms["entries"], [])
+        self.assertEqual(completed_payload["visible_entry_count"], 0)
         self.assertFalse(payload["all_months"])
 
     def test_features_status_identity_search_covers_all_months_and_services(self):

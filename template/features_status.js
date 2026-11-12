@@ -212,7 +212,7 @@ function renderTopSummary(payload) {
   summaryWaitingCount.textContent = summary.waiting_count || 0;
   summaryServicesCount.textContent = summary.services_count || 0;
   document.getElementById("summary-services-scope").textContent = payload.all_months ? "שירותים עם תוצאות בחיפוש" : "שירותים עם תוצאות בחודש";
-  resultsCountLabel.textContent = summary.total_entries || 0;
+  resultsCountLabel.textContent = payload.visible_entry_count ?? summary.total_entries ?? 0;
 
   const filterParts = [payload.status_filter || "כל הסטטוסים"];
   if (payload.query_type === "project_manager" && payload.query) {
@@ -274,7 +274,7 @@ function renderResults(services) {
     return;
   }
 
-  const visibleServices = services.filter((service) => Array.isArray(service.entries) && service.entries.length > 0);
+  const visibleServices = services.filter((service) => service.entry_count > 0 || (Array.isArray(service.entries) && service.entries.length > 0));
   const servicesToRender = visibleServices.length > 0 ? visibleServices : services;
 
   results.innerHTML = servicesToRender.map((service) => {
@@ -286,7 +286,7 @@ function renderResults(services) {
         <p class="service-status-sheet">${escapeHtml(service.sheet || "")}</p>
         ${service.found ? `
           <div class="status-chip-row">
-            <span class="status-chip ${normalizeStatusClass(statusValue)}">${escapeHtml(statusValue)}</span>
+            ${statusValue ? `<span class="status-chip ${normalizeStatusClass(statusValue)}">${escapeHtml(statusValue)}</span>` : ""}
             <span class="status-chip other">סה"כ ${escapeHtml(service.entry_count ?? 0)}</span>
             <span class="status-chip done">בוצע ${escapeHtml(service.done_count ?? 0)}</span>
             <span class="status-chip waiting">ממתין ${escapeHtml(service.waiting_count ?? 0)}</span>

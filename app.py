@@ -7491,15 +7491,20 @@ def build_feature_status_dashboard(month_value="", query_text="", query_type="al
             entries.append(entry)
             all_entries.append(entry)
 
+        # Allocation domains supply SMS counters, not customer feature cards.
+        visible_entries = [
+            entry for entry in entries
+            if not (config["key"] == "sms" and entry["sheet"] == CGR_SHEET_NAME)
+        ]
         services.append({
             "key": config["key"],
             "label": config["label"],
-            "sheet": " / ".join(dict.fromkeys(entry["sheet"] for entry in entries)) or normalize_legacy_hebrew_text(config["sheet"]),
+            "sheet": " / ".join(dict.fromkeys(entry["sheet"] for entry in visible_entries)) or normalize_legacy_hebrew_text(config["sheet"]),
             "found": bool(entries),
             "entry_count": len(entries),
             "done_count": len([entry for entry in entries if entry.get("status_category") == "בוצע"]),
             "waiting_count": len([entry for entry in entries if entry.get("status_category") == "ממתין"]),
-            "entries": entries,
+            "entries": visible_entries,
         })
 
     all_entries.sort(key=lambda item: (item.get("date") or "", item.get("service_label") or "", item.get("business_name") or ""), reverse=True)
@@ -7517,6 +7522,11 @@ def build_feature_status_dashboard(month_value="", query_text="", query_type="al
         else:
             status_counts["סטטוס אחר"] += 1
 
+    visible_entries = [
+        entry for entry in all_entries
+        if not (entry["service_key"] == "sms" and entry["sheet"] == CGR_SHEET_NAME)
+    ]
+
     return normalize_legacy_hebrew_data({
         "month": selected_month.strftime("%Y-%m"),
         "month_display": "כל החודשים" if all_months else selected_month.strftime("%m/%Y"),
@@ -7526,7 +7536,8 @@ def build_feature_status_dashboard(month_value="", query_text="", query_type="al
         "status_filter": str(status_filter or "").strip(),
         "project_manager_filter": str(project_manager_filter or "").strip(),
         "services": services,
-        "entries": all_entries,
+        "entries": visible_entries,
+        "visible_entry_count": len(visible_entries),
         "available_statuses": sorted(available_statuses),
         "available_project_managers": sort_feature_status_project_managers(set(FEATURE_STATUS_PROJECT_MANAGERS_ORDER) | available_project_managers),
         "status_counts": [{"label": label, "count": status_counts.get(label, 0)} for label in FEATURE_STATUS_COUNTER_ORDER + ["סטטוס אחר"]],
