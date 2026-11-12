@@ -663,7 +663,7 @@ body.tickets-monthly-report-page {
 
 .coordinated-primary {
   font-weight: 800;
-  color: #f3f8ff;
+  color: inherit;
 }
 
 .coordinated-secondary {

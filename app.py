@@ -3715,30 +3715,9 @@ def ticket_report_reference(ticket):
 
 def ticket_report_business_name(ticket):
     details = ticket.get("details") or {}
-    board_slug = (ticket.get("board_slug") or "").strip().lower()
-    if board_slug == "support":
-        return (
-            (details.get("business_name") or "").strip()
-            or (details.get("service_contact") or "").strip()
-            or (ticket.get("service_type") or "").strip()
-            or get_ticket_board(board_slug).get("name")
-            or ""
-        )
-    if board_slug == "hot-kiryot":
-        return (
-            (details.get("customer_name") or "").strip()
-            or (details.get("on_site_contact") or "").strip()
-            or (details.get("address") or "").strip()
-            or get_ticket_board(board_slug).get("name")
-            or ""
-        )
-    terminal_number = (details.get("terminal_number") or "").strip()
     return (
-        (details.get("contact_name") or "").strip()
-        or (details.get("address") or "").strip()
-        or (f"מסוף {terminal_number}" if terminal_number else "")
-        or get_ticket_board(board_slug).get("name")
-        or ""
+        (details.get("customer_name") or "").strip()
+        or (details.get("business_name") or "").strip()
     )
 
 
