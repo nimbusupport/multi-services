@@ -3745,6 +3745,50 @@ class SupportTicketsTestCase(unittest.TestCase):
         self.assertIn("משלוח", captured["subject"])
         self.assertIn("Ship Biz", captured["html_body"])
 
+    def test_coordinated_completed_filter_and_report_keep_completed_visits(self):
+        all_tickets = []
+        for board in ("support", "pais", "hot-kiryot"):
+            tickets = [
+                {"id": index, "board_slug": board, "status": status,
+                 "created_at": "2026-11-05T09:00:00+02:00",
+                 "details": {"coordinated_worker": worker}}
+                for index, (status, worker) in enumerate([
+                    ("תואם", ""), ("בוצע", "אסף"), ("בוצע", ""),
+                    ("בוצע", "  "), ("נכשל", "אסף"), ("בוטל", "אסף"),
+                    ("ממתין לתיאום", "אסף"),
+                ], start=1)
+            ]
+            with self.subTest(board=board):
+                filtered = self.app_module._support_tickets_apply_filters(
+                    tickets, board_slug=board, queue_slug="", scope="all",
+                    status_filter="תואם ובוצע", assignee_filter="", worker_filter="",
+                    priority_filter="", date_from="", date_to="", search="",
+                    current_support_user="Admin", assigned_technician_mode=False,
+                )
+                self.assertEqual([ticket["id"] for ticket in filtered], [2])
+                report = self.app_module.build_ticket_board_report(tickets, period="all")
+                self.assertEqual(report["summary"]["coordinated"], 2)
+                completed_report = self.app_module.build_ticket_board_report(
+                    tickets, period="all", status_filter="תואם ובוצע")
+                self.assertEqual([ticket["id"] for ticket in completed_report["tickets"]], [2])
+                scheduled_report = self.app_module.build_ticket_board_report(
+                    tickets, period="all", status_filter="תואם")
+                self.assertEqual([ticket["id"] for ticket in scheduled_report["tickets"]], [1])
+            all_tickets.extend(tickets)
+
+        # The monthly KPI, drill-down, board breakdown and trend share the rule.
+        with patch.object(self.app_module, "load_support_tickets", return_value=all_tickets):
+            monthly = self.app_module.build_ticket_monthly_report("2026-11")
+        self.assertEqual(monthly["summary"]["coordinated"], 6)
+        self.assertEqual(len(monthly["coordinated_tickets"]), 6)
+        self.assertEqual(sum(row["was_coordinated"] for row in monthly["all_tickets"]), 6)
+        self.assertTrue(all(board["coordinated"] == 2 for board in monthly["boards"]))
+        november = next(month for month in monthly["trend_months"] if month["month"] == "2026-11")
+        self.assertEqual(november["coordinated"], 6)
+        self.assertTrue(self.app_module.ticket_is_coordinated_and_done({
+            "board_slug": "support", "status": "Done", "details": {"coordinated_worker": "אסף"},
+        }))
+
     def test_support_board_report_data_uses_board_parameter(self):
         tickets = self.app_module.load_support_tickets()
         tickets.append({

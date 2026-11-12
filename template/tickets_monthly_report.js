@@ -36,7 +36,7 @@ const METRIC_CONFIG = {
     title: "קריאות מתואמות",
     chip: "קריאות מתואמות",
     summary: "קריאות מתואמות",
-    match: (row) => row.status === "תואם",
+    match: (row) => rowWasCoordinated(row),
   },
   coordination: {
     title: "קריאות הממתינות לתיאום",
@@ -101,9 +101,14 @@ function setMessage(text, isError = false) {
   messageEl.style.color = isError ? "#ffbcb7" : "";
 }
 
+function rowWasCoordinated(row) {
+  return row.was_coordinated ?? (row.status === "תואם"
+    || (["בוצע", "Done"].includes(row.status) && Boolean(String(row.coordinated_worker || "").trim())));
+}
+
 function summarizeRows(rows) {
   const total = rows.length;
-  const coordinated = rows.filter((row) => row.status === "תואם").length;
+  const coordinated = rows.filter(rowWasCoordinated).length;
   const open = rows.filter((row) => !["תואם", "בוצע", "נכשל", "Done"].includes(row.status)).length;
   const coordinationRate = total ? (coordinated / total) * 100 : 0;
   return { total, coordinated, open, coordinationRate };

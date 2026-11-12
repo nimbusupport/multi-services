@@ -9,6 +9,29 @@ const start = source.indexOf('async function saveTicketDetailWithFeedback(');
 const saveHandler = source.slice(start, source.indexOf('\nfunction showTicketDetail(', start));
 const longSummary = ('\u05e1\u05d9\u05db\u05d5\u05dd \u05d1\u05d9\u05e7\u05d5\u05e8: WIFI 100/100 MB; RJ45\n').repeat(100).trim();
 
+test('coordinated counters and drill-down include completed visits with a coordinated worker', () => {
+  const rows = [
+    { status: 'תואם' },
+    { status: 'בוצע', coordinated_worker: 'אסף' },
+    { status: 'בוצע', coordinated_worker: '' },
+    { status: 'נכשל', coordinated_worker: 'אסף' },
+    { status: 'בוטל', coordinated_worker: 'אסף' },
+    { status: 'Done', coordinated_worker: 'אסף' },
+  ];
+  const reportSource = fs.readFileSync(path.join(__dirname, 'template/tickets_monthly_report.js'), 'utf8');
+  const context = { reportQuickFilter: 'coordinated', ticketDetails: ticket => ticket.details || {} };
+  vm.createContext(context);
+  vm.runInContext(reportSource.slice(reportSource.indexOf('function rowWasCoordinated('), reportSource.indexOf('\nfunction boardLabel(')), context);
+  vm.runInContext(reportSource.slice(reportSource.indexOf('const METRIC_CONFIG ='), reportSource.indexOf('\nlet activeReport')), context);
+  assert.equal(context.summarizeRows(rows).coordinated, 3);
+  context.rows = rows;
+  assert.equal(vm.runInContext('rows.filter(METRIC_CONFIG.coordinated.match).length', context), 3);
+  const begin = source.indexOf('function applyReportQuickFilter(');
+  vm.runInContext(source.slice(begin, source.indexOf('\nfunction applyNastyaBoardFilter(', begin)), context);
+  const tickets = rows.map(row => ({ status: row.status, details: { coordinated_worker: row.coordinated_worker } }));
+  assert.equal(context.applyReportQuickFilter(tickets).length, 3);
+});
+
 test('ticket searches load all months while the default view loads the current month', () => {
   const context = {};
   vm.createContext(context);

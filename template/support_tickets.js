@@ -879,7 +879,8 @@ function applyReportQuickFilter(tickets) {
     return tickets.filter((ticket) => ticket.status === "נכשל");
   }
   if (reportQuickFilter === "coordinated") {
-    return tickets.filter((ticket) => ticket.status === "תואם");
+    return tickets.filter((ticket) => ticket.status === "תואם"
+      || (["בוצע", "Done"].includes(ticket.status) && String(ticketDetails(ticket).coordinated_worker || "").trim()));
   }
   return tickets;
 }

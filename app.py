@@ -1191,6 +1191,23 @@ def support_ticket_is_open(ticket):
     return not support_ticket_is_done(ticket)
 
 
+def ticket_is_coordinated_and_done(ticket):
+    status = normalize_ticket_status(ticket.get("board_slug"), ticket.get("status"))
+    worker = str((ticket.get("details") or {}).get("coordinated_worker") or "").strip()
+    return status in {"בוצע", "Done"} and bool(worker)
+
+
+def ticket_was_coordinated(ticket):
+    return normalize_ticket_status(ticket.get("board_slug"), ticket.get("status")) == "תואם" or ticket_is_coordinated_and_done(ticket)
+
+
+def ticket_matches_status_filter(ticket, status_filter):
+    if status_filter == "תואם ובוצע":
+        return ticket_is_coordinated_and_done(ticket)
+    board_slug = ticket.get("board_slug")
+    return normalize_ticket_status(board_slug, ticket.get("status")) == normalize_ticket_status(board_slug, status_filter)
+
+
 def normalize_allowed_pages(values):
     if not values:
         return sorted(FULL_ACCESS_PAGES)
@@ -3589,7 +3606,7 @@ def build_ticket_board_report(tickets, status_filter="", period="daily", date_fr
     period_filtered = filter_tickets_by_created_range(tickets, report_from, report_to)
     filtered = list(period_filtered)
     if status_filter:
-        filtered = [ticket for ticket in filtered if ticket.get("status") == status_filter]
+        filtered = [ticket for ticket in filtered if ticket_matches_status_filter(ticket, status_filter)]
     if worker_filter:
         filtered = [ticket for ticket in filtered if ticket_owner_name(ticket) == worker_filter]
 
@@ -3627,7 +3644,7 @@ def build_ticket_board_report(tickets, status_filter="", period="daily", date_fr
             "waiting": len([ticket for ticket in filtered if support_ticket_is_open(ticket)]),
             "coordination": len([ticket for ticket in filtered if status_is_coordination_pending(ticket.get("status"))]),
             "failed": len([ticket for ticket in filtered if ticket.get("status") == "נכשל"]),
-            "coordinated": len([ticket for ticket in filtered if ticket.get("status") == "תואם"]),
+            "coordinated": len([ticket for ticket in filtered if ticket_was_coordinated(ticket)]),
         },
         "leaderboard": leaderboard,
     }
@@ -3752,6 +3769,7 @@ def ticket_report_row(ticket):
         "status": normalize_ticket_status(board_slug, ticket.get("status")),
         "assigned_to": (ticket.get("assigned_to") or "").strip(),
         "coordinated_worker": (details.get("coordinated_worker") or "").strip(),
+        "was_coordinated": ticket_was_coordinated(ticket),
         "visit_date": visit_date,
         "visit_hours": visit_hours,
         "created_at": created_at.isoformat() if created_at else "",
@@ -3764,7 +3782,7 @@ def summarize_ticket_report_tickets(tickets):
     coordinated = len([
         ticket
         for ticket in tickets
-        if normalize_ticket_status(ticket.get("board_slug"), ticket.get("status")) == "תואם"
+        if ticket_was_coordinated(ticket)
     ])
     done = len([ticket for ticket in tickets if support_ticket_is_done(ticket)])
     open_count = len([ticket for ticket in tickets if support_ticket_is_open(ticket)])
@@ -3800,7 +3818,7 @@ def build_ticket_monthly_report(month_value=""):
     coordinated_rows = [
         ticket_report_row(ticket)
         for ticket in month_tickets
-        if normalize_ticket_status(ticket.get("board_slug"), ticket.get("status")) == "תואם"
+        if ticket_was_coordinated(ticket)
     ]
     coordinated_rows.sort(
         key=lambda item: (
@@ -8996,7 +9014,7 @@ def _support_tickets_apply_filters(
         filtered = [ticket for ticket in filtered if not ticket.get("assigned_to")]
 
     if status_filter:
-        filtered = [ticket for ticket in filtered if ticket.get("status") == status_filter]
+        filtered = [ticket for ticket in filtered if ticket_matches_status_filter(ticket, status_filter)]
     if effective_assignee_filter:
         filtered = [ticket for ticket in filtered if ticket.get("assigned_to") == effective_assignee_filter]
     if worker_filter:
