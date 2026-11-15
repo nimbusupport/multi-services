@@ -51,7 +51,6 @@ body.dashboard-page .site-nav {
 
 body.dashboard-page .site-nav-inner {
   width: 100%;
-  max-width: 1480px;
   margin: 0 auto;
   padding: 0 22px;
   height: 100%;
@@ -66,6 +65,7 @@ body.dashboard-page .nav-left,
 body.dashboard-page .nav-right {
   display: flex;
   align-items: center;
+  flex-shrink: 0;
 }
 
 body.dashboard-page .nav-left {
@@ -202,13 +202,17 @@ body.dashboard-page .nav-label {
 body.dashboard-page .brand {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  direction: rtl;
+  gap: clamp(5px, 0.7vw, 8px);
+  margin: 0;
+  white-space: nowrap;
   text-decoration: none;
 }
 
 body.dashboard-page .brand-mark {
-  width: 40px;
-  height: 40px;
+  width: clamp(28px, 3.5vw, 40px);
+  height: clamp(28px, 3.5vw, 40px);
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -228,7 +232,7 @@ body.dashboard-page .brand-mark img {
 
 body.dashboard-page .brand-word {
   color: #10335f;
-  font-size: 17px;
+  font-size: clamp(14px, 1.5vw, 17px);
   font-weight: 800;
   letter-spacing: -0.02em;
 }
@@ -724,7 +728,7 @@ body.dashboard-page .guide-panel {
   }
 }
 
-@media (max-width: 860px) {
+@media (max-width: 1160px) {
   body.dashboard-page.has-side-nav {
     padding-top: var(--dashboard-nav-height);
   }
@@ -810,7 +814,9 @@ body.dashboard-page .guide-panel {
     background: #f6f9ff;
     font-size: 14px;
   }
+}
 
+@media (max-width: 860px) {
   .dashboard-wrap {
     padding: 16px 14px 28px;
   }

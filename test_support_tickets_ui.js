@@ -9,6 +9,41 @@ const start = source.indexOf('async function saveTicketDetailWithFeedback(');
 const saveHandler = source.slice(start, source.indexOf('\nfunction showTicketDetail(', start));
 const longSummary = ('\u05e1\u05d9\u05db\u05d5\u05dd \u05d1\u05d9\u05e7\u05d5\u05e8: WIFI 100/100 MB; RJ45\n').repeat(100).trim();
 
+test('Pais visit summaries are visible to admins, coordinators, viewers and technicians', () => {
+  const context = {
+    ticketDetails: ticket => ticket.details,
+    escapeHtml: value => String(value).replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;'),
+    canAssignedTechnicianEditTicket: () => false,
+    canEditExistingTickets: true, isNastyaQueuePage: false, pageMode: '',
+    technicianUsers: [], NASTYA_EDITABLE_STATUSES: ['תואם'],
+    normalizePendingStatus: value => value, displayTicketStatus: ticket => ticket.status,
+    coordinationFinalStatusesForCurrentUser: () => ['בוצע', 'נכשל'],
+    availablePaisStatusesForCurrentUser: status => [status],
+    statusOptionsForTicket: () => '', ticketContactEditor: () => '',
+    fieldReportSummaryCard: () => '', coordinationCancelButton: () => '', hourOptions: () => '',
+  };
+  vm.createContext(context);
+  const sectionStart = source.indexOf('function detailSection(');
+  vm.runInContext(source.slice(sectionStart, source.indexOf('\nfunction detailSectionHtml(', sectionStart)), context);
+  const summaryStart = source.indexOf('function visitSummarySection(');
+  vm.runInContext(source.slice(summaryStart, source.indexOf('\nasync function cancelTicketCoordination(', summaryStart)), context);
+  // The last declaration is the renderer used by the page.
+  const rendererStart = source.lastIndexOf('function renderPaisDetailSections(');
+  vm.runInContext(source.slice(rendererStart, source.indexOf('\nasync function submitFieldReport(', rendererStart)), context);
+  for (const role of ['admin', 'coordinator', 'viewer', 'technician']) {
+    context.isNastyaQueuePage = role === 'coordinator';
+    context.canEditExistingTickets = role === 'admin' || role === 'coordinator';
+    context.canAssignedTechnicianEditTicket = () => role === 'technician';
+    for (const status of ['תואם', 'בוצע', 'נכשל']) {
+      const ticket = { id: 2, board_slug: 'pais', status, details: { visit_summary: 'החלפת נתב והגדרה <script>' } };
+      const html = context.renderPaisDetailSections(ticket);
+      assert.equal((html.match(/<h3>סיכום לאחר ביקור<\/h3>/g) || []).length, 1, `${role}: ${status}`);
+      assert.ok(html.includes('החלפת נתב והגדרה &lt;script>'));
+      assert.equal(html.includes('id="detail-visit-summary"'), role === 'technician');
+    }
+  }
+});
+
 test('coordinated counters and drill-down include completed visits with a coordinated worker', () => {
   const rows = [
     { status: 'תואם' },

@@ -4429,6 +4429,7 @@ function renderPaisDetailSections(ticket) {
       <textarea id="detail-actions-taken" rows="4">${escapeHtml(details.actions_taken || "")}</textarea>
     </section>
     ${details.field_report ? fieldReportSummaryCard(ticket, false) : ""}
+    ${visitSummarySection(details.visit_summary, false)}
     ${showCoordinatorStatus ? `
     <section class="detail-description detail-edit-card">
       <h3>סטטוס</h3>
