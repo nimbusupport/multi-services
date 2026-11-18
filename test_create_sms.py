@@ -104,6 +104,19 @@ class CreateSmsTests(unittest.TestCase):
         self.assertEqual(payload["results"][0]["response"], "Created")
         self.assertEqual(payload["results"][0]["message"], "Created")
 
+        self.assertEqual(
+            post.call_args.kwargs["data"],
+            {
+                "type": "sms",
+                "environment_name": "6101",
+                "profile[domain]": "6101",
+                "vml[0][caller_id_number]": "0747041404",
+                "vml[0][number]": "0777315857",
+                "vml[0][template]": "hello",
+                "subscription[0][plan_uuid]": "5489e132-286d-464f-8352-8c17b9033d92",
+            },
+        )
+
     @patch("app.requests.post")
     def test_api_error_response_is_preserved(self, post):
         post.return_value = FakeResponse(409, {"message": "environment name exists"})
