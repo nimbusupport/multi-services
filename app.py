@@ -10746,8 +10746,9 @@ def create_sms():
             "vml[0][caller_id_number]": did,
             "vml[0][number]": number,
             "vml[0][template]": template,
-            "subscription[0][plan_uuid]": "5489e132-286d-464f-8352-8c17b9033d92",
+
         }
+        ##Provider : "subscription[0][plan_uuid]": "5489e132-286d-464f-8352-8c17b9033d92",
 
         print("Sending To Voipappz API:", api_payload)
         print("Token configured:", bool(SMS_TOKEN))
