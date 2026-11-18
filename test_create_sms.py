@@ -104,16 +104,21 @@ class CreateSmsTests(unittest.TestCase):
         self.assertEqual(payload["results"][0]["response"], "Created")
         self.assertEqual(payload["results"][0]["message"], "Created")
 
+        self.assertEqual(post.call_args.kwargs["headers"]["Content-Type"], "application/json")
         self.assertEqual(
-            post.call_args.kwargs["data"],
+            post.call_args.kwargs["json"],
             {
                 "type": "sms",
                 "environment_name": "6101",
-                "profile[domain]": "6101",
-                "vml[0][caller_id_number]": "0747041404",
-                "vml[0][number]": "0777315857",
-                "vml[0][template]": "hello",
-                "subscription[0][plan_uuid]": "5489e132-286d-464f-8352-8c17b9033d92",
+                "vml": [
+                    {
+                        "caller_id_number": "0747041404",
+                        "number": "0777315857",
+                        "template": "hello",
+                        "meta": {"hot_id": "6101"},
+                    }
+                ],
+                "subscription": [{"plan_uuid": "ca9c7d19-8041-4d3f-b8ce-d1b6884c6237"}],
             },
         )
 

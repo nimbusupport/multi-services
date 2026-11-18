@@ -10720,7 +10720,7 @@ def create_sms():
 
     headers = {
         "Authorization": SMS_TOKEN,
-        "Content-Type": "application/x-www-form-urlencoded"
+        "Content-Type": "application/json",
     }
 
     for c in customers:
@@ -10742,13 +10742,16 @@ def create_sms():
         api_payload = {
             "type": "sms",
             "environment_name": domain,
-            "profile[domain]": domain,
-            "vml[0][caller_id_number]": did,
-            "vml[0][number]": number,
-            "vml[0][template]": template,
-
+            "vml": [
+                {
+                    "caller_id_number": did,
+                    "number": number,
+                    "template": template,
+                    "meta": {"hot_id": domain},
+                }
+            ],
+            "subscription": [{"plan_uuid": "ca9c7d19-8041-4d3f-b8ce-d1b6884c6237"}],
         }
-        ##Provider : "subscription[0][plan_uuid]": "5489e132-286d-464f-8352-8c17b9033d92",
 
         print("Sending To Voipappz API:", api_payload)
         print("Token configured:", bool(SMS_TOKEN))
@@ -10758,7 +10761,7 @@ def create_sms():
             r = requests.post(
                 normalize_voipappz_sms_url(SMS_URL),
                 headers=headers,
-                data=api_payload,
+                json=api_payload,
                 timeout=30
             )
 
